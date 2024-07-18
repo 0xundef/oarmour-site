@@ -3,8 +3,8 @@ import Sidebar from "@/components/layout/sidebar";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Next Shadcn Dashboard Starter",
-  description: "Basic dashboard with Next.js and Shadcn",
+  title: "OArmour - The Armour of Blockchain",
+  description: "Foucus on AML|Auditing|Real-time detection",
 };
 
 export default function DashboardLayout({

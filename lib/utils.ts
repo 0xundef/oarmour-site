@@ -1,8 +1,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { Active, DataRef, Over } from "@dnd-kit/core";
-import { ColumnDragData } from "@/components/kanban/board-column";
-import { TaskDragData } from "@/components/kanban/task-card";
+import { ColumnDragData } from "@/components/auditing/board-column";
+import { TaskDragData } from "@/components/auditing/task-card";
 
 type DraggableData = ColumnDragData | TaskDragData;
 
