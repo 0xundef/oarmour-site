@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 
-const SearchBar: React.FC = () => {
+const SearchBar: React.FC<{ placeholder: string }> = ({ placeholder }) => {
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -24,7 +24,7 @@ const SearchBar: React.FC = () => {
       <Input
         type="search"
         name="search"
-        placeholder="Address"
+        placeholder={placeholder}
         className="flex-grow bg-background text-foreground"
       />
       <Button type="submit" variant="default">
