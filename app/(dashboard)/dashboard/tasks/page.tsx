@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 // Simulate a database read for tasks.
 async function getTasks() {
   const data = await fs.readFile(
-    path.join(process.cwd(), "app/(app)/examples/tasks/data/tasks.json")
+    path.join(process.cwd(), "app/(app)/tasks/data/tasks.json")
   )
 
   const tasks = JSON.parse(data.toString())
@@ -32,14 +32,14 @@ export default async function TaskPage() {
     <>
       <div className="md:hidden">
         <Image
-          src="/examples/tasks-light.png"
+          src=""
           width={1280}
           height={998}
           alt="Playground"
           className="block dark:hidden"
         />
         <Image
-          src="/examples/tasks-dark.png"
+          src=""
           width={1280}
           height={998}
           alt="Playground"
