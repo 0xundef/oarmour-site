@@ -60,7 +60,8 @@
     "uploadthing": "^5.7.4",
     "uuid": "^9.0.1",
     "zod": "^3.22.4",
-    "zustand": "^4.4.6"
+    "zustand": "^4.4.6",
+    "cmdk": "^0.2.0"
   },
   "devDependencies": {
     "@types/uuid": "^9.0.7",
