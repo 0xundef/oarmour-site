@@ -2,7 +2,7 @@ import BreadCrumb from "@/components/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SearchBar from "@/components/searchbar";
 
-const breadcrumbItems = [{ title: "Auditing", link: "/dashboard/auditing" }];
+const breadcrumbItems = [{ title: "Tracing", link: "/dashboard/auditing" }];
 
 export default function Page() {
   return (
