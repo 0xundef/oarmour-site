@@ -3,7 +3,6 @@ import Link from "next/link";
 import UserAuthForm from "@/components/forms/user-auth-form";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import logo from "@/public/logo.svg"
 export const metadata: Metadata = {
   title: "Authentication",
   description: "Authentication forms built using the components.",
@@ -23,10 +22,17 @@ export default function AuthenticationPage() {
       </Link>
       <div className="relative hidden h-full flex-col bg-muted p-10 text-white dark:border-r lg:flex">
         <div className="absolute inset-0 bg-zinc-900" />
-        <div className="relative z-20 flex items-center text-lg font-medium">
-          <img src={logo} alt=""></img>
-          OArmour
+
+        <div className="relative z-20 flex items-center">
+          <img 
+            src="/logo.svg" 
+            alt="OArmour Logo" 
+            className="w-20 h-20 mr-4" 
+            style={{ '--logo-color': '#FFFFFF' }}
+          />
+          <span className="text-xs font-medium">OArmour</span>
         </div>
+          
       </div>
       <div className="p-4 lg:p-8 h-full flex items-center">
         <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
