@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { MobileSidebar } from "./mobile-sidebar";
 import { UserNav } from "./user-nav";
 import Link from "next/link";
+import Logo from "@/components/logo";
 
 export default function Header() {
   return (
@@ -13,17 +14,7 @@ export default function Header() {
             href={"https://github.com/Kiranism/next-shadcn-dashboard-starter"}
             target="_blank"
           >
-       
-        <div className="relative z-20 flex items-center">
-          <img 
-            src="/logo.svg" 
-            alt="OArmour Logo" 
-            className="w-20 h-20 mr-4" 
-            style={{ '--logo-color': '#FFFFFF' }}
-          />
-          <span className="text-xs font-medium">OArmour</span>
-        </div>
-
+          <Logo/>
           </Link>
         </div>
         <div className={cn("block lg:!hidden")}>

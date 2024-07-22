@@ -3,6 +3,8 @@ import Link from "next/link";
 import UserAuthForm from "@/components/forms/user-auth-form";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import Logo from "@/components/logo";
+
 export const metadata: Metadata = {
   title: "Authentication",
   description: "Authentication forms built using the components.",
@@ -24,12 +26,7 @@ export default function AuthenticationPage() {
         <div className="absolute inset-0 bg-zinc-900" />
 
         <div className="relative z-20 flex items-center">
-          <img 
-            src="/logo.svg" 
-            alt="OArmour Logo" 
-            className="w-20 h-20 mr-4" 
-            style={{ '--logo-color': '#FFFFFF' }}
-          />
+          <Logo/>
           <span className="text-xs font-medium">OArmour</span>
         </div>
           
