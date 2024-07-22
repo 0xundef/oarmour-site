@@ -2,7 +2,7 @@ import BreadCrumb from "@/components/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import SearchBar from "@/components/searchbar";
-import { CytoscapeComponent } from 'react-cytoscapejs';
+import CytoscapeComponent from "react-cytoscapejs";
 
 const breadcrumbItems = [{ title: "Tracing", link: "/dashboard/tracing" }];
 
