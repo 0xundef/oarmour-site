@@ -11,8 +11,7 @@ export default function Header() {
       <nav className="h-14 flex items-center justify-between px-4">
         <div className="hidden lg:block">
           <Link
-            href={"https://github.com/Kiranism/next-shadcn-dashboard-starter"}
-            target="_blank"
+            href={"/"}
           >
           <Logo/>
           </Link>
@@ -20,8 +19,14 @@ export default function Header() {
         <div className={cn("block lg:!hidden")}>
           <MobileSidebar />
         </div>
-
+     
         <div className="flex items-center gap-2">
+        <Link
+          href={"https://zccobra.notion.site/OAmour-88a311d5d637490b8490afd207ae4046?pvs=4"}
+            target="_blank"
+          >
+            Blog
+          </Link>
           <UserNav />
           <ThemeToggle />
         </div>
