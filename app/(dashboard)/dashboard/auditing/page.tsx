@@ -10,8 +10,16 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Define the type for search results
+interface SearchResult {
+  id: number;
+  title: string;
+  description: string;
+}
+
 export default function Page() {
-  const [results, setResults] = useState([]);
+  // Use the SearchResult type in the state
+  const [results, setResults] = useState<SearchResult[]>([]);
 
   const handleSearch = async (searchTerm: string) => {
     try {
@@ -20,7 +28,6 @@ export default function Page() {
         headers: {
           'Content-Type': 'application/json',
         },
-        // Use URLSearchParams to add query parameter
         body: JSON.stringify({ query: searchTerm }),
       });
 
@@ -28,7 +35,7 @@ export default function Page() {
         throw new Error('Network response was not ok');
       }
 
-      const data = await response.json();
+      const data: SearchResult[] = await response.json();
       setResults(data);
     } catch (error) {
       console.error('Error fetching search results:', error);
@@ -50,8 +57,8 @@ export default function Page() {
             </CardHeader>
             <CardContent className="pl-2 h-[300px] overflow-y-auto">
               <ul>
-                {results.map((result, index) => (
-                  <li key={index} className="py-2 border-b border-gray-200">
+                {results.map((result) => (
+                  <li key={result.id} className="py-2 border-b border-gray-200">
                     <h3 className="font-semibold">{result.title}</h3>
                     <p>{result.description}</p>
                   </li>
