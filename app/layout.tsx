@@ -11,6 +11,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "OArmour - The Armour of Blockchain",
   description: "Foucus on AML|Auditing|Real-time detection",
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico', 
+  }
 };
 
 export default async function RootLayout({
