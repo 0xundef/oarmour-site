@@ -21,12 +21,12 @@ export default function Header() {
         </div>
      
         <div className="flex items-center gap-2">
-        <Link
+        {/* <Link
           href={"https://zccobra.notion.site/OAmour-88a311d5d637490b8490afd207ae4046?pvs=4"}
             target="_blank"
           >
             Blog
-          </Link>
+          </Link> */}
           <UserNav />
           <ThemeToggle />
         </div>
