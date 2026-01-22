@@ -14,11 +14,14 @@ export function middleware(request: NextRequest) {
   }
 
   // Use authentication in production
-  return withAuth({
-    pages: {
-      signIn: '/',
-    },
-  })(request);
+  return withAuth(
+    request,
+    {
+      pages: {
+        signIn: '/',
+      },
+    }
+  );
 }
 
 export const config = { matcher: ["/dashboard/:path*"] };
