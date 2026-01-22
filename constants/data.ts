@@ -130,10 +130,4 @@ export const navItems: NavItem[] = [
     icon: "kanban",
     label: "kanban",
   },
-  {
-    title: "Tracing",
-    href: "/dashboard/tracing",
-    icon: "kanban",
-    label: "kanban",
-  },
 ];
