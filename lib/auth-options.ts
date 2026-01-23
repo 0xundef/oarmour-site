@@ -32,7 +32,7 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      console.log(`User: ${JSON.stringify(user)}, Account: ${JSON.stringify(account)}, Profile: ${JSON.stringify(profile)}`);
+      // console.log(`User: ${JSON.stringify(user)}, Account: ${JSON.stringify(account)}, Profile: ${JSON.stringify(profile)}`);
       return true;
     },
     async redirect({ url, baseUrl }) {

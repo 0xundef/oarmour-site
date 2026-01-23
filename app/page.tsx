@@ -136,7 +136,7 @@ export default function LandingPage() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Choose the plan that fits your organization's needs
+              Choose the plan that fits your organization&apos;s needs
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">

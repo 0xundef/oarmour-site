@@ -22,7 +22,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const onConfirm = async () => {};
+  const onConfirm = async () => {
+    setLoading(true);
+    // Execute delete logic here
+    setLoading(false);
+  };
 
   return (
     <>
