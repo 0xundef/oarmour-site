@@ -49,6 +49,7 @@
     "next-auth": "^4.24.4",
     "next-themes": "^0.2.1",
     "postcss": "8.4.28",
+    "posthog-js": "^1.335.0",
     "react": "^18.2.0",
     "react-cytoscapejs": "^2.0.0",
     "react-day-picker": "^8.9.1",
