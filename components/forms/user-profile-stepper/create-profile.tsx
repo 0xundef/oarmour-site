@@ -41,17 +41,12 @@ export const CreateProfileOne: React.FC<ProfileFormType> = ({
   initialData,
   categories,
 }) => {
-  const params = useParams();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [imgLoading, setImgLoading] = useState(false);
   const title = initialData ? "Edit product" : "Create Your Profile";
   const description = initialData
     ? "Edit a product."
     : "To create your resume, we first need some basic information about you.";
-  const toastMessage = initialData ? "Product updated." : "Product created.";
-  const action = initialData ? "Save changes" : "Create";
   const [previousStep, setPreviousStep] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [data, setData] = useState({});
@@ -100,19 +95,6 @@ export const CreateProfileOne: React.FC<ProfileFormType> = ({
     } catch (error: any) {
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onDelete = async () => {
-    try {
-      setLoading(true);
-      //   await axios.delete(`/api/${params.storeId}/products/${params.productId}`);
-      router.refresh();
-      router.push(`/${params.storeId}/products`);
-    } catch (error: any) {
-    } finally {
-      setLoading(false);
-      setOpen(false);
     }
   };
 
@@ -189,16 +171,6 @@ export const CreateProfileOne: React.FC<ProfileFormType> = ({
     <>
       <div className="flex items-center justify-between">
         <Heading title={title} description={description} />
-        {initialData && (
-          <Button
-            disabled={loading}
-            variant="destructive"
-            size="sm"
-            onClick={() => setOpen(true)}
-          >
-            <Trash className="h-4 w-4" />
-          </Button>
-        )}
       </div>
       <Separator />
       <div>
