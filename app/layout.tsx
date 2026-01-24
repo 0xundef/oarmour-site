@@ -10,6 +10,10 @@ import { PHProvider } from "@/components/posthog-provider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://oarmour.com"),
+  alternates: {
+    canonical: "/",
+  },
   title: {
     default: "OArmour - Web3 Access Point Security",
     template: "%s | OArmour"
