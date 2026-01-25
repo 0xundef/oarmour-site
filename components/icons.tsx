@@ -29,11 +29,17 @@ import {
   User2Icon,
   UserX2Icon,
   X,
+  Puzzle,
 } from "lucide-react";
 
 export type Icon = LucideIcon;
 
 export const Icons = {
+  webExtension: (props: LucideProps) => (
+    <Puzzle
+      {...props}
+    />
+  ),
   dashboard: LayoutDashboardIcon,
   logo: Command,
   login: LogIn,
@@ -60,7 +66,7 @@ export const Icons = {
   sun: SunMedium,
   moon: Moon,
   laptop: Laptop,
-  gitHub: ({ ...props }: LucideProps) => (
+  gitHub: (props: LucideProps) => (
     <svg
       aria-hidden="true"
       focusable="false"

@@ -1,0 +1,307 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// 1. Identity & Integration
+// ==========================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // NextAuth.js Relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // App Relations
+  apiKeys       ApiKey[]
+  subscriptions AssetSubscription[]
+  submissions   Submission[]
+
+  // Stripe Subscription
+  stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
+  stripeSubscriptionId   String?   @unique @map(name: "stripe_subscription_id")
+  stripePriceId          String?   @map(name: "stripe_price_id")
+  stripeCurrentPeriodEnd DateTime? @map(name: "stripe_current_period_end")
+}
+
+model Submission {
+  id          String           @id @default(uuid())
+  userId      String
+  input       String           // Extension ID or URL
+  status      SubmissionStatus @default(PENDING)
+  feedback    String?          // For storing analysis result later
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Account {
+  id                 String  @id @default(uuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// For "Open-source endpoint monitoring tools" to fetch data
+model ApiKey {
+  id          String    @id @default(uuid())
+  userId      String
+  keyHash     String    // Hashed API Key
+  label       String?   // e.g. "My Local Firewall Agent"
+  permissions Json?     // ["read:threats", "read:extensions"]
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 2. Global Asset Registry (The "Public Goods")
+// ==========================================
+
+enum Platform {
+  CHROME
+  FIREFOX
+  EDGE
+}
+
+enum RiskLevel {
+  UNKNOWN
+  SAFE
+  CAUTION
+  HIGH
+}
+
+// A. The Library of Extensions (e.g., MetaMask, Phantom)
+model GlobalExtension {
+  id          String   @id @default(uuid())
+  
+  // Identity
+  storeId     String   @unique // Chrome Web Store ID
+  name        String
+  platform    Platform @default(CHROME)
+  
+  // Metadata
+  developerEmail  String?
+  officialWebsite String?
+  
+  // Monitoring Config
+  checkFrequencyMinutes Int       @default(30)
+  riskLevel             RiskLevel @default(UNKNOWN)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions AssetSubscription[]
+}
+
+// B. The Library of Web Portals (e.g., Uniswap App, OpenSea)
+model GlobalWebPage {
+  id          String   @id @default(uuid())
+  
+  // Identity
+  url         String   @unique
+  name        String
+  domain      String   // Extracted domain for easier searching
+  
+  // Monitoring Config
+  checkFrequencyMinutes Int       @default(15)
+  riskLevel             RiskLevel @default(UNKNOWN)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions AssetSubscription[]
+}
+
+// ==========================================
+// 3. Subscriptions (The "User Interest")
+// ==========================================
+
+enum TargetType {
+  EXTENSION
+  WEB_PAGE
+}
+
+// "I want to be alerted if MetaMask is compromised"
+model AssetSubscription {
+  id        String     @id @default(uuid())
+  userId    String
+  
+  // Polymorphic Target
+  targetType TargetType
+  targetId   String     // ID from GlobalExtension or GlobalWebPage
+  
+  // Preferences
+  notifyViaEmail   Boolean @default(true)
+  notifyViaWebhook Boolean @default(false)
+  webhookUrl       String?
+  
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relations to Global Assets (Optional relations for polymorphism)
+  extension GlobalExtension? @relation(fields: [extensionId], references: [id])
+  extensionId String?
+  
+  webPage   GlobalWebPage?   @relation(fields: [webPageId], references: [id])
+  webPageId String?
+
+  // Ensure unique subscription per user per asset
+  @@unique([userId, targetType, targetId])
+}
+
+// ==========================================
+// 4. Security Intelligence (The "Brain")
+// ==========================================
+
+// A. Historical State (Baselines)
+model AssetSnapshot {
+  id          String     @id @default(uuid())
+  targetType  TargetType
+  targetId    String
+  
+  version     String?    // For Extensions
+  contentHash String?    // Merkle Root or DOM Hash
+  metadata    Json?      // Permissions, Script Srcs, etc.
+  
+  capturedAt  DateTime   @default(now())
+}
+
+// B. Analysis Jobs
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ScanJob {
+  id         String     @id @default(uuid())
+  targetType TargetType
+  targetId   String
+  
+  status     JobStatus
+  startedAt  DateTime   @default(now())
+  durationMs Int?
+  
+  // Relations
+  threatEvents ThreatEvent[]
+}
+
+// C. Threat Events (The "News")
+enum ThreatSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ThreatType {
+  CODE_INJECTION
+  VERSION_ROLLBACK
+  PERMISSION_ESCALATION
+  MALICIOUS_DOMAIN
+  UNKNOWN
+}
+
+model ThreatEvent {
+  id          String         @id @default(uuid())
+  scanJobId   String?
+  
+  severity    ThreatSeverity
+  type        ThreatType
+  title       String
+  description String?
+  
+  publishedAt DateTime       @default(now())
+  
+  // Relations
+  scanJob     ScanJob?       @relation(fields: [scanJobId], references: [id])
+  iocs        IndicatorOfCompromise[]
+}
+
+// D. Indicators of Compromise (The "Block List")
+enum IocType {
+  DOMAIN
+  IP
+  FILE_HASH_SHA256
+  URL_REGEX
+}
+
+model IndicatorOfCompromise {
+  id            String   @id @default(uuid())
+  threatEventId String?
+  
+  // Actionable Data
+  iocType       IocType
+  iocValue      String
+  
+  confidenceScore Int     @default(100)
+  isActive        Boolean @default(true)
+  
+  createdAt     DateTime @default(now())
+  
+  // Relations
+  threatEvent   ThreatEvent? @relation(fields: [threatEventId], references: [id])
+}

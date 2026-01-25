@@ -2,8 +2,11 @@ import { NextAuthOptions } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialProvider from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { prisma } from "@/lib/prisma";
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -22,7 +25,7 @@ export const authOptions: NextAuthOptions = {
         },
       },
       async authorize(credentials, req) {
-        const user = { id: "1", name: "John", email: credentials?.email };
+        const user = { id: "1", name: "John", email: credentials?.email, role: "USER" as const };
         if (user) {
           // Any object returned will be saved in `user` property of the JWT
           return user;
@@ -35,6 +38,9 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  session: {
+    strategy: "jwt",
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       // console.log(`User: ${JSON.stringify(user)}, Account: ${JSON.stringify(account)}, Profile: ${JSON.stringify(profile)}`);
@@ -44,11 +50,16 @@ export const authOptions: NextAuthOptions = {
       return baseUrl + '/dashboard';
     },
     async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role;
+      }
       return session;
     },
     async jwt({ token, user, account, profile, isNewUser }) {
       if (user) {
         token.id = user.id;
+        token.role = user.role;
       }
       return token;
     },

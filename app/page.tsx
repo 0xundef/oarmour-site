@@ -3,6 +3,7 @@ import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, ShieldCheck, Clock } from "lucide-react";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { ExtensionWalletIcon, WebPortalIcon } from "@/components/custom-icons";
 
 export default function LandingPage() {
@@ -45,7 +46,12 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center space-x-4">
-
+            <Button asChild variant="ghost" size="icon">
+              <Link href="https://discord.gg/Dcu73t7mkP" target="_blank" rel="noopener noreferrer">
+                <DiscordLogoIcon className="w-5 h-5" />
+                <span className="sr-only">Join Discord</span>
+              </Link>
+            </Button>
             <Button asChild>
               <Link href="/signin">
                 Get Started
@@ -90,7 +96,7 @@ export default function LandingPage() {
               </h2>
               <p className="text-lg text-muted-foreground mb-6">
                 While blockchain is built on cryptography, users connect via bridges—Chrome extensions and web pages. 
-                This "last inch" is where attacks happen.
+                This &quot;last inch&quot; is where attacks happen.
               </p>
               <p className="text-lg text-muted-foreground mb-6">
                 Recent incidents show a critical delay between malicious code injection and detection:
@@ -145,7 +151,7 @@ export default function LandingPage() {
               Comprehensive Access Point Protection
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Dirty work done right. We monitor every upgrade and change so you don't have to.
+              Dirty work done right. We monitor every upgrade and change so you don&apos;t have to.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -180,7 +186,7 @@ export default function LandingPage() {
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            <Card className="border-2 border-primary">
+            <Card className="border-2">
               <CardHeader>
                 <CardTitle className="text-2xl">Free</CardTitle>
                 <CardDescription>For security-conscious users</CardDescription>
@@ -190,15 +196,19 @@ export default function LandingPage() {
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Monitor 1 Extension</span>
+                    <span className="text-sm">Limited Extension Submission</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Daily checks</span>
+                    <span className="text-sm">Unlimited Analysis Results</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Email alerts</span>
+                    <span className="text-sm">No Alert Subscription</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    <span className="text-sm">No API Integration</span>
                   </li>
                 </ul>
                 <Button asChild className="w-full">
@@ -209,10 +219,10 @@ export default function LandingPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-2 opacity-60 relative">
+            <Card className="border-2 border-primary relative shadow-lg">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <span className="bg-primary text-primary-foreground text-xs font-medium px-3 py-1 rounded-full">
-                  Coming Soon
+                  POPULAR
                 </span>
               </div>
               <CardHeader>
@@ -220,56 +230,63 @@ export default function LandingPage() {
                 <CardDescription>For individual developers</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-4xl font-bold mb-6">$49<span className="text-lg font-normal text-muted-foreground">/mo</span></div>
+                <div className="text-4xl font-bold mb-6">$10<span className="text-lg font-normal text-muted-foreground">/mo</span></div>
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Monitor 1 Extension</span>
+                    <span className="text-sm">Limited Extension Submission</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Monitor 1 Web Portal</span>
+                    <span className="text-sm">Unlimited Analysis Results</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Hourly checks</span>
+                    <span className="text-sm">Max 2 Alert Subscriptions</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    <span className="text-sm">No API Integration</span>
                   </li>
                 </ul>
-                <Button variant="outline" className="w-full" disabled>Coming Soon</Button>
+                <Button asChild className="w-full">
+                  <Link href="/signin">
+                    Get Started
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
 
-            <Card className="border-2 opacity-60 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-primary text-primary-foreground text-xs font-medium px-3 py-1 rounded-full">
-                  Coming Soon
-                </span>
-              </div>
+            <Card className="border-2">
               <CardHeader>
                 <CardTitle className="text-2xl">Pro</CardTitle>
                 <CardDescription>For growing Web3 projects</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-4xl font-bold mb-6">$199<span className="text-lg font-normal text-muted-foreground">/mo</span></div>
+                <div className="text-4xl font-bold mb-6">$30<span className="text-lg font-normal text-muted-foreground">/mo</span></div>
                 <ul className="space-y-3 mb-6">
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Up to 5 Extensions</span>
+                    <span className="text-sm">Unlimited Extension Submission</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Up to 5 Web Portals</span>
+                    <span className="text-sm">Unlimited Analysis Results</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">Real-time alerts</span>
+                    <span className="text-sm">Max 10 Alert Subscriptions</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-primary" />
-                    <span className="text-sm">LLM Threat Analysis</span>
+                    <span className="text-sm">API Integration</span>
                   </li>
                 </ul>
-                <Button variant="outline" className="w-full" disabled>Coming Soon</Button>
+                <Button asChild className="w-full">
+                  <Link href="/signin">
+                    Get Started
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
@@ -290,6 +307,9 @@ export default function LandingPage() {
               </Link>
               <Link href="/privacy" className="hover:text-foreground transition-colors">
                 Privacy Policy
+              </Link>
+              <Link href="https://discord.gg/Dcu73t7mkP" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+                Discord
               </Link>
               <Link href="#" className="hover:text-foreground transition-colors">
                 Contact

@@ -5,9 +5,9 @@ export default function Logo() {
     <Image
       src="/logo.svg"
       alt="OArmour Logo"
-      width={64}
-      height={64}
-      className="w-16 h-16 mr-4 dark:invert"
+      width={40}
+      height={40}
+      className="w-10 h-10 mr-4 dark:invert"
     />
   </div>
 }

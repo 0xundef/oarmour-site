@@ -11,9 +11,10 @@ import { Dispatch, SetStateAction } from "react";
 interface DashboardNavProps {
   items: NavItem[];
   setOpen?: Dispatch<SetStateAction<boolean>>;
+  isMinimized?: boolean;
 }
 
-export function DashboardNav({ items, setOpen }: DashboardNavProps) {
+export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardNavProps) {
   const path = usePathname();
 
   if (!items?.length) {
@@ -38,10 +39,12 @@ export function DashboardNav({ items, setOpen }: DashboardNavProps) {
                   "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                   path === item.href ? "bg-accent" : "transparent",
                   item.disabled && "cursor-not-allowed opacity-80",
+                  isMinimized && "justify-center px-2"
                 )}
+                title={isMinimized ? item.title : undefined}
               >
-                <Icon className="mr-2 h-4 w-4" />
-                <span>{item.title}</span>
+                <Icon className={cn("h-4 w-4", !isMinimized && "mr-2")} />
+                {!isMinimized && <span>{item.title}</span>}
               </span>
             </Link>
           )

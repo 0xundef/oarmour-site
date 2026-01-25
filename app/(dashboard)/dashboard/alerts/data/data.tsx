@@ -22,6 +22,26 @@ export const labels = [
     value: "documentation",
     label: "Documentation",
   },
+  {
+    value: "Malicious Injection",
+    label: "Malicious Injection",
+  },
+  {
+    value: "Permission Change",
+    label: "Permission Change",
+  },
+  {
+    value: "Network Activity",
+    label: "Network Activity",
+  },
+  {
+    value: "Manifest Update",
+    label: "Manifest Update",
+  },
+  {
+    value: "Malicious Code",
+    label: "Malicious Code",
+  },
 ]
 
 export const statuses = [
@@ -66,6 +86,11 @@ export const priorities = [
   {
     label: "High",
     value: "high",
+    icon: ArrowUpIcon,
+  },
+  {
+    label: "Critical",
+    value: "critical",
     icon: ArrowUpIcon,
   },
 ]
