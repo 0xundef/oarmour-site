@@ -14,10 +14,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { useToast } from "@/components/ui/use-toast"
 
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
   const router = useRouter()
+  const { toast } = useToast()
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -31,10 +35,54 @@ export function GlobalSearch() {
     return () => document.removeEventListener("keydown", down)
   }, [])
 
-  const runCommand = React.useCallback((command: () => unknown) => {
-    setOpen(false)
-    command()
-  }, [])
+  // removed unused runCommand
+
+  const handleSubmit = async () => {
+    if (!query) return;
+    
+    // Basic regex for extension ID (32 chars)
+    const isExtensionId = /^[a-z]{32}$/.test(query);
+    
+    if (!isExtensionId) {
+        toast({
+            variant: "destructive",
+            title: "Invalid ID",
+            description: "Please enter a valid 32-character Chrome Extension ID."
+        });
+        return;
+    }
+
+    setIsSubmitting(true);
+    try {
+        const res = await fetch('/api/extensions/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ extensionId: query })
+        });
+
+        if (!res.ok) throw new Error('Failed to start analysis');
+        
+        const data = await res.json();
+        
+        toast({
+            title: "Analysis Started",
+            description: `Processing extension: ${data.data.name || query}`,
+        });
+        
+        setOpen(false);
+        // Maybe refresh dashboard data?
+        router.refresh();
+
+    } catch {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Failed to submit extension for analysis."
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -49,17 +97,24 @@ export function GlobalSearch() {
         </kbd>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Type extension ID or URL to search..." />
+        <CommandInput 
+            placeholder="Type extension ID to analyze..." 
+            value={query}
+            onValueChange={setQuery}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    handleSubmit();
+                }
+            }}
+        />
         <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandEmpty>
+            {isSubmitting ? "Submitting..." : "Press Enter to analyze extension ID."}
+          </CommandEmpty>
           <CommandGroup heading="Quick Actions">
-            <CommandItem
-              onSelect={() => {
-                runCommand(() => router.push("/dashboard"))
-              }}
-            >
+             <CommandItem onSelect={handleSubmit}>
               <PlusIcon className="mr-2 h-4 w-4" />
-              <span>Submit extension analysis</span>
+              <span>Analyze Extension: {query || "..."}</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>

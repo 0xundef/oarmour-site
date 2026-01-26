@@ -140,8 +140,12 @@ model GlobalExtension {
   platform    Platform @default(CHROME)
   
   // Metadata
+  version         String?
+  publisher       String?  // New field
   developerEmail  String?
   officialWebsite String?
+  description     String?
+  iconUrl         String?
   
   // Monitoring Config
   checkFrequencyMinutes Int       @default(30)
@@ -152,6 +156,27 @@ model GlobalExtension {
 
   // Relations
   subscriptions AssetSubscription[]
+  analysisResults ExtensionAnalysisResult[]
+}
+
+// Extension Analysis Results
+model ExtensionAnalysisResult {
+  id          String   @id @default(uuid())
+  extensionId String
+  
+  // Status
+  status      JobStatus @default(PENDING)
+  
+  // Extracted Intelligence
+  domains     String[] // Stored as array of strings
+  ips         String[]
+  urls        String[]
+  filesScanned Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
 }
 
 // B. The Library of Web Portals (e.g., Uniswap App, OpenSea)
