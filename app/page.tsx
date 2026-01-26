@@ -2,9 +2,15 @@ import Link from "next/link";
 import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Zap, ShieldCheck, Clock } from "lucide-react";
+import { Zap, ShieldCheck, Clock, ChevronDown } from "lucide-react";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
 import { ExtensionWalletIcon, WebPortalIcon } from "@/components/custom-icons";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function LandingPage() {
   const features = [
@@ -41,6 +47,18 @@ export default function LandingPage() {
             <span className="hover:text-primary transition-colors cursor-pointer">
               Solutions
             </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-primary transition-colors outline-none">
+                Resources <ChevronDown className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href="/blog" className="w-full cursor-pointer">
+                    Blog
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
           <div className="flex items-center space-x-4">
             <Button asChild variant="ghost" size="icon">
