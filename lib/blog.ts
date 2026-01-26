@@ -67,7 +67,7 @@ export function getPostBySlug(slug: string): Post | null {
       author: data.author,
       ...data,
     } as Post;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
