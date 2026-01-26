@@ -41,9 +41,6 @@ export default function LandingPage() {
             <span className="hover:text-primary transition-colors cursor-pointer">
               Solutions
             </span>
-            <Link href="#pricing" className="hover:text-primary transition-colors">
-              Pricing
-            </Link>
           </nav>
           <div className="flex items-center space-x-4">
             <Button asChild variant="ghost" size="icon">
@@ -174,8 +171,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4">
+      {/* Pricing Section (Hidden) */}
+      {/* <section id="pricing" className="py-20 px-4">
         <div className="container max-w-5xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -291,7 +288,7 @@ export default function LandingPage() {
             </Card>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Footer */}
       <footer className="border-t py-8 px-4">
