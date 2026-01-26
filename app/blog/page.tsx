@@ -2,8 +2,12 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
+import { getAllPosts } from "@/lib/blog";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function BlogPage() {
+  const posts = getAllPosts();
+
   return (
     <div className="flex min-h-screen flex-col">
        <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -32,14 +36,37 @@ export default function BlogPage() {
             </Button>
         </div>
         
-        <div className="text-center py-20 space-y-4">
-            <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
-            <p className="text-xl text-muted-foreground">
-                Latest news, updates, and security insights from the OArmour team.
-            </p>
-            <div className="p-12 border rounded-lg bg-muted/20 mt-8">
-                <p className="text-muted-foreground italic">No posts yet. Stay tuned!</p>
+        <div className="space-y-8">
+            <div className="text-center space-y-4">
+                <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
+                <p className="text-xl text-muted-foreground">
+                    Latest news, updates, and security insights from the OArmour team.
+                </p>
             </div>
+
+            {posts.length > 0 ? (
+                <div className="grid gap-6">
+                    {posts.map((post) => (
+                        <Link key={post.slug} href={`/blog/${post.slug}`}>
+                            <Card className="hover:bg-muted/50 transition-colors">
+                                <CardHeader>
+                                    <CardTitle>{post.title}</CardTitle>
+                                    <CardDescription>
+                                        {post.date} • {post.author}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground">{post.description}</p>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))}
+                </div>
+            ) : (
+                <div className="p-12 border rounded-lg bg-muted/20 mt-8 text-center">
+                    <p className="text-muted-foreground italic">No posts yet. Stay tuned!</p>
+                </div>
+            )}
         </div>
       </main>
     </div>
