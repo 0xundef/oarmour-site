@@ -52,7 +52,7 @@ export function DataTable<TData, TValue>({
           className="w-full md:max-w-sm"
         />
       </div>
-      <div className="rounded-md border overflow-hidden">
+      <div className="rounded-md border overflow-x-auto">
         <Table className="relative min-w-max">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
