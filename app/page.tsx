@@ -48,17 +48,17 @@ export default function LandingPage() {
               Solutions
             </span>
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-primary transition-colors outline-none">
-                Resources <ChevronDown className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href="/blog" className="w-full cursor-pointer">
-                    Blog
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-1 hover:text-primary transition-colors outline-none">
+                  Resources <ChevronDown className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[--radix-dropdown-menu-trigger-width] min-w-0">
+                  <DropdownMenuItem asChild>
+                    <Link href="/blog" className="w-full cursor-pointer">
+                      Blog
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
           </nav>
           <div className="flex items-center space-x-4">
             <Button asChild variant="ghost" size="icon">

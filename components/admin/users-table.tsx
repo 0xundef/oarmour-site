@@ -37,13 +37,12 @@ export function UsersTable({ users }: UsersTableProps) {
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Joined</TableHead>
-            <TableHead className="text-right">Submissions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {users.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center">
+              <TableCell colSpan={4} className="text-center">
                 No users found.
               </TableCell>
             </TableRow>
@@ -56,22 +55,6 @@ export function UsersTable({ users }: UsersTableProps) {
                   <Badge variant="outline">{user.role}</Badge>
                 </TableCell>
                 <TableCell>{formatDate(user.createdAt)}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="font-medium">{user.submissions.length} Total</span>
-                    <div className="flex gap-1 text-xs">
-                        <span className="text-yellow-600">
-                            {user.submissions.filter(s => s.status === 'PENDING').length} P
-                        </span>
-                        <span className="text-green-600">
-                            {user.submissions.filter(s => s.status === 'APPROVED').length} A
-                        </span>
-                        <span className="text-red-600">
-                            {user.submissions.filter(s => s.status === 'REJECTED').length} R
-                        </span>
-                    </div>
-                  </div>
-                </TableCell>
               </TableRow>
             ))
           )}
