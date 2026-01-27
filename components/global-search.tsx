@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   PlusIcon,
+  MagnifyingGlassIcon,
 } from "@radix-ui/react-icons"
 import { useRouter } from "next/navigation"
 
@@ -13,6 +14,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -57,7 +59,7 @@ export function GlobalSearch() {
     return null
   }
 
-  const handleSubmit = async () => {
+  const handleAnalyze = async () => {
     if (!query) return;
     const extensionId = extractExtensionId(query);
     if (!extensionId) {
@@ -103,6 +105,16 @@ export function GlobalSearch() {
     }
   }
 
+  const handleSearch = () => {
+    if (!query) return;
+    setOpen(false);
+    // Navigate to search page or handle search
+    // For now, let's redirect to dashboard with search param
+    const extensionId = extractExtensionId(query);
+    const searchQuery = extensionId || query;
+    router.push(`/dashboard/extension?search=${searchQuery}`);
+  }
+
   return (
     <>
       <button
@@ -122,16 +134,23 @@ export function GlobalSearch() {
             onValueChange={setQuery}
             onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                    handleSubmit();
+                    handleSearch();
                 }
             }}
         />
         <CommandList>
           <CommandEmpty>
-            Press Enter to analyze extension ID.
+            Press Enter to search or analyze extension.
           </CommandEmpty>
+          <CommandGroup heading="Suggestions">
+            <CommandItem onSelect={handleSearch}>
+              <MagnifyingGlassIcon className="mr-2 h-4 w-4" />
+              <span>Search Extension: {query || "..."}</span>
+            </CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
           <CommandGroup heading="Quick Actions">
-             <CommandItem onSelect={handleSubmit}>
+             <CommandItem onSelect={handleAnalyze}>
               <PlusIcon className="mr-2 h-4 w-4" />
               <span>Analyze Extension: {extractExtensionId(query) || query || "..."}</span>
             </CommandItem>
