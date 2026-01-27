@@ -19,7 +19,6 @@ import { useToast } from "@/components/ui/use-toast"
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -70,7 +69,12 @@ export function GlobalSearch() {
         return;
     }
 
-    setIsSubmitting(true);
+    setOpen(false);
+    toast({
+        title: "Analysis Queued",
+        description: "Request submitted. Analyzing in background...",
+    });
+
     try {
         const res = await fetch('/api/extensions/analyze', {
             method: 'POST',
@@ -87,7 +91,6 @@ export function GlobalSearch() {
             description: `Processing extension: ${data.data.name || extensionId}`,
         });
         
-        setOpen(false);
         // Maybe refresh dashboard data?
         router.refresh();
 
@@ -97,8 +100,6 @@ export function GlobalSearch() {
             title: "Error",
             description: "Failed to submit extension for analysis."
         });
-    } finally {
-        setIsSubmitting(false);
     }
   }
 
@@ -127,12 +128,12 @@ export function GlobalSearch() {
         />
         <CommandList>
           <CommandEmpty>
-            {isSubmitting ? "Submitting..." : "Press Enter to analyze extension ID."}
+            Press Enter to analyze extension ID.
           </CommandEmpty>
           <CommandGroup heading="Quick Actions">
              <CommandItem onSelect={handleSubmit}>
               <PlusIcon className="mr-2 h-4 w-4" />
-              <span>Analyze Extension: {query || "..."}</span>
+              <span>Analyze Extension: {extractExtensionId(query) || query || "..."}</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>
