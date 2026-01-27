@@ -40,6 +40,27 @@ export async function POST(req: NextRequest) {
         }
         
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+
+        const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
+            if (typeof value !== 'string') return String(value ?? '');
+            const match = value.match(/^__MSG_(.+)__$/);
+            if (!match) return value;
+            const key = match[1];
+            const locale = manifestObj.default_locale || 'en';
+            const messagesPath = path.join(baseDir, '_locales', locale, 'messages.json');
+            try {
+                if (fs.existsSync(messagesPath)) {
+                    const messages = JSON.parse(fs.readFileSync(messagesPath, 'utf-8'));
+                    const entry = messages[key];
+                    if (entry && typeof entry.message === 'string') {
+                        return entry.message;
+                    }
+                }
+            } catch {
+                // ignore locale resolution errors
+            }
+            return value;
+        }
         
         // Try to get publisher/author
         // V2/V3 can have 'author' string or object, or 'developer' object in some contexts (though rare in raw manifest)
@@ -53,12 +74,13 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Upsert Extension in DB with basic info
+        const resolvedName = resolveLocalizedString(manifest.name, sourceDir, manifest);
         extension = await prisma.globalExtension.upsert({
             where: { storeId: extensionId },
             update: {
-                name: manifest.name || extensionId,
+                name: resolvedName || extensionId,
                 version: manifest.version,
-                description: manifest.description,
+                description: resolveLocalizedString(manifest.description, sourceDir, manifest),
                 publisher: publisher || null,
                 // manifest icons are usually paths, hard to get full URL without hosting. 
                 // We'll skip iconUrl for now or use a placeholder if needed.
@@ -66,9 +88,9 @@ export async function POST(req: NextRequest) {
             },
             create: {
                 storeId: extensionId,
-                name: manifest.name || extensionId,
+                name: resolvedName || extensionId,
                 version: manifest.version,
-                description: manifest.description,
+                description: resolveLocalizedString(manifest.description, sourceDir, manifest),
                 publisher: publisher || null,
                 platform: 'CHROME'
             }
