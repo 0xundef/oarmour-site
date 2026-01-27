@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, ShieldCheck, Clock, ChevronDown } from "lucide-react";
 import { DiscordLogoIcon } from "@radix-ui/react-icons";
-import { ExtensionWalletIcon, WebPortalIcon } from "@/components/custom-icons";
+import { WebPortalIcon } from "@/components/custom-icons";
+import { Icons } from "@/components/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
 export default function LandingPage() {
   const features = [
     {
-      icon: ExtensionWalletIcon,
+      icon: Icons.webExtension,
       title: "Browser Extension Wallet",
       description: "Detect malicious code and malicious traffic in nearly real-time. Verify source code integrity.",
     },

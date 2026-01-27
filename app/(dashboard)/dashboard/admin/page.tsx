@@ -38,23 +38,16 @@ export default async function AdminPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Manage submissions and view user stats.</p>
-        </div>
-      </div>
-
-      <Tabs defaultValue="submissions" className="space-y-4">
+      <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="submissions">Submissions</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="submissions">Submissions</TabsTrigger>
         </TabsList>
-        <TabsContent value="submissions" className="space-y-4">
-          <SubmissionsTable submissions={submissions} />
-        </TabsContent>
         <TabsContent value="users" className="space-y-4">
           <UsersTable users={users} />
+        </TabsContent>
+        <TabsContent value="submissions" className="space-y-4">
+          <SubmissionsTable submissions={submissions} />
         </TabsContent>
       </Tabs>
     </div>

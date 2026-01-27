@@ -4,9 +4,9 @@ import { PostHogProvider } from 'posthog-js/react'
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-if (typeof window !== 'undefined') {
-  posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+  posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
     capture_pageview: false // Disable automatic pageview capture, as we capture manually
   })
 }
@@ -20,7 +20,7 @@ export function PHProvider({
     const searchParams = useSearchParams();
 
     useEffect(() => {
-      if (pathname) {
+      if (pathname && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
         let url = window.origin + pathname;
         if (searchParams && searchParams.toString()) {
           url = url + `?${searchParams.toString()}`;

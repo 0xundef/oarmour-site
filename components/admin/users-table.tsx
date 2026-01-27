@@ -36,13 +36,14 @@ export function UsersTable({ users }: UsersTableProps) {
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Submissions</TableHead>
             <TableHead>Joined</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {users.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center">
+              <TableCell colSpan={5} className="text-center">
                 No users found.
               </TableCell>
             </TableRow>
@@ -54,6 +55,7 @@ export function UsersTable({ users }: UsersTableProps) {
                 <TableCell>
                   <Badge variant="outline">{user.role}</Badge>
                 </TableCell>
+                <TableCell>{user.submissions.length}</TableCell>
                 <TableCell>{formatDate(user.createdAt)}</TableCell>
               </TableRow>
             ))
