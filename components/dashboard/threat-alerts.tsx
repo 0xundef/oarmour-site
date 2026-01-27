@@ -55,12 +55,12 @@ const columns: ColumnDef<ThreatAlert>[] = [
     cell: ({ row }) => {
       const storeUrl = `https://chromewebstore.google.com/detail/${row.original.extensionId}`
       return (
-        <a 
-          href={storeUrl} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="hover:underline decoration-primary underline-offset-4"
-          onClick={(e) => e.stopPropagation()} 
+        <a
+          href={storeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline decoration-blue-500 underline-offset-4 text-blue-600 hover:text-blue-800 hover:decoration-blue-700"
+          onClick={(e) => e.stopPropagation()}
         >
           <span className="font-medium">{row.getValue("extensionName")}</span>
         </a>
