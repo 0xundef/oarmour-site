@@ -52,9 +52,20 @@ const columns: ColumnDef<ThreatAlert>[] = [
   {
     accessorKey: "extensionName",
     header: "Extension Name",
-    cell: ({ row }) => (
-      <span className="font-medium">{row.getValue("extensionName")}</span>
-    ),
+    cell: ({ row }) => {
+      const storeUrl = `https://chromewebstore.google.com/detail/${row.original.extensionId}`
+      return (
+        <a 
+          href={storeUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="hover:underline decoration-primary underline-offset-4"
+          onClick={(e) => e.stopPropagation()} 
+        >
+          <span className="font-medium">{row.getValue("extensionName")}</span>
+        </a>
+      )
+    },
   },
   {
     accessorKey: "version",
