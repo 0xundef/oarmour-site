@@ -49,7 +49,7 @@ export default function LandingPage() {
               Solutions
             </span>
             <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-1 hover:text-primary transition-colors outline-none">
+                <DropdownMenuTrigger className="flex items-center gap-1 hover:text-primary transition-colors outline-none" suppressHydrationWarning>
                   Resources <ChevronDown className="h-4 w-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[--radix-dropdown-menu-trigger-width] min-w-0">

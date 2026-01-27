@@ -127,21 +127,19 @@ export function GlobalSearch() {
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={setOpen} commandProps={{ shouldFilter: false }}>
         <CommandInput 
-            placeholder="Type extension ID to analyze..." 
+            placeholder="Type extension ID to analyze..."  
             value={query}
             onValueChange={setQuery}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                    handleSearch();
-                }
-            }}
         />
         <CommandList>
           <CommandEmpty>
             Press Enter to search or analyze extension.
           </CommandEmpty>
+          {/* Dummy item to prevent auto-focus on the first real item. 
+              Using 'hidden' might cause cmdk to skip it, so we use a visually hidden approach. */}
+          <CommandItem className="h-0 w-0 p-0 m-0 overflow-hidden opacity-0 pointer-events-none border-0" value="dummy-focus-trap" />
           <CommandGroup heading="Suggestions">
             <CommandItem onSelect={handleSearch}>
               <MagnifyingGlassIcon className="mr-2 h-4 w-4" />
