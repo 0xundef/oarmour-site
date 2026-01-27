@@ -37,17 +37,35 @@ export function GlobalSearch() {
 
   // removed unused runCommand
 
+  const extractExtensionId = (input: string): string | null => {
+    const trimmed = input.trim()
+    const idRegex = /^[a-z]{32}$/
+    if (idRegex.test(trimmed)) return trimmed
+    try {
+      const url = new URL(trimmed)
+      const host = url.hostname
+      const path = url.pathname
+      const isChromeWebStore =
+        host.includes("chromewebstore.google.com") ||
+        (host.includes("chrome.google.com") && path.includes("/webstore/"))
+      if (isChromeWebStore && path.includes("/detail/")) {
+        const match = path.match(/[a-z]{32}/)
+        if (match) return match[0]
+      }
+    } catch {
+      // not a valid URL, fall through
+    }
+    return null
+  }
+
   const handleSubmit = async () => {
     if (!query) return;
-    
-    // Basic regex for extension ID (32 chars)
-    const isExtensionId = /^[a-z]{32}$/.test(query);
-    
-    if (!isExtensionId) {
+    const extensionId = extractExtensionId(query);
+    if (!extensionId) {
         toast({
             variant: "destructive",
-            title: "Invalid ID",
-            description: "Please enter a valid 32-character Chrome Extension ID."
+            title: "输入不合法",
+            description: "请输入 32 位插件 ID 或 Chrome Web Store 链接。",
         });
         return;
     }
@@ -57,7 +75,7 @@ export function GlobalSearch() {
         const res = await fetch('/api/extensions/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extensionId: query })
+            body: JSON.stringify({ extensionId })
         });
 
         if (!res.ok) throw new Error('Failed to start analysis');
@@ -66,7 +84,7 @@ export function GlobalSearch() {
         
         toast({
             title: "Analysis Started",
-            description: `Processing extension: ${data.data.name || query}`,
+            description: `Processing extension: ${data.data.name || extensionId}`,
         });
         
         setOpen(false);
