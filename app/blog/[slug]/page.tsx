@@ -5,12 +5,42 @@ import { Button } from "@/components/ui/button";
 import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
 import { getPostBySlug, getAllPosts } from "@/lib/blog";
+import type { Metadata } from "next";
 
 export async function generateStaticParams() {
   const posts = getAllPosts();
   return posts.map((post) => ({
     slug: post.slug,
   }));
+}
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const post = getPostBySlug(params.slug);
+  if (!post) {
+    return {};
+  }
+  const url = `https://oarmour.com/blog/${post.slug}`;
+  const title = `${post.title} | OArmour`;
+  const description = post.description || post.title;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      url,
+      title,
+      description,
+      siteName: "OArmour",
+      images: [{ url: "/icon-512x512.png", width: 512, height: 512, alt: post.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/icon-512x512.png"],
+    },
+  };
 }
 
 export default function BlogPost({ params }: { params: { slug: string } }) {

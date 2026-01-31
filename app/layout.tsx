@@ -30,11 +30,20 @@ export const metadata: Metadata = {
     title: "OArmour - Web3 Access Point Security",
     description: "Real-time detection of malicious code in browser extensions and web portals.",
     siteName: "OArmour",
+    images: [
+      {
+        url: "/icon-512x512.png",
+        width: 512,
+        height: 512,
+        alt: "OArmour"
+      }
+    ]
   },
   twitter: {
     card: "summary_large_image",
     title: "OArmour - Web3 Access Point Security",
     description: "Protect your users from malicious extension upgrades and web portal injections.",
+    images: ["/icon-512x512.png"]
   },
   icons: {
     icon: '/favicon.ico',
@@ -81,6 +90,24 @@ export default async function RootLayout({
           type="application/ld+json"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        <Script
+          id="json-ld-website"
+          type="application/ld+json"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "url": "https://oarmour.com",
+              "name": "OArmour",
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://oarmour.com/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+              }
+            })
+          }}
         />
       </body>
     </html>

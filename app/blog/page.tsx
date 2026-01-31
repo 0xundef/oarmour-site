@@ -4,6 +4,25 @@ import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
 import { getAllPosts } from "@/lib/blog";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Blog | OArmour",
+  description: "Latest news, updates, and security insights from the OArmour team.",
+  alternates: { canonical: "https://oarmour.com/blog" },
+  openGraph: {
+    url: "https://oarmour.com/blog",
+    title: "Blog | OArmour",
+    description: "Latest news, updates, and security insights from the OArmour team.",
+    images: [{ url: "/icon-512x512.png", width: 512, height: 512, alt: "OArmour Blog" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Blog | OArmour",
+    description: "Latest news, updates, and security insights from the OArmour team.",
+    images: ["/icon-512x512.png"],
+  },
+};
 
 export default function BlogPage() {
   const posts = getAllPosts();
