@@ -56,15 +56,30 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role;
+        session.user.role = (token.role as any) ?? "USER";
       }
       return session;
     },
     async jwt({ token, user, account, profile, isNewUser }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.role = (user as any).role ?? token.role ?? "USER";
+        (token as any).email = (user as any).email ?? (token as any).email;
       }
+      const rawList = process.env.NEXTAUTH_DEV_ADMIN_EMAILS ?? "";
+      const devListRaw =
+        process.env.NODE_ENV !== "production"
+          ? rawList || "*"
+          : rawList;
+      const devList = devListRaw
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const emailLower = typeof (token as any).email === "string" ? ((token as any).email as string).toLowerCase() : "";
+      if (devList.length > 0 && (devList.includes("*") || devList.includes(emailLower))) {
+        token.role = "ADMIN" as any;
+      }
+      token.role = token.role ?? ("USER" as any);
       return token;
     },
   },

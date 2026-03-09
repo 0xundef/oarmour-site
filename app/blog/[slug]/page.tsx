@@ -89,7 +89,13 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
                 </div>
             </div>
             
-            <MDXRemote source={post.content} />
+            <MDXRemote
+              source={post.content}
+              options={{
+                blockJS: true,
+                blockDangerousJS: true,
+              }}
+            />
         </article>
       </main>
     </div>
