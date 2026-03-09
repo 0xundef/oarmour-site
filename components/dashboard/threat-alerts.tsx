@@ -121,6 +121,7 @@ export function ThreatAlerts() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
+  const [details, setDetails] = useState<{ domains: string[]; ips: string[]; urls: string[]; filesScanned: number; status: string } | null>(null)
 
   const fetchData = async () => {
     try {
@@ -151,6 +152,24 @@ export function ThreatAlerts() {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+  
+  useEffect(() => {
+    const loadDetails = async () => {
+      if (!selected) { setDetails(null); return }
+      try {
+        const res = await fetch(`/api/extensions/${selected.extensionId}/latest`)
+        if (res.ok) {
+          const json = await res.json()
+          setDetails(json)
+        } else {
+          setDetails(null)
+        }
+      } catch {
+        setDetails(null)
+      }
+    }
+    loadDetails()
+  }, [selected, open])
 
   if (loading && data.length === 0) {
       return <div className="p-4 text-center text-muted-foreground">Loading extensions...</div>
@@ -171,6 +190,24 @@ export function ThreatAlerts() {
               <div className="text-sm">Publisher: {selected?.publisher}</div>
               <div className="text-sm">Last Update: {selected?.lastUpdate}</div>
               <div className="text-sm">Status: {selected?.analysisStatus}</div>
+              <div className="pt-4">
+                <div className="text-sm font-medium">Domains</div>
+                <div className="text-xs text-muted-foreground">
+                  {(details?.domains || []).slice(0, 20).map((d, i) => (
+                    <div key={i} className="truncate">{d}</div>
+                  ))}
+                  {(!details || (details.domains || []).length === 0) && <div className="text-muted-foreground">No data</div>}
+                </div>
+              </div>
+              <div className="pt-2">
+                <div className="text-sm font-medium">IPs</div>
+                <div className="text-xs text-muted-foreground">
+                  {(details?.ips || []).slice(0, 20).map((ip, i) => (
+                    <div key={i} className="truncate">{ip}</div>
+                  ))}
+                  {(!details || (details.ips || []).length === 0) && <div className="text-muted-foreground">No data</div>}
+                </div>
+              </div>
             </div>
           </SheetContent>
         </Sheet>

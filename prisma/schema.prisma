@@ -179,6 +179,7 @@ model ExtensionAnalysisResult {
   updatedAt   DateTime @updatedAt
   
   extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
+  domainEnrichments DomainEnrichment[]
 }
 
 // B. The Library of Web Portals (e.g., Uniswap App, OpenSea)
@@ -239,6 +240,18 @@ model AssetSubscription {
   @@unique([userId, targetType, targetId])
 }
 
+model DomainEnrichment {
+  id        String   @id @default(uuid())
+  analysis  ExtensionAnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  analysisId String
+  domain    String
+  registrar String?
+  status    String?
+  nameservers String[]
+  createdDate DateTime?
+  expiresDate DateTime?
+  fetchedAt DateTime @default(now())
+}
 // ==========================================
 // 4. Security Intelligence (The "Brain")
 // ==========================================
