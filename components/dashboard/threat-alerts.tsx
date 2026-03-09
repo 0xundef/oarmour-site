@@ -6,7 +6,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Copy, Bell } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 
@@ -122,6 +122,7 @@ export function ThreatAlerts() {
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
   const [details, setDetails] = useState<{ addedDomains: string[]; addedIps: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number; totalIps: number } | null>(null)
+  const detailsAbortRef = useRef<AbortController | null>(null)
 
   const fetchData = async () => {
     try {
@@ -156,15 +157,22 @@ export function ThreatAlerts() {
   useEffect(() => {
     const loadDetails = async () => {
       if (!selected) { setDetails(null); return }
+      if (detailsAbortRef.current) {
+        detailsAbortRef.current.abort()
+      }
+      const controller = new AbortController()
+      detailsAbortRef.current = controller
       try {
-        const res = await fetch(`/api/extensions/${selected.extensionId}/latest`)
-        if (res.ok) {
-          const json = await res.json()
+        const extId = selected.extensionId
+        const res = await fetch(`/api/extensions/${extId}/latest`, { signal: controller.signal })
+        if (!res.ok) { setDetails(null); return }
+        const json = await res.json()
+        // Ignore stale responses
+        if (detailsAbortRef.current === controller && selected?.extensionId === extId) {
           setDetails(json)
-        } else {
-          setDetails(null)
         }
-      } catch {
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return
         setDetails(null)
       }
     }
@@ -178,7 +186,15 @@ export function ThreatAlerts() {
   return (
     <Card className="h-full border-none shadow-none">
       <CardContent className="p-0">
-        <DataTable data={data} columns={makeColumns((row) => { setSelected(row); setOpen(true) })} searchKey="extensionName" />
+        <DataTable
+          data={data}
+          columns={makeColumns((row) => {
+            setDetails(null)
+            setSelected(row)
+            setOpen(true)
+          })}
+          searchKey="extensionName"
+        />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="right" className="sm:max-w-md">
             <SheetHeader>
@@ -192,8 +208,14 @@ export function ThreatAlerts() {
               <div className="pt-4">
                 <div className="text-sm font-medium">Domains</div>
                 <div className="text-xs text-muted-foreground">
-                  <div className="mb-1">Total: {details?.totalDomains ?? 0}</div>
-                  <div className="mb-1">New since last analysis: {details?.addedDomains?.length ?? 0}</div>
+                  {details === null ? (
+                    <div className="text-muted-foreground">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="mb-1">Total: {details.totalDomains}</div>
+                      <div className="mb-1">New since last analysis: {details.addedDomains.length}</div>
+                    </>
+                  )}
                   {(details?.addedDomains || []).slice(0, 10).map((d, i) => (
                     <div key={i} className="truncate">+ {d}</div>
                   ))}
@@ -203,8 +225,14 @@ export function ThreatAlerts() {
               <div className="pt-2">
                 <div className="text-sm font-medium">IPs</div>
                 <div className="text-xs text-muted-foreground">
-                  <div className="mb-1">Total: {details?.totalIps ?? 0}</div>
-                  <div className="mb-1">New since last analysis: {details?.addedIps?.length ?? 0}</div>
+                  {details === null ? (
+                    <div className="text-muted-foreground">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="mb-1">Total: {details.totalIps}</div>
+                      <div className="mb-1">New since last analysis: {details.addedIps.length}</div>
+                    </>
+                  )}
                   {(details?.addedIps || []).slice(0, 10).map((ip, i) => (
                     <div key={i} className="truncate">+ {ip}</div>
                   ))}
