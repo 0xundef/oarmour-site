@@ -13,17 +13,24 @@ export default async function BillingPage() {
     redirect("/signin")
   }
 
-  const user = await prisma.user.findUnique({
-    where: {
-      id: session.id,
-    },
-  })
+  const adapterEnabled =
+    process.env.NEXTAUTH_USE_ADAPTER === "1" ||
+    (process.env.NODE_ENV === "production" && !!process.env.db1_POSTGRES_PRISMA_URL)
 
-  if (!user) {
-    redirect("/signin")
+  let user: { id: string; email: string | null; stripeSubscriptionId: string | null } | null = null
+  if (adapterEnabled && session.id) {
+    try {
+      const found = await prisma.user.findUnique({
+        where: { id: session.id },
+        select: { id: true, email: true, stripeSubscriptionId: true },
+      })
+      user = found
+    } catch {
+      user = null
+    }
   }
 
-  const isSubscribed = !!user.stripeSubscriptionId
+  const isSubscribed = !!user?.stripeSubscriptionId
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
@@ -76,11 +83,11 @@ export default async function BillingPage() {
               {isSubscribed ? (
                   <ManageSubscriptionButton />
               ) : (
-                  <SubscriptionButton 
-                      userId={user.id} 
-                      email={user.email} 
-                      paymentLink="https://buy.stripe.com/aFa14odpK4J50dB1cGdnW02"
-                      text="Subscribe to Starter"
+                  <SubscriptionButton
+                    userId={user?.id ?? (session.id ?? session.email ?? "guest")}
+                    email={user?.email ?? session.email ?? null}
+                    paymentLink="https://buy.stripe.com/aFa14odpK4J50dB1cGdnW02"
+                    text="Subscribe to Starter"
                   />
               )}
            </CardFooter>
@@ -105,11 +112,11 @@ export default async function BillingPage() {
                 {isSubscribed ? (
                     <ManageSubscriptionButton />
                 ) : (
-                    <SubscriptionButton 
-                        userId={user.id} 
-                        email={user.email} 
-                        paymentLink="https://buy.stripe.com/7sYfZidpKb7t2lJg7AdnW03"
-                        text="Subscribe to Pro"
+                    <SubscriptionButton
+                      userId={user?.id ?? (session.id ?? session.email ?? "guest")}
+                      email={user?.email ?? session.email ?? null}
+                      paymentLink="https://buy.stripe.com/7sYfZidpKb7t2lJg7AdnW03"
+                      text="Subscribe to Pro"
                     />
                 )}
             </CardFooter>

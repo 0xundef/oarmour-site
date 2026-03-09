@@ -15,35 +15,37 @@ export type ExtensionWithAnalysis = {
 }
 
 export async function getExtensions(): Promise<ExtensionWithAnalysis[]> {
-  const extensions = await prisma.globalExtension.findMany({
-    orderBy: {
-      updatedAt: 'desc'
-    },
-    include: {
-      analysisResults: {
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: 1
+  try {
+    const extensions = await prisma.globalExtension.findMany({
+      orderBy: {
+        updatedAt: 'desc'
+      },
+      include: {
+        analysisResults: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
       }
-    }
-  })
+    })
 
-  return extensions.map((ext: any) => {
-    const latestAnalysis = ext.analysisResults[0]
-    
-    return {
-      id: ext.id,
-      storeId: ext.storeId,
-      name: ext.name,
-      version: ext.version,
-      publisher: ext.publisher,
-      updatedAt: ext.updatedAt,
-      // Map DB RiskLevel to UI string
-      riskLevel: ext.riskLevel, 
-      // Determine status: if analysis is running or no analysis yet
-      analysisStatus: latestAnalysis?.status || 'PENDING',
-      filesScanned: latestAnalysis?.filesScanned || 0
-    }
-  })
+    return extensions.map((ext: any) => {
+      const latestAnalysis = ext.analysisResults[0]
+      
+      return {
+        id: ext.id,
+        storeId: ext.storeId,
+        name: ext.name,
+        version: ext.version,
+        publisher: ext.publisher,
+        updatedAt: ext.updatedAt,
+        riskLevel: ext.riskLevel,
+        analysisStatus: latestAnalysis?.status || 'PENDING',
+        filesScanned: latestAnalysis?.filesScanned || 0
+      }
+    })
+  } catch (e) {
+    return []
+  }
 }

@@ -5,8 +5,12 @@ import CredentialProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
+const enableAdapter =
+  process.env.NEXTAUTH_USE_ADAPTER === "1" ||
+  (process.env.NODE_ENV === "production" && !!process.env.db1_POSTGRES_PRISMA_URL);
+
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  ...(enableAdapter ? { adapter: PrismaAdapter(prisma) } : {}),
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
@@ -65,6 +69,6 @@ export const authOptions: NextAuthOptions = {
     },
   },
   pages: {
-    signIn: "/", //sigin page
+    signIn: "/signin",
   },
 };

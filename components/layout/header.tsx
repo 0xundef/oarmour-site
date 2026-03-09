@@ -1,9 +1,12 @@
+ "use client";
+
 import { cn } from "@/lib/utils";
 import { MobileSidebar } from "./mobile-sidebar";
 import { UserNav } from "./user-nav";
 import Link from "next/link";
 import Logo from "@/components/logo";
-import { GlobalSearch } from "@/components/global-search";
+import dynamic from "next/dynamic";
+const GlobalSearch = dynamic(() => import("@/components/global-search").then(m => m.GlobalSearch), { ssr: false });
 
 export default function Header() {
   return (
