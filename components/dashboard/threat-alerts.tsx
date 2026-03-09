@@ -8,6 +8,7 @@ import { Copy, Bell } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useEffect, useState } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 
 type ThreatAlert = {
   id: string
@@ -48,78 +49,78 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
   )
 }
 
-const columns: ColumnDef<ThreatAlert>[] = [
-  {
-    accessorKey: "extensionName",
-    header: "Extension Name",
-    cell: ({ row }) => {
-      const storeUrl = `https://chromewebstore.google.com/detail/${row.original.extensionId}`
-      return (
-        <a
-          href={storeUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline decoration-blue-500 underline-offset-4 text-blue-600 hover:text-blue-800 hover:decoration-blue-700"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span className="font-medium">{row.getValue("extensionName")}</span>
-        </a>
-      )
+function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>[] {
+  return [
+    {
+      accessorKey: "extensionName",
+      header: "Extension Name",
+      cell: ({ row }) => {
+        return (
+          <span
+            className="font-medium text-blue-600 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpen(row.original)
+            }}
+          >
+            {row.getValue("extensionName")}
+          </span>
+        )
+      },
     },
-  },
-  {
-    accessorKey: "version",
-    header: "Version",
-  },
-  {
-    accessorKey: "publisher",
-    header: "Publisher",
-    cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground">{row.getValue("publisher") || 'N/A'}</span>
-    ),
-  },
-  {
-    accessorKey: "lastUpdate",
-    header: "Last Update",
-  },
-  {
-    accessorKey: "risk",
-    header: "Risk Level",
-    cell: ({ row }) => {
-      const risk = row.getValue("risk") as string
-      const status = row.original.analysisStatus
-
-      if (status === 'RUNNING' || status === 'PENDING') {
-         return (
+    {
+      accessorKey: "version",
+      header: "Version",
+    },
+    {
+      accessorKey: "publisher",
+      header: "Publisher",
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">{row.getValue("publisher") || 'N/A'}</span>
+      ),
+    },
+    {
+      accessorKey: "lastUpdate",
+      header: "Last Update",
+    },
+    {
+      accessorKey: "risk",
+      header: "Risk Level",
+      cell: ({ row }) => {
+        const risk = row.getValue("risk") as string
+        const status = row.original.analysisStatus
+        if (status === 'RUNNING' || status === 'PENDING') {
+          return (
             <div className="flex items-center gap-2" title="Analysis In Progress">
-                <div className="h-2 w-12 rounded-full bg-gray-300 animate-pulse" />
-                <span className="text-xs text-gray-500">Analyzing...</span>
+              <div className="h-2 w-12 rounded-full bg-gray-300 animate-pulse" />
+              <span className="text-xs text-gray-500">Analyzing...</span>
             </div>
-         )
-      }
-      
-      let colorClass = "bg-gray-400" // Default Unknown
-      if (risk === "SAFE") colorClass = "bg-green-500"
-      if (risk === "CAUTION") colorClass = "bg-yellow-500"
-      if (risk === "HIGH" || risk === "CRITICAL") colorClass = "bg-red-500"
-
-      return (
-        <div className="flex items-center" title={risk}>
-          <div className={`h-2 w-12 rounded-full ${colorClass}`} />
-        </div>
-      )
+          )
+        }
+        let colorClass = "bg-gray-400"
+        if (risk === "SAFE") colorClass = "bg-green-500"
+        if (risk === "CAUTION") colorClass = "bg-yellow-500"
+        if (risk === "HIGH" || risk === "CRITICAL") colorClass = "bg-red-500"
+        return (
+          <div className="flex items-center" title={risk}>
+            <div className={`h-2 w-12 rounded-full ${colorClass}`} />
+          </div>
+        )
+      },
     },
-  },
-  {
-    id: "operation",
-    header: "Operation",
-    cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} />,
-  },
-]
+    {
+      id: "operation",
+      header: "Operation",
+      cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} />,
+    },
+  ]
+}
 
 export function ThreatAlerts() {
   const [data, setData] = useState<ThreatAlert[]>([])
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<ThreatAlert | null>(null)
+  const [open, setOpen] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -158,7 +159,21 @@ export function ThreatAlerts() {
   return (
     <Card className="h-full border-none shadow-none">
       <CardContent className="p-0">
-        <DataTable data={data} columns={columns} searchKey="extensionName" />
+        <DataTable data={data} columns={makeColumns((row) => { setSelected(row); setOpen(true) })} searchKey="extensionName" />
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="right" className="sm:max-w-md">
+            <SheetHeader>
+              <SheetTitle>{selected?.extensionName}</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-2">
+              <div className="text-sm text-muted-foreground">Extension ID: {selected?.extensionId}</div>
+              <div className="text-sm">Version: {selected?.version}</div>
+              <div className="text-sm">Publisher: {selected?.publisher}</div>
+              <div className="text-sm">Last Update: {selected?.lastUpdate}</div>
+              <div className="text-sm">Status: {selected?.analysisStatus}</div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </CardContent>
     </Card>
   )
