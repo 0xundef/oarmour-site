@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell } from "lucide-react"
+import { Copy, Bell, RefreshCw } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useEffect, useState } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
@@ -22,18 +22,33 @@ type ThreatAlert = {
 
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
+  const [analyzing, setAnalyzing] = useState(false)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(extensionId)
-    toast({
-      description: "Extension ID copied to clipboard",
-    })
+    toast({ description: "Extension ID copied to clipboard" })
   }
 
   const handleSubscribe = () => {
-    toast({
-      description: "Subscribed to alert events",
-    })
+    toast({ description: "Subscribed to alert events" })
+  }
+
+  const handleAnalyze = async () => {
+    if (analyzing) return
+    setAnalyzing(true)
+    try {
+      const res = await fetch('/api/extensions/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extensionId }),
+      })
+      if (!res.ok) throw new Error('Failed to start analysis')
+      toast({ description: "Analysis started" })
+    } catch {
+      toast({ variant: "destructive", description: "Failed to start analysis" })
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   return (
@@ -43,6 +58,9 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
       </Button>
       <Button variant="ghost" size="icon" onClick={handleSubscribe} title="Subscribe Alert Event">
         <Bell className="h-4 w-4" />
+      </Button>
+      <Button variant="ghost" size="icon" onClick={handleAnalyze} title="Analyze Now" disabled={analyzing}>
+        <RefreshCw className="h-4 w-4" />
       </Button>
     </div>
   )

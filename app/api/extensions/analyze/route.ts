@@ -12,18 +12,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Extension ID is required' }, { status: 400 });
     }
 
-    // Record submission if user is logged in
+    // Record submission if adapter is enabled and user exists
+    const adapterEnabled =
+      process.env.NEXTAUTH_USE_ADAPTER === "1" ||
+      (process.env.NODE_ENV === "production" && !!process.env.db1_POSTGRES_PRISMA_URL);
     const session = await getServerSession(authOptions);
-    if (session?.user?.id) {
+    if (adapterEnabled && session?.user?.id) {
       try {
-        await prisma.submission.create({
-          data: {
-            userId: session.user.id,
-            input: extensionId,
-            status: 'APPROVED', // Auto-approved as we are running analysis
-            feedback: 'Analysis triggered via Global Search'
-          }
+        const exists = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { id: true },
         });
+        if (exists) {
+          await prisma.submission.create({
+            data: {
+              userId: session.user.id,
+              input: extensionId,
+              status: 'APPROVED',
+              feedback: 'Analysis triggered via UI',
+            },
+          });
+        }
       } catch (e) {
         console.error('Failed to record submission:', e);
         // Continue with analysis even if submission recording fails
