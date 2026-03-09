@@ -121,7 +121,7 @@ export function ThreatAlerts() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
-  const [details, setDetails] = useState<{ domains: string[]; ips: string[]; urls: string[]; filesScanned: number; status: string } | null>(null)
+  const [details, setDetails] = useState<{ addedDomains: string[]; addedIps: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number; totalIps: number } | null>(null)
 
   const fetchData = async () => {
     try {
@@ -185,7 +185,6 @@ export function ThreatAlerts() {
               <SheetTitle>{selected?.extensionName}</SheetTitle>
             </SheetHeader>
             <div className="mt-4 space-y-2">
-              <div className="text-sm text-muted-foreground">Extension ID: {selected?.extensionId}</div>
               <div className="text-sm">Version: {selected?.version}</div>
               <div className="text-sm">Publisher: {selected?.publisher}</div>
               <div className="text-sm">Last Update: {selected?.lastUpdate}</div>
@@ -193,19 +192,23 @@ export function ThreatAlerts() {
               <div className="pt-4">
                 <div className="text-sm font-medium">Domains</div>
                 <div className="text-xs text-muted-foreground">
-                  {(details?.domains || []).slice(0, 20).map((d, i) => (
-                    <div key={i} className="truncate">{d}</div>
+                  <div className="mb-1">Total: {details?.totalDomains ?? 0}</div>
+                  <div className="mb-1">New since last analysis: {details?.addedDomains?.length ?? 0}</div>
+                  {(details?.addedDomains || []).slice(0, 10).map((d, i) => (
+                    <div key={i} className="truncate">+ {d}</div>
                   ))}
-                  {(!details || (details.domains || []).length === 0) && <div className="text-muted-foreground">No data</div>}
+                  {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
                 </div>
               </div>
               <div className="pt-2">
                 <div className="text-sm font-medium">IPs</div>
                 <div className="text-xs text-muted-foreground">
-                  {(details?.ips || []).slice(0, 20).map((ip, i) => (
-                    <div key={i} className="truncate">{ip}</div>
+                  <div className="mb-1">Total: {details?.totalIps ?? 0}</div>
+                  <div className="mb-1">New since last analysis: {details?.addedIps?.length ?? 0}</div>
+                  {(details?.addedIps || []).slice(0, 10).map((ip, i) => (
+                    <div key={i} className="truncate">+ {ip}</div>
                   ))}
-                  {(!details || (details.ips || []).length === 0) && <div className="text-muted-foreground">No data</div>}
+                  {details && (details.addedIps || []).length === 0 && <div className="text-muted-foreground">No new IPs</div>}
                 </div>
               </div>
             </div>
