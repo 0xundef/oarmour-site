@@ -37,19 +37,21 @@ export default async function AdminPage() {
     }
   });
   
-  // Extensions list for monitoring control (tolerant to missing column)
-  let extensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored?: boolean; checkFrequencyMinutes?: number }> = []
-  try {
-    extensions = await (prisma as any).globalExtension.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true, storeId: true, version: true, isMonitored: true, checkFrequencyMinutes: true },
-    })
-  } catch {
-    extensions = await prisma.globalExtension.findMany({
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, name: true, storeId: true, version: true },
-    })
-  }
+  // Extensions list for monitoring control (fetch via raw to ensure isMonitored is present)
+  const rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null }> =
+    await prisma.$queryRaw`
+      SELECT "id","name","storeId","version","isMonitored","checkFrequencyMinutes"
+      FROM "GlobalExtension"
+      ORDER BY "updatedAt" DESC
+    `
+  const extensions = rawExtensions.map((e) => ({
+    id: e.id,
+    name: e.name,
+    storeId: e.storeId,
+    version: e.version,
+    isMonitored: e.isMonitored,
+    checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
+  }))
 
   return (
     <div className="container mx-auto py-10">

@@ -34,12 +34,11 @@ async function fetchStoreVersion(extensionId: string) {
 export async function monitorExtensionsOnce() {
   let list: Array<{ id: string; storeId: string; version: string | null }>
   try {
-    list = await (prisma as any).globalExtension.findMany({
-      where: { isMonitored: true },
-      select: { id: true, storeId: true, version: true },
-    })
+    list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
+      SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "isMonitored" = true
+    `
   } catch (e) {
-    console.warn('Monitor: isMonitored flag not available or DB error. Skipping monitoring.', e)
+    console.warn('Monitor: isMonitored flag query failed. Skipping monitoring.', e)
     return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> }
   }
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> = []

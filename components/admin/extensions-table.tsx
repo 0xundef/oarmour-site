@@ -3,7 +3,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
-import { useTransition } from "react";
+import { useEffect, useTransition, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ExtRow = {
   id: string;
@@ -17,6 +18,12 @@ type ExtRow = {
 export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const [rows, setRows] = useState<ExtRow[]>(extensions);
+
+  useEffect(() => {
+    setRows(extensions);
+  }, [extensions]);
 
   const toggleMonitor = (id: string, enabled: boolean) => {
     startTransition(async () => {
@@ -28,6 +35,8 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         });
         if (!res.ok) throw new Error("Failed to update");
         toast({ description: enabled ? "Monitoring enabled" : "Monitoring disabled" });
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, isMonitored: enabled } : r)));
+        router.refresh();
       } catch (e) {
         toast({ variant: "destructive", description: "Failed to update monitoring setting" });
       }
@@ -46,14 +55,14 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {extensions.length === 0 ? (
+          {rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={4} className="text-center">
                 No extensions found.
               </TableCell>
             </TableRow>
           ) : (
-            extensions.map((ext) => (
+            rows.map((ext) => (
               <TableRow key={ext.id}>
                 <TableCell>{ext.name}</TableCell>
                 <TableCell className="font-mono text-xs">{ext.storeId}</TableCell>
