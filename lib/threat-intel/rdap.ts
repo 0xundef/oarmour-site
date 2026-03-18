@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export type WhoisDomainResult = {
+export type RdapDomainResult = {
   registrar: string | null
   status: string | null
   nameservers: string[]
@@ -8,7 +8,7 @@ export type WhoisDomainResult = {
   expiresDate: Date | null
 }
 
-export async function whoisDomain(domain: string): Promise<WhoisDomainResult> {
+export async function rdapDomain(domain: string): Promise<RdapDomainResult> {
   const resp = await axios.get(`https://rdap.org/domain/${domain}`, { timeout: 8000 })
   const data = resp.data || {}
   const registrar =

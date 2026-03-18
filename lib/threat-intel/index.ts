@@ -1,2 +1,2 @@
 export * from './virustotal'
-export * from './whois'
+export * from './rdap'

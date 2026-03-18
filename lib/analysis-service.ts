@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
 import { getDomain } from 'tldts';
-import { whoisDomain } from '@/lib/threat-intel';
+import { rdapDomain } from '@/lib/threat-intel';
 
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
     if (typeof value !== 'string') return String(value ?? '');
@@ -139,7 +139,7 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
         }> = [];
         for (const d of apexDomains) {
             try {
-                const info = await whoisDomain(d);
+                const info = await rdapDomain(d);
                 enrichments.push({
                     analysisId: analysis.id,
                     domain: d,
