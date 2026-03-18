@@ -5,6 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -42,6 +44,25 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
       }
     });
   };
+  
+  const deleteExtension = (id: string) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/admin/extensions/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || "Delete failed");
+        }
+        toast({ description: "Extension deleted" });
+        setRows((prev) => prev.filter((r) => r.id !== id));
+        router.refresh();
+      } catch (e) {
+        toast({ variant: "destructive", description: "Failed to delete extension" });
+      }
+    });
+  };
 
   return (
     <div className="rounded-md border">
@@ -51,7 +72,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             <TableHead>Name</TableHead>
             <TableHead>Store ID</TableHead>
             <TableHead>Version</TableHead>
-            <TableHead>Monitored</TableHead>
+            <TableHead>Operation</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -67,12 +88,23 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                 <TableCell>{ext.name}</TableCell>
                 <TableCell className="font-mono text-xs">{ext.storeId}</TableCell>
                 <TableCell>{ext.version || "N/A"}</TableCell>
-                <TableCell>
+                <TableCell className="flex items-center gap-3">
                   <Switch
                     checked={!!ext.isMonitored}
                     onCheckedChange={(v) => toggleMonitor(ext.id, v)}
                     disabled={pending}
                   />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="ml-2"
+                    disabled={pending}
+                    onClick={() => deleteExtension(ext.id)}
+                    aria-label="Delete extension"
+                    title="Delete extension"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))
