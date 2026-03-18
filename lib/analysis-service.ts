@@ -219,6 +219,7 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 }
             }),
         )
+        const hasMaliciousDomain = topDomainSignals.some((d) => d.isMalicious)
 
         await prisma.extensionAnalysisResult.update({
             where: { id: analysis.id },
@@ -228,6 +229,12 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 filesScanned: results.fileCount,
                 updatedAt: new Date()
             }
+        });
+        await prisma.globalExtension.update({
+            where: { id: dbId },
+            data: {
+                riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+            },
         });
 
         // Cleanup temp files
