@@ -123,7 +123,7 @@ export function ThreatAlerts() {
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
-  const [details, setDetails] = useState<{ addedDomains: string[]; addedIps: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number; totalIps: number } | null>(null)
+  const [details, setDetails] = useState<{ addedDomains: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number } | null>(null)
   const detailsAbortRef = useRef<AbortController | null>(null)
 
   const fetchData = async () => {
@@ -242,23 +242,6 @@ export function ThreatAlerts() {
                     <div key={i} className="truncate">+ {d}</div>
                   ))}
                   {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
-                </div>
-              </div>
-              <div className="pt-2">
-                <div className="text-sm font-medium">IPs</div>
-                <div className="text-xs text-muted-foreground">
-                  {details === null ? (
-                    <div className="text-muted-foreground">Loading...</div>
-                  ) : (
-                    <>
-                      <div className="mb-1">Total: {details.totalIps}</div>
-                      <div className="mb-1">New since last analysis: {details.addedIps.length}</div>
-                    </>
-                  )}
-                  {(details?.addedIps || []).slice(0, 10).map((ip, i) => (
-                    <div key={i} className="truncate">+ {ip}</div>
-                  ))}
-                  {details && (details.addedIps || []).length === 0 && <div className="text-muted-foreground">No new IPs</div>}
                 </div>
               </div>
             </div>
