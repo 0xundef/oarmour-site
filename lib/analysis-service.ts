@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
 import { getDomain } from 'tldts';
-import { rdapDomain } from '@/lib/threat-intel';
+import { rdapDomain, whoisInfo } from '@/lib/threat-intel';
 
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
     if (typeof value !== 'string') return String(value ?? '');
@@ -138,28 +138,36 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             expiresDate?: Date | null;
         }> = [];
         for (const d of apexDomains) {
+            let registrar: string | null = null
+            let status: string | null = null
+            let nameservers: string[] = []
+            let createdDate: Date | null = null
+            let expiresDate: Date | null = null
             try {
-                const info = await rdapDomain(d);
-                enrichments.push({
-                    analysisId: analysis.id,
-                    domain: d,
-                    registrar: info.registrar,
-                    status: info.status,
-                    nameservers: info.nameservers,
-                    createdDate: info.createdDate,
-                    expiresDate: info.expiresDate,
-                });
-            } catch {
-                enrichments.push({
-                    analysisId: analysis.id,
-                    domain: d,
-                    registrar: null,
-                    status: null,
-                    nameservers: [],
-                    createdDate: null,
-                    expiresDate: null,
-                });
+                const info = await rdapDomain(d)
+                registrar = info.registrar ?? null
+                status = info.status ?? null
+                nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
+                createdDate = info.createdDate ?? null
+                expiresDate = info.expiresDate ?? null
+            } catch {}
+            const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
+            if (insufficient) {
+                const w = await whoisInfo(d)
+                registrar = registrar ?? w.registrar
+                nameservers = nameservers.length ? nameservers : w.nameservers
+                createdDate = createdDate ?? w.createdDate
+                expiresDate = expiresDate ?? w.expiresDate
             }
+            enrichments.push({
+                analysisId: analysis.id,
+                domain: d,
+                registrar,
+                status,
+                nameservers,
+                createdDate,
+                expiresDate,
+            })
         }
         if (enrichments.length > 0) {
             await prisma.domainEnrichment.createMany({
