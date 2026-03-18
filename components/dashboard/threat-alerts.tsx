@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useEffect, useState, useRef } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import Link from "next/link"
 
 type ThreatAlert = {
   id: string
@@ -121,6 +122,7 @@ export function ThreatAlerts() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
+  const [pinned, setPinned] = useState(false)
   const [details, setDetails] = useState<{ addedDomains: string[]; addedIps: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number; totalIps: number } | null>(null)
   const detailsAbortRef = useRef<AbortController | null>(null)
 
@@ -196,9 +198,29 @@ export function ThreatAlerts() {
           searchKey="extensionName"
         />
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="right" className="sm:max-w-md">
+          <SheetContent
+            side="right"
+            className="sm:max-w-md"
+            onPin={() => {
+              setPinned((v) => !v)
+            }}
+            pinned={pinned}
+          >
             <SheetHeader>
-              <SheetTitle>{selected?.extensionName}</SheetTitle>
+              <SheetTitle>
+                {selected?.extensionId ? (
+                  <Link
+                    href={`https://chromewebstore.google.com/detail/${selected.extensionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {selected?.extensionName}
+                  </Link>
+                ) : (
+                  selected?.extensionName
+                )}
+              </SheetTitle>
             </SheetHeader>
             <div className="mt-4 space-y-2">
               <div className="text-sm">Version: {selected?.version}</div>
