@@ -57,13 +57,17 @@ export async function processExtension(extensionId: string) {
     const tempDir = path.join(os.tmpdir(), 'chrome-extension-analyzer', extensionId);
     const crxDir = path.join(tempDir, 'crx');
     const sourceDir = path.join(tempDir, 'source');
+    const startedAt = Date.now()
 
     try {
+        console.warn('[analysis] processExtension:start', { extensionId, tempDir })
         // 1. Download
         const crxPath = await downloadExtension(extensionId, crxDir);
+        console.warn('[analysis] processExtension:downloaded', { extensionId, crxPath })
         
         // 2. Extract
         await extractExtension(crxPath, sourceDir);
+        console.warn('[analysis] processExtension:extracted', { extensionId, sourceDir })
         
         // 3. Read Manifest
         const manifestPath = path.join(sourceDir, 'manifest.json');
@@ -72,6 +76,7 @@ export async function processExtension(extensionId: string) {
         }
         
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        console.warn('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
         
         let publisher = '';
         if (typeof manifest.author === 'string') {
@@ -103,13 +108,21 @@ export async function processExtension(extensionId: string) {
                 platform: 'CHROME'
             }
         });
+        console.warn('[analysis] processExtension:upserted', {
+            extensionId,
+            dbId: extension.id,
+            version: extension.version,
+            elapsedMs: Date.now() - startedAt,
+        })
 
         // 5. Trigger Async Analysis
         // Fire and forget, but catch errors to avoid unhandled rejections
         triggerAsyncAnalysis(extension.id, extensionId, sourceDir).catch(e => console.error("Async analysis error:", e));
+        console.warn('[analysis] processExtension:asyncTriggered', { extensionId, dbId: extension.id })
 
         return extension;
     } catch (error) {
+        console.error('[analysis] processExtension:failed', { extensionId, error })
         // Cleanup if error occurs before analysis starts
         if (fs.existsSync(tempDir)) {
              try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
@@ -120,6 +133,8 @@ export async function processExtension(extensionId: string) {
 
 export async function triggerAsyncAnalysis(dbId: string, extensionId: string, sourceDir: string) {
     try {
+        const startedAt = Date.now()
+        console.warn('[analysis] triggerAsyncAnalysis:start', { extensionId, dbId, sourceDir })
         // Create initial analysis record
         const analysis = await prisma.extensionAnalysisResult.create({
             data: {
@@ -127,12 +142,22 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 status: 'RUNNING',
             }
         });
+        console.warn('[analysis] triggerAsyncAnalysis:analysisCreated', { extensionId, analysisId: analysis.id })
 
         // Import scanner dynamically or use the one we have
         // lib/analysis-service.ts -> lib/extension-analyzer/scanner.ts
         const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
+        console.warn('[analysis] triggerAsyncAnalysis:scannerReady', { extensionId, analysisId: analysis.id })
         
         const results = scanDirectory(sourceDir);
+        console.warn('[analysis] triggerAsyncAnalysis:scanCompleted', {
+            extensionId,
+            analysisId: analysis.id,
+            fileCount: results.fileCount,
+            domainCount: results.domains.size,
+            ipCount: results.ips.size,
+            urlCount: results.urls.size,
+        })
         
         const apexDomains = Array.from(
             new Set(
@@ -141,6 +166,11 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                     .filter((d): d is string => !!d)
             )
         ).slice(0, 20);
+        console.warn('[analysis] triggerAsyncAnalysis:apexDomainsPrepared', {
+            extensionId,
+            analysisId: analysis.id,
+            apexDomainCount: apexDomains.length,
+        })
         const enrichments: Array<{
             analysisId: string;
             domain: string;
@@ -150,7 +180,8 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             createdDate?: Date | null;
             expiresDate?: Date | null;
         }> = [];
-        for (const d of apexDomains) {
+        for (let i = 0; i < apexDomains.length; i++) {
+            const d = apexDomains[i]
             let registrar: string | null = null
             let status: string | null = null
             let nameservers: string[] = []
@@ -181,19 +212,43 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 createdDate,
                 expiresDate,
             })
+            if ((i + 1) % 2 === 0) {
+                console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentProgress', {
+                    extensionId,
+                    analysisId: analysis.id,
+                    processedDomains: i + 1,
+                    totalDomains: apexDomains.length,
+                    currentDomain: d,
+                })
+            }
         }
+        console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentBuilt', {
+            extensionId,
+            analysisId: analysis.id,
+            enrichmentCount: enrichments.length,
+        })
         const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
         if (enrichments.length > 0) {
             await domainEnrichment.createMany({
                 data: enrichments
             });
         }
+        console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentStored', {
+            extensionId,
+            analysisId: analysis.id,
+            enrichmentCount: enrichments.length,
+        })
 
         const topDomains = await domainEnrichment.findMany({
             where: { analysisId: analysis.id },
             orderBy: { createdDate: 'desc' },
             take: 3,
             select: { id: true, domain: true, createdDate: true },
+        })
+        console.warn('[analysis] triggerAsyncAnalysis:topDomainsSelected', {
+            extensionId,
+            analysisId: analysis.id,
+            topDomainCount: topDomains.length,
         })
         const topDomainSignals: Array<{
             topDomainSignalId: string
@@ -220,6 +275,12 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             }),
         )
         const hasMaliciousDomain = topDomainSignals.some((d) => d.isMalicious)
+        console.warn('[analysis] triggerAsyncAnalysis:topDomainSignalsReady', {
+            extensionId,
+            analysisId: analysis.id,
+            maliciousDomainCount: topDomainSignals.filter((d) => d.isMalicious).length,
+            hasMaliciousDomain,
+        })
 
         await prisma.extensionAnalysisResult.update({
             where: { id: analysis.id },
@@ -230,21 +291,34 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 updatedAt: new Date()
             }
         });
+        console.warn('[analysis] triggerAsyncAnalysis:analysisUpdated', {
+            extensionId,
+            analysisId: analysis.id,
+            filesScanned: results.fileCount,
+            elapsedMs: Date.now() - startedAt,
+        })
         await prisma.globalExtension.update({
             where: { id: dbId },
             data: {
                 riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
             },
         });
+        console.warn('[analysis] triggerAsyncAnalysis:riskUpdated', {
+            extensionId,
+            dbId,
+            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+        })
 
         // Cleanup temp files
         const tempExtensionDir = path.dirname(sourceDir); // .../extensionId
         if (fs.existsSync(tempExtensionDir)) {
             fs.rmSync(tempExtensionDir, { recursive: true, force: true });
         }
+        console.warn('[analysis] triggerAsyncAnalysis:cleanupDone', { extensionId, tempExtensionDir })
 
     } catch (e) {
         console.error('Async analysis failed:', e);
+        console.error('[analysis] triggerAsyncAnalysis:failed', { extensionId, dbId, error: e })
         // We might want to update the status to FAILED here if we had the ID
     }
 }
