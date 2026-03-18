@@ -73,6 +73,7 @@
     "typescript": "^5.9.3",
     "uploadthing": "^5.7.4",
     "uuid": "^9.0.1",
+    "whoiser": "^2.0.0-beta.10",
     "zod": "^3.22.4",
     "zustand": "^4.4.6"
   },
