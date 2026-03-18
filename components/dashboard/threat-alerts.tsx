@@ -6,6 +6,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Copy, Bell } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { Badge } from "@/components/ui/badge"
 import { useEffect, useState, useRef } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -18,13 +19,19 @@ type ThreatAlert = {
   version: string
   publisher: string
   lastUpdate: string
-  risk: "Critical" | "High" | "Medium" | "Low" | "Unknown" | "Analysis In Progress"
+  risk: string
   analysisStatus: string
+}
+
+function isAbortError(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false
+  if (!("name" in e)) return false
+  const name = (e as { name?: unknown }).name
+  return name === "AbortError"
 }
 
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
-  const [analyzing] = useState(false)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(extensionId)
@@ -124,7 +131,10 @@ export function ThreatAlerts() {
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
   const [details, setDetails] = useState<{ addedDomains: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number } | null>(null)
+  const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
   const detailsAbortRef = useRef<AbortController | null>(null)
+  const domainMetaAbortRef = useRef<AbortController | null>(null)
+  const domainMetaRequestedRef = useRef<Set<string>>(new Set())
 
   const fetchData = async () => {
     try {
@@ -137,7 +147,7 @@ export function ThreatAlerts() {
             version: ext.version || 'N/A',
             publisher: ext.publisher || 'N/A',
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
-            risk: ext.riskLevel as any,
+            risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus
         }));
         
@@ -174,12 +184,63 @@ export function ThreatAlerts() {
           setDetails(json)
         }
       } catch (e) {
-        if ((e as any)?.name === 'AbortError') return
+        if (isAbortError(e)) return
         setDetails(null)
       }
     }
     loadDetails()
   }, [selected, open])
+
+  useEffect(() => {
+    if (!open || !details) return
+    const domains = Array.from(new Set((details.addedDomains || []).slice(0, 10).filter(Boolean)))
+    const missing = domains.filter((d) => !domainMetaRequestedRef.current.has(d))
+    if (missing.length === 0) return
+
+    for (const d of missing) domainMetaRequestedRef.current.add(d)
+
+    if (domainMetaAbortRef.current) domainMetaAbortRef.current.abort()
+    const controller = new AbortController()
+    domainMetaAbortRef.current = controller
+
+    const load = async () => {
+      await Promise.all(
+        missing.map(async (domain) => {
+          try {
+            const res = await fetch(`/api/ti/whois?domain=${encodeURIComponent(domain)}`, {
+              signal: controller.signal,
+            })
+            if (!res.ok) {
+              setDomainAgeDays((prev) => ({ ...prev, [domain]: null }))
+              return
+            }
+            const json: unknown = await res.json()
+            const payload =
+              typeof json === "object" && json !== null
+                ? (json as { source?: unknown; info?: { createdDate?: unknown } })
+                : null
+            const createdRaw = payload?.info?.createdDate
+            const created =
+              typeof createdRaw === "string" ? new Date(createdRaw) : createdRaw instanceof Date ? createdRaw : null
+            const createdDate = created && !isNaN(created.getTime()) ? created : null
+            const ageDays = createdDate
+              ? Math.max(0, Math.floor((Date.now() - createdDate.getTime()) / 86400000))
+              : null
+            setDomainAgeDays((prev) => ({ ...prev, [domain]: ageDays }))
+          } catch (e) {
+            if (isAbortError(e)) return
+            setDomainAgeDays((prev) => ({ ...prev, [domain]: null }))
+          }
+        }),
+      )
+    }
+
+    load()
+
+    return () => {
+      controller.abort()
+    }
+  }, [details, open])
 
   if (loading && data.length === 0) {
       return <div className="p-4 text-center text-muted-foreground">Loading extensions...</div>
@@ -238,8 +299,16 @@ export function ThreatAlerts() {
                       <div className="mb-1">New since last analysis: {details.addedDomains.length}</div>
                     </>
                   )}
-                  {(details?.addedDomains || []).slice(0, 10).map((d, i) => (
-                    <div key={i} className="truncate">+ {d}</div>
+                  {(details?.addedDomains || []).slice(0, 10).map((d) => (
+                    <div key={d} className="grid grid-cols-[1fr_132px] items-center gap-2">
+                      <div className="min-w-0 truncate">+ {d}</div>
+                      <div className="flex items-center justify-start gap-2">
+                        <Badge variant="secondary" className="w-[72px] justify-center">
+                          {domainAgeDays[d] === null || domainAgeDays[d] === undefined ? "N/A" : `${domainAgeDays[d]}d`}
+                        </Badge>
+                        <Badge variant="outline">NEW</Badge>
+                      </div>
+                    </div>
                   ))}
                   {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
                 </div>
