@@ -315,7 +315,7 @@ export function ThreatAlerts() {
                     const signal = details?.topDomainSignals?.find((s) => s.domain === d)
                     const isMalicious = signal?.isMalicious === true
                     return (
-                    <div key={d} className="grid grid-cols-[1fr_132px] items-center gap-2">
+                    <div key={d} className="mb-px grid grid-cols-[1fr_132px] items-center gap-2">
                       <div className="min-w-0 truncate">+ {d}</div>
                       <div className="flex items-center justify-start gap-2">
                         <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
