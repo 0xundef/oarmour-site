@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SubmissionsTable } from "@/components/admin/submissions-table";
 import { UsersTable } from "@/components/admin/users-table";
 import { ExtensionsTable } from "@/components/admin/extensions-table";
+import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
@@ -60,6 +61,7 @@ export default async function AdminPage() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="submissions">Submissions</TabsTrigger>
           <TabsTrigger value="extensions">Extensions</TabsTrigger>
+          <TabsTrigger value="monitor">Monitor</TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="space-y-4">
           <UsersTable users={users} />
@@ -69,6 +71,9 @@ export default async function AdminPage() {
         </TabsContent>
         <TabsContent value="extensions" className="space-y-4">
           <ExtensionsTable extensions={extensions} />
+        </TabsContent>
+        <TabsContent value="monitor" className="space-y-4">
+          <MonitorJobsDashboard />
         </TabsContent>
       </Tabs>
     </div>
