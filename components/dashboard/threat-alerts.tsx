@@ -130,7 +130,19 @@ export function ThreatAlerts() {
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
-  const [details, setDetails] = useState<{ addedDomains: string[]; urls: string[]; filesScanned: number; status: string; totalDomains: number } | null>(null)
+  const [details, setDetails] = useState<{
+    addedDomains: string[]
+    urls: string[]
+    filesScanned: number
+    status: string
+    totalDomains: number
+    topDomainSignals?: Array<{
+      topDomainSignalId: string | null
+      domain: string
+      createTime: string | null
+      isMalicious: boolean | null
+    }>
+  } | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
@@ -217,9 +229,9 @@ export function ThreatAlerts() {
             const json: unknown = await res.json()
             const payload =
               typeof json === "object" && json !== null
-                ? (json as { source?: unknown; info?: { createdDate?: unknown } })
+                ? (json as { source?: unknown; info?: { createTime?: unknown } })
                 : null
-            const createdRaw = payload?.info?.createdDate
+            const createdRaw = payload?.info?.createTime
             const created =
               typeof createdRaw === "string" ? new Date(createdRaw) : createdRaw instanceof Date ? createdRaw : null
             const createdDate = created && !isNaN(created.getTime()) ? created : null
@@ -299,17 +311,24 @@ export function ThreatAlerts() {
                       <div className="mb-1">New since last analysis: {details.addedDomains.length}</div>
                     </>
                   )}
-                  {(details?.addedDomains || []).slice(0, 10).map((d) => (
+                  {(details?.addedDomains || []).slice(0, 10).map((d) => {
+                    const signal = details?.topDomainSignals?.find((s) => s.domain === d)
+                    const isMalicious = signal?.isMalicious === true
+                    return (
                     <div key={d} className="grid grid-cols-[1fr_132px] items-center gap-2">
                       <div className="min-w-0 truncate">+ {d}</div>
                       <div className="flex items-center justify-start gap-2">
                         <Badge variant="secondary" className="w-[72px] justify-center">
                           {domainAgeDays[d] === null || domainAgeDays[d] === undefined ? "N/A" : `${domainAgeDays[d]}d`}
                         </Badge>
-                        <Badge variant="outline">NEW</Badge>
+                        <Badge
+                          className={isMalicious ? "bg-red-500 text-white" : "bg-green-500 text-white"}
+                        >
+                          {isMalicious ? "MALICIOUS" : "SAFE"}
+                        </Badge>
                       </div>
                     </div>
-                  ))}
+                  )})}
                   {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
                 </div>
               </div>

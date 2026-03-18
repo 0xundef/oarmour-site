@@ -3,6 +3,28 @@ import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
+type TopDomainSignal = {
+  topDomainSignalId: string | null
+  domain: string
+  createTime: string | null
+  isMalicious: boolean | null
+}
+
+function parseTopDomainSignal(raw: string): TopDomainSignal {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>
+      const domain = typeof obj.domain === 'string' ? obj.domain : raw
+      const topDomainSignalId = typeof obj.topDomainSignalId === 'string' ? obj.topDomainSignalId : null
+      const createTime = typeof obj.createTime === 'string' ? obj.createTime : null
+      const isMalicious = typeof obj.isMalicious === 'boolean' ? obj.isMalicious : null
+      return { topDomainSignalId, domain, createTime, isMalicious }
+    }
+  } catch {}
+  return { topDomainSignalId: null, domain: raw, createTime: null, isMalicious: null }
+}
+
 export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ storeId: string }> }
@@ -30,9 +52,10 @@ export async function GET(
     }
     const latest = results[0]
     const previous = results[1]
-    const latestDomains = latest.domains || []
+    const latestDomainSignals = (latest.domains || []).map(parseTopDomainSignal)
+    const latestDomains = latestDomainSignals.map((d) => d.domain)
     const latestIps = latest.ips || []
-    const prevDomains = previous?.domains || []
+    const prevDomains = (previous?.domains || []).map((x) => parseTopDomainSignal(x).domain)
     const prevIps = previous?.ips || []
     const prevDomainSet = new Set(prevDomains)
     const prevIpSet = new Set(prevIps)
@@ -45,6 +68,7 @@ export async function GET(
       totalIps: latestIps.length,
       urls: latest.urls || [],
       addedDomains,
+      topDomainSignals: latestDomainSignals,
       addedIps,
     })
   } catch {

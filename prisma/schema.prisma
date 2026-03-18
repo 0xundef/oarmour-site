@@ -245,6 +245,7 @@ model DomainEnrichment {
   analysis  ExtensionAnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
   analysisId String
   domain    String
+  isMalicious Boolean?
   registrar String?
   status    String?
   nameservers String[]

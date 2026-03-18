@@ -3,11 +3,24 @@ import { downloadExtension, extractExtension } from '@/lib/extension-analyzer';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import axios from 'axios';
 import { getDomain } from 'tldts';
-import { rdapDomain, whoisInfo } from '@/lib/threat-intel';
+import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 
-const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
+type DomainEnrichmentDelegate = {
+    createMany: (args: { data: unknown[] }) => Promise<unknown>
+    findMany: (args: {
+        where: { analysisId: string }
+        orderBy: { createdDate: 'desc' }
+        take: number
+        select: { id: true; domain: true; createdDate: true }
+    }) => Promise<Array<{ id: string; domain: string; createdDate: Date | null }>>
+    update: (args: {
+        where: { id: string }
+        data: { isMalicious: boolean }
+    }) => Promise<unknown>
+}
+
+const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { default_locale?: string }): string => {
     if (typeof value !== 'string') return String(value ?? '');
     const match = value.match(/^__MSG_(.+)__$/);
     if (!match) return value;
@@ -26,6 +39,18 @@ const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: an
         // ignore locale resolution errors
     }
     return value;
+}
+
+function isDomainMalicious(vt: unknown): boolean {
+    if (!vt || typeof vt !== 'object') return false
+    const data = (vt as { data?: unknown }).data
+    if (!data || typeof data !== 'object') return false
+    const attributes = (data as { attributes?: unknown }).attributes
+    if (!attributes || typeof attributes !== 'object') return false
+    const stats = (attributes as { last_analysis_stats?: unknown }).last_analysis_stats
+    if (!stats || typeof stats !== 'object') return false
+    const malicious = (stats as { malicious?: unknown }).malicious
+    return typeof malicious === 'number' && malicious > 0
 }
 
 export async function processExtension(extensionId: string) {
@@ -108,18 +133,6 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
         const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
         
         const results = scanDirectory(sourceDir);
-
-        // Update record with results
-        await prisma.extensionAnalysisResult.update({
-            where: { id: analysis.id },
-            data: {
-                status: 'COMPLETED',
-                domains: Array.from(results.domains),
-                ips: Array.from(results.ips),
-                urls: Array.from(results.urls),
-                filesScanned: results.fileCount
-            }
-        });
         
         const apexDomains = Array.from(
             new Set(
@@ -169,12 +182,54 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
                 expiresDate,
             })
         }
+        const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
         if (enrichments.length > 0) {
-            await prisma.domainEnrichment.createMany({
+            await domainEnrichment.createMany({
                 data: enrichments
             });
         }
-        
+
+        const topDomains = await domainEnrichment.findMany({
+            where: { analysisId: analysis.id },
+            orderBy: { createdDate: 'desc' },
+            take: 3,
+            select: { id: true, domain: true, createdDate: true },
+        })
+        const topDomainSignals: Array<{
+            topDomainSignalId: string
+            domain: string
+            createTime: string | null
+            isMalicious: boolean
+        }> = await Promise.all(
+            topDomains.map(async (item) => {
+                let isMalicious = false
+                try {
+                    const vt = await vtGetDomain(item.domain)
+                    isMalicious = isDomainMalicious(vt)
+                } catch {}
+                await domainEnrichment.update({
+                    where: { id: item.id },
+                    data: { isMalicious },
+                })
+                return {
+                    topDomainSignalId: item.id,
+                    domain: item.domain,
+                    createTime: item.createdDate ? item.createdDate.toISOString() : null,
+                    isMalicious,
+                }
+            }),
+        )
+
+        await prisma.extensionAnalysisResult.update({
+            where: { id: analysis.id },
+            data: {
+                status: 'COMPLETED',
+                domains: topDomainSignals.map((d) => JSON.stringify(d)),
+                filesScanned: results.fileCount,
+                updatedAt: new Date()
+            }
+        });
+
         // Cleanup temp files
         const tempExtensionDir = path.dirname(sourceDir); // .../extensionId
         if (fs.existsSync(tempExtensionDir)) {
