@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
+import { getDomain } from 'tldts';
 
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
     if (typeof value !== 'string') return String(value ?? '');
@@ -119,7 +120,13 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             }
         });
         
-        const domains = Array.from(results.domains).slice(0, 20);
+        const apexDomains = Array.from(
+            new Set(
+                Array.from(results.domains)
+                    .map((d) => getDomain(String(d)) || null)
+                    .filter((d): d is string => !!d)
+            )
+        ).slice(0, 20);
         const enrichments: Array<{
             analysisId: string;
             domain: string;
@@ -129,7 +136,7 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             createdDate?: Date | null;
             expiresDate?: Date | null;
         }> = [];
-        for (const d of domains) {
+        for (const d of apexDomains) {
             try {
                 const resp = await axios.get(`https://rdap.org/domain/${d}`, { timeout: 8000 });
                 const data = resp.data || {};
