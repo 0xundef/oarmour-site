@@ -30,6 +30,13 @@ function isAbortError(e: unknown): boolean {
   return name === "AbortError"
 }
 
+function getAgeDaysFromCreateTime(createTime: string | null | undefined): number | null {
+  if (!createTime) return null
+  const created = new Date(createTime)
+  if (isNaN(created.getTime())) return null
+  return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000))
+}
+
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
 
@@ -205,7 +212,17 @@ export function ThreatAlerts() {
 
   useEffect(() => {
     if (!open || !details) return
-    const domains = Array.from(new Set((details.addedDomains || []).slice(0, 10).filter(Boolean)))
+    const domains = Array.from(
+      new Set(
+        (details.addedDomains || [])
+          .slice(0, 10)
+          .filter((domain) => {
+            const signal = details.topDomainSignals?.find((s) => s.domain === domain)
+            return getAgeDaysFromCreateTime(signal?.createTime) === null
+          })
+          .filter(Boolean),
+      ),
+    )
     const missing = domains.filter((d) => !domainMetaRequestedRef.current.has(d))
     if (missing.length === 0) return
 
@@ -314,12 +331,14 @@ export function ThreatAlerts() {
                   {(details?.addedDomains || []).slice(0, 10).map((d) => {
                     const signal = details?.topDomainSignals?.find((s) => s.domain === d)
                     const isMalicious = signal?.isMalicious === true
+                    const signalAgeDays = getAgeDaysFromCreateTime(signal?.createTime)
+                    const displayAgeDays = signalAgeDays ?? domainAgeDays[d] ?? null
                     return (
                     <div key={d} className="mb-px grid grid-cols-[1fr_132px] items-center gap-2">
                       <div className="min-w-0 truncate">+ {d}</div>
                       <div className="flex items-center justify-start gap-2">
                         <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
-                          {domainAgeDays[d] === null || domainAgeDays[d] === undefined ? "N/A" : `${domainAgeDays[d]}d`}
+                          {displayAgeDays === null || displayAgeDays === undefined ? "N/A" : `${displayAgeDays}d`}
                         </Badge>
                         <Badge
                           className={`h-5 px-2 text-[10px] leading-none ${isMalicious ? "bg-red-500 text-white" : "bg-green-500 text-white"}`}
