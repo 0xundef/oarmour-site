@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
 import { getDomain } from 'tldts';
+import { whoisDomain } from '@/lib/threat-intel';
 
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: any): string => {
     if (typeof value !== 'string') return String(value ?? '');
@@ -138,34 +139,15 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
         }> = [];
         for (const d of apexDomains) {
             try {
-                const resp = await axios.get(`https://rdap.org/domain/${d}`, { timeout: 8000 });
-                const data = resp.data || {};
-                const registrar =
-                    Array.isArray(data.entities)
-                        ? (data.entities.find((e: any) => Array.isArray(e.roles) && e.roles.includes('registrar'))?.vcardArray?.[1]?.find((v: any) => v[0] === 'fn')?.[3] ?? null)
-                        : null;
-                const ns =
-                    Array.isArray(data.nameservers)
-                        ? data.nameservers.map((n: any) => n.ldhName).filter(Boolean)
-                        : [];
-                let created: Date | null = null;
-                let expires: Date | null = null;
-                if (Array.isArray(data.events)) {
-                    const reg = data.events.find((e: any) => e.eventAction === 'registration')?.eventDate;
-                    const exp = data.events.find((e: any) => e.eventAction === 'expiration')?.eventDate;
-                    created = reg ? new Date(reg) : null;
-                    expires = exp ? new Date(exp) : null;
-                }
-                const statusStr =
-                    Array.isArray(data.status) ? String(data.status.join(',')) : null;
+                const info = await whoisDomain(d);
                 enrichments.push({
                     analysisId: analysis.id,
                     domain: d,
-                    registrar,
-                    status: statusStr,
-                    nameservers: ns,
-                    createdDate: created,
-                    expiresDate: expires,
+                    registrar: info.registrar,
+                    status: info.status,
+                    nameservers: info.nameservers,
+                    createdDate: info.createdDate,
+                    expiresDate: info.expiresDate,
                 });
             } catch {
                 enrichments.push({
