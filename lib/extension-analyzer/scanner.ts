@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getDomain } from 'tldts';
 
 const URL_REGEX = /(https?:\/\/[^\s/$.?#].[^\s"'`]*)/gi;
 const IP_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
@@ -34,7 +35,7 @@ export function scanDirectory(dir: string): ScanResult {
                     traverse(filePath);
                 } else {
                     // Only scan text-like files to avoid binaries
-                    if (/\.(js|json|html|css|txt|xml|map)$/i.test(file)) {
+                    if (/\.(js|json)$/i.test(file)) {
                         results.fileCount++;
                         // Read file with limit to avoid OOM on huge minified files, but usually extensions are manageable.
                         // For safety, let's read as utf-8.
@@ -44,14 +45,9 @@ export function scanDirectory(dir: string): ScanResult {
                         if (urls) {
                             urls.forEach(u => {
                                 results.urls.add(u);
-                                try {
-                                    // Extract hostname
-                                    const urlObj = new URL(u);
-                                    if (urlObj.hostname) {
-                                        results.domains.add(urlObj.hostname);
-                                    }
-                                } catch {
-                                    // Ignore invalid URLs
+                                const apex = getDomain(u);
+                                if (apex) {
+                                    results.domains.add(apex);
                                 }
                             });
                         }
