@@ -3,7 +3,6 @@ import path from 'path';
 import { getDomain } from 'tldts';
 
 const URL_REGEX = /(https?:\/\/[^\s/$.?#].[^\s"'`]*)/gi;
-const IP_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 
 export interface ScanResult {
     urls: Set<string>;
@@ -52,15 +51,6 @@ export function scanDirectory(dir: string): ScanResult {
                             });
                         }
 
-                        const ips = content.match(IP_REGEX);
-                        if (ips) {
-                            ips.forEach(ip => {
-                                // Basic filter for version numbers looking like IPs
-                                if (!ip.startsWith('0.') && !ip.endsWith('.0')) {
-                                     results.ips.add(ip);
-                                }
-                            });
-                        }
                     }
                 }
             } catch (e) {
