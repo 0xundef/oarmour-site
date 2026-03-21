@@ -1,4 +1,5 @@
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
   Check,
@@ -59,6 +60,7 @@ export const Icons = {
   ellipsis: MoreVertical,
   add: Plus,
   warning: AlertTriangle,
+  monitor: Activity,
   user: User,
   arrowRight: ArrowRight,
   help: HelpCircle,

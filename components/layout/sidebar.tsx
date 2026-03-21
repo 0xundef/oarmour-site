@@ -10,9 +10,13 @@ export default async function Sidebar() {
   if (user?.role === "ADMIN") {
     finalNavItems.push({
       title: "Admin",
-      href: "/dashboard/admin",
       icon: "user",
       label: "Admin",
+      items: [
+        { title: "Users", href: "/dashboard/admin?section=users", icon: "user" },
+        { title: "Extensions", href: "/dashboard/admin?section=extensions", icon: "webExtension" },
+        { title: "Monitoring", href: "/dashboard/admin?section=monitoring", icon: "monitor" },
+      ],
     });
   }
 
