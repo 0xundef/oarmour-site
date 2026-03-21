@@ -53,6 +53,45 @@ function isDomainMalicious(vt: unknown): boolean {
     return typeof malicious === 'number' && malicious > 0
 }
 
+function toStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is string => typeof item === 'string')
+}
+
+function extractManifestPermissions(manifest: Record<string, unknown>) {
+    const permissions = toStringArray(manifest.permissions)
+    const hostPermissions = toStringArray(manifest.host_permissions)
+    const optionalPermissions = toStringArray(manifest.optional_permissions)
+    const optionalHostPermissions = toStringArray(manifest.optional_host_permissions)
+    return {
+        permissions,
+        hostPermissions,
+        optionalPermissions,
+        optionalHostPermissions,
+        allRequestedPermissions: Array.from(
+            new Set([
+                ...permissions,
+                ...hostPermissions,
+                ...optionalPermissions,
+                ...optionalHostPermissions,
+            ])
+        ),
+    }
+}
+
+function getPublisher(manifest: Record<string, unknown>): string {
+    const author = manifest.author
+    if (typeof author === 'string') return author
+    if (author && typeof author === 'object' && 'name' in author && typeof author.name === 'string') {
+        return author.name
+    }
+    const developer = manifest.developer
+    if (developer && typeof developer === 'object' && 'name' in developer && typeof developer.name === 'string') {
+        return developer.name
+    }
+    return ''
+}
+
 export async function processExtension(extensionId: string) {
     const tempDir = path.join(os.tmpdir(), 'chrome-extension-analyzer', extensionId);
     const crxDir = path.join(tempDir, 'crx');
@@ -75,26 +114,21 @@ export async function processExtension(extensionId: string) {
              throw new Error('Manifest file not found');
         }
         
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
         console.warn('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
         
-        let publisher = '';
-        if (typeof manifest.author === 'string') {
-            publisher = manifest.author;
-        } else if (typeof manifest.author === 'object' && manifest.author?.name) {
-            publisher = manifest.author.name;
-        } else if (manifest.developer && manifest.developer.name) {
-             publisher = manifest.developer.name;
-        }
+        const publisher = getPublisher(manifest)
 
         const resolvedName = resolveLocalizedString(manifest.name, sourceDir, manifest);
+        const version = typeof manifest.version === 'string' ? manifest.version : null
+        const manifestPermissions = extractManifestPermissions(manifest)
         
         // 4. Upsert Extension
         const extension = await prisma.globalExtension.upsert({
             where: { storeId: extensionId },
             update: {
                 name: resolvedName || extensionId,
-                version: manifest.version,
+                version,
                 description: resolveLocalizedString(manifest.description, sourceDir, manifest),
                 publisher: publisher || null,
                 updatedAt: new Date()
@@ -102,7 +136,7 @@ export async function processExtension(extensionId: string) {
             create: {
                 storeId: extensionId,
                 name: resolvedName || extensionId,
-                version: manifest.version,
+                version,
                 description: resolveLocalizedString(manifest.description, sourceDir, manifest),
                 publisher: publisher || null,
                 platform: 'CHROME'
@@ -113,6 +147,21 @@ export async function processExtension(extensionId: string) {
             dbId: extension.id,
             version: extension.version,
             elapsedMs: Date.now() - startedAt,
+        })
+        await prisma.assetSnapshot.create({
+            data: {
+                targetType: 'EXTENSION',
+                targetId: extension.id,
+                version,
+                metadata: {
+                    manifestPermissions,
+                },
+            },
+        })
+        console.warn('[analysis] processExtension:snapshotStored', {
+            extensionId,
+            dbId: extension.id,
+            requestedPermissions: manifestPermissions.allRequestedPermissions.length,
         })
 
         // 5. Trigger Async Analysis
@@ -287,6 +336,8 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
             data: {
                 status: 'COMPLETED',
                 domains: topDomainSignals.map((d) => JSON.stringify(d)),
+                ips: Array.from(results.ips).slice(0, 200),
+                urls: Array.from(results.urls).slice(0, 200),
                 filesScanned: results.fileCount,
                 updatedAt: new Date()
             }

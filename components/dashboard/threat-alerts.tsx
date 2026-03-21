@@ -149,6 +149,13 @@ export function ThreatAlerts() {
       createTime: string | null
       isMalicious: boolean | null
     }>
+    manifestPermissions?: {
+      permissions: string[]
+      hostPermissions: string[]
+      optionalPermissions: string[]
+      optionalHostPermissions: string[]
+      allRequestedPermissions: string[]
+    }
   } | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
   const detailsAbortRef = useRef<AbortController | null>(null)
@@ -349,6 +356,24 @@ export function ThreatAlerts() {
                     </div>
                   )})}
                   {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
+                </div>
+              </div>
+              <div className="pt-4">
+                <div className="text-sm font-medium">Manifest Permissions</div>
+                <div className="text-xs text-muted-foreground">
+                  {details === null ? (
+                    <div className="text-muted-foreground">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="mb-1">Total requested: {details.manifestPermissions?.allRequestedPermissions?.length || 0}</div>
+                      {(details.manifestPermissions?.allRequestedPermissions || []).slice(0, 20).map((p) => (
+                        <div key={p} className="mb-px truncate">+ {p}</div>
+                      ))}
+                      {(details.manifestPermissions?.allRequestedPermissions || []).length === 0 && (
+                        <div className="text-muted-foreground">No explicit permissions found in manifest</div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>

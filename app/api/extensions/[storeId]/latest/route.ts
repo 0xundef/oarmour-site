@@ -10,6 +10,35 @@ type TopDomainSignal = {
   isMalicious: boolean | null
 }
 
+type ManifestPermissionsPayload = {
+  permissions: string[]
+  hostPermissions: string[]
+  optionalPermissions: string[]
+  optionalHostPermissions: string[]
+  allRequestedPermissions: string[]
+}
+
+function parseManifestPermissions(raw: unknown): ManifestPermissionsPayload {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      permissions: [],
+      hostPermissions: [],
+      optionalPermissions: [],
+      optionalHostPermissions: [],
+      allRequestedPermissions: [],
+    }
+  }
+  const obj = raw as Record<string, unknown>
+  const toArray = (value: unknown) => (Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [])
+  return {
+    permissions: toArray(obj.permissions),
+    hostPermissions: toArray(obj.hostPermissions),
+    optionalPermissions: toArray(obj.optionalPermissions),
+    optionalHostPermissions: toArray(obj.optionalHostPermissions),
+    allRequestedPermissions: toArray(obj.allRequestedPermissions),
+  }
+}
+
 function parseTopDomainSignal(raw: string): TopDomainSignal {
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -52,6 +81,16 @@ export async function GET(
     }
     const latest = results[0]
     const previous = results[1]
+    const snapshot = await prisma.assetSnapshot.findFirst({
+      where: { targetType: 'EXTENSION', targetId: ext.id },
+      orderBy: { capturedAt: 'desc' },
+      select: { metadata: true },
+    })
+    const snapshotMetadata =
+      snapshot?.metadata && typeof snapshot.metadata === 'object'
+        ? (snapshot.metadata as Record<string, unknown>)
+        : null
+    const manifestPermissions = parseManifestPermissions(snapshotMetadata?.manifestPermissions)
     const latestDomainSignals = (latest.domains || []).map(parseTopDomainSignal)
     const latestDomains = latestDomainSignals.map((d) => d.domain)
     const latestIps = latest.ips || []
@@ -70,6 +109,7 @@ export async function GET(
       addedDomains,
       topDomainSignals: latestDomainSignals,
       addedIps,
+      manifestPermissions,
     })
   } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
