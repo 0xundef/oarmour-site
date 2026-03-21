@@ -31,7 +31,13 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
         const childIsActive = !!item.items?.some((child) => child.href === currentUrl);
         const itemIsActive = item.href === currentUrl || (!item.href && childIsActive) || (item.href === path && !item.href?.includes("?"));
         return (
-          <div key={index} className="space-y-1">
+          <div
+            key={index}
+            className={cn(
+              "space-y-1",
+              index > 0 && "mt-2 border-t pt-3"
+            )}
+          >
             {item.href ? (
               <Link
                 href={item.disabled ? "/" : item.href}
@@ -58,22 +64,31 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                   {item.title}
                 </div>
               ) : (
-                <Link
-                  href={item.items?.[0]?.href || "/"}
-                  onClick={() => {
-                    if (setOpen) setOpen(false);
-                  }}
-                >
-                  <span
-                    className={cn(
-                      "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground justify-center px-2",
-                      childIsActive ? "bg-accent" : "transparent"
-                    )}
-                    title={item.title}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </span>
-                </Link>
+                <div className="space-y-1">
+                  {item.items?.map((child) => {
+                    const ChildIcon = Icons[child.icon || "arrowRight"];
+                    return child.href ? (
+                      <Link
+                        key={child.href}
+                        href={child.disabled ? "/" : child.href}
+                        onClick={() => {
+                          if (setOpen) setOpen(false);
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground justify-center px-2",
+                            child.href === currentUrl ? "bg-accent" : "transparent",
+                            child.disabled && "cursor-not-allowed opacity-80"
+                          )}
+                          title={child.title}
+                        >
+                          <ChildIcon className="h-4 w-4" />
+                        </span>
+                      </Link>
+                    ) : null;
+                  })}
+                </div>
               )
             ) : (
               <span

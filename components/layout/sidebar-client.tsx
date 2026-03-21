@@ -22,7 +22,7 @@ export default function SidebarClient({ items }: SidebarClientProps) {
     <nav
       className={cn(
         "relative hidden h-screen border-r pt-16 lg:block transition-all duration-300",
-        isMinimized ? "w-20" : "w-64"
+        isMinimized ? "w-16" : "w-56"
       )}
     >
       <div className="absolute right-[-12px] top-20 z-20">
