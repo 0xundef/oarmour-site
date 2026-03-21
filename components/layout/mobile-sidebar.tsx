@@ -5,6 +5,7 @@ import { navItems } from "@/constants/data";
 import { MenuIcon } from "lucide-react";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
+import { UserNav } from "./user-nav";
 
 // import { Playlist } from "../data/playlists";
 
@@ -36,11 +37,16 @@ export function MobileSidebar({ className }: SidebarProps) {
         </SheetTrigger>
         <SheetContent side="left" className="!px-0">
           <SheetTitle className="sr-only">Mobile Navigation</SheetTitle>
-          <div className="space-y-4 py-4">
-            <div className="px-3 py-2">
-              <div className="space-y-1">
-                <DashboardNav items={finalNavItems} setOpen={setOpen} />
+          <div className="flex h-full flex-col">
+            <div className="flex-1 space-y-4 overflow-y-auto py-4">
+              <div className="px-3 py-2">
+                <div className="space-y-1">
+                  <DashboardNav items={finalNavItems} setOpen={setOpen} />
+                </div>
               </div>
+            </div>
+            <div className="border-t px-3 py-3">
+              <UserNav variant="sidebar" />
             </div>
           </div>
         </SheetContent>
