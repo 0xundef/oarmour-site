@@ -79,6 +79,43 @@ function extractManifestPermissions(manifest: Record<string, unknown>) {
     }
 }
 
+function collectIconPathsFromValue(value: unknown, sink: Set<string>) {
+    if (!value || typeof value !== 'object') return
+    for (const entry of Object.values(value as Record<string, unknown>)) {
+        if (typeof entry === 'string' && entry.trim().length > 0) {
+            sink.add(entry.trim())
+        }
+    }
+}
+
+function extractManifestIconAssets(manifest: Record<string, unknown>, sourceDir: string) {
+    const iconPaths = new Set<string>()
+    collectIconPathsFromValue(manifest.icons, iconPaths)
+    if (manifest.action && typeof manifest.action === 'object') {
+        const action = manifest.action as Record<string, unknown>
+        collectIconPathsFromValue(action.default_icon, iconPaths)
+    }
+    if (manifest.browser_action && typeof manifest.browser_action === 'object') {
+        const browserAction = manifest.browser_action as Record<string, unknown>
+        collectIconPathsFromValue(browserAction.default_icon, iconPaths)
+    }
+    if (manifest.page_action && typeof manifest.page_action === 'object') {
+        const pageAction = manifest.page_action as Record<string, unknown>
+        collectIconPathsFromValue(pageAction.default_icon, iconPaths)
+    }
+    const declaredIconPaths = Array.from(iconPaths)
+    const existingIconPaths = declaredIconPaths.filter((iconPath) => {
+        const absoluteIconPath = path.resolve(sourceDir, iconPath)
+        return absoluteIconPath.startsWith(sourceDir) && fs.existsSync(absoluteIconPath)
+    })
+    return {
+        hasDeclaredIcon: declaredIconPaths.length > 0,
+        hasPackagedIcon: existingIconPaths.length > 0,
+        declaredIconPaths,
+        existingIconPaths,
+    }
+}
+
 function getPublisher(manifest: Record<string, unknown>): string {
     const author = manifest.author
     if (typeof author === 'string') return author
@@ -122,6 +159,7 @@ export async function processExtension(extensionId: string) {
         const resolvedName = resolveLocalizedString(manifest.name, sourceDir, manifest);
         const version = typeof manifest.version === 'string' ? manifest.version : null
         const manifestPermissions = extractManifestPermissions(manifest)
+        const manifestIconAssets = extractManifestIconAssets(manifest, sourceDir)
         
         // 4. Upsert Extension
         const extension = await prisma.globalExtension.upsert({
@@ -155,6 +193,7 @@ export async function processExtension(extensionId: string) {
                 version,
                 metadata: {
                     manifestPermissions,
+                    manifestIconAssets,
                 },
             },
         })
@@ -162,6 +201,7 @@ export async function processExtension(extensionId: string) {
             extensionId,
             dbId: extension.id,
             requestedPermissions: manifestPermissions.allRequestedPermissions.length,
+            hasPackagedIcon: manifestIconAssets.hasPackagedIcon,
         })
 
         // 5. Trigger Async Analysis

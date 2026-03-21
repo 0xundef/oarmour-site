@@ -18,6 +18,13 @@ type ManifestPermissionsPayload = {
   allRequestedPermissions: string[]
 }
 
+type ManifestIconAssetsPayload = {
+  hasDeclaredIcon: boolean
+  hasPackagedIcon: boolean
+  declaredIconPaths: string[]
+  existingIconPaths: string[]
+}
+
 function parseManifestPermissions(raw: unknown): ManifestPermissionsPayload {
   if (!raw || typeof raw !== 'object') {
     return {
@@ -36,6 +43,25 @@ function parseManifestPermissions(raw: unknown): ManifestPermissionsPayload {
     optionalPermissions: toArray(obj.optionalPermissions),
     optionalHostPermissions: toArray(obj.optionalHostPermissions),
     allRequestedPermissions: toArray(obj.allRequestedPermissions),
+  }
+}
+
+function parseManifestIconAssets(raw: unknown): ManifestIconAssetsPayload {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      hasDeclaredIcon: false,
+      hasPackagedIcon: false,
+      declaredIconPaths: [],
+      existingIconPaths: [],
+    }
+  }
+  const obj = raw as Record<string, unknown>
+  const toArray = (value: unknown) => (Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [])
+  return {
+    hasDeclaredIcon: obj.hasDeclaredIcon === true,
+    hasPackagedIcon: obj.hasPackagedIcon === true,
+    declaredIconPaths: toArray(obj.declaredIconPaths),
+    existingIconPaths: toArray(obj.existingIconPaths),
   }
 }
 
@@ -91,6 +117,7 @@ export async function GET(
         ? (snapshot.metadata as Record<string, unknown>)
         : null
     const manifestPermissions = parseManifestPermissions(snapshotMetadata?.manifestPermissions)
+    const manifestIconAssets = parseManifestIconAssets(snapshotMetadata?.manifestIconAssets)
     const latestDomainSignals = (latest.domains || []).map(parseTopDomainSignal)
     const latestDomains = latestDomainSignals.map((d) => d.domain)
     const latestIps = latest.ips || []
@@ -110,6 +137,7 @@ export async function GET(
       topDomainSignals: latestDomainSignals,
       addedIps,
       manifestPermissions,
+      manifestIconAssets,
     })
   } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
