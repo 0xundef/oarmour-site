@@ -72,10 +72,6 @@ export function GlobalSearch() {
     }
 
     setOpen(false);
-    toast({
-        title: "Analysis Queued",
-        description: "Request submitted. Analyzing in background...",
-    });
 
     try {
         const res = await fetch('/api/extensions/analyze', {
@@ -87,11 +83,19 @@ export function GlobalSearch() {
         if (!res.ok) throw new Error('Failed to start analysis');
         
         const data = await res.json();
-        
-        toast({
-            title: "Analysis Started",
-            description: `Processing extension: ${data.data.name || extensionId}`,
-        });
+        const fromCache = data?.message === "Extension found in cache" || !!data?.analysis
+
+        toast(
+          fromCache
+            ? {
+                title: "Extension Already Analyzed",
+                description: `No need to submit again. Showing existing analysis for ${data?.data?.name || extensionId}.`,
+              }
+            : {
+                title: "Analysis Started",
+                description: `Processing extension: ${data?.data?.name || extensionId}`,
+              },
+        )
         
         // Maybe refresh dashboard data?
         router.refresh();

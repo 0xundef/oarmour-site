@@ -5,10 +5,24 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-type Row = {
-  status: string;
-  count: number | bigint;
-};
+type AggregateRow = {
+  totalRuns: number | bigint
+  successfulRuns: number | bigint
+  failedRuns: number | bigint
+  totalChecked: number | bigint
+  totalUpdated: number | bigint
+}
+
+type HistoryRow = {
+  id: string
+  status: string
+  checkedCount: number
+  succeededCount: number
+  failedCount: number
+  updatedCount: number
+  startedAt: Date
+  endedAt: Date | null
+}
 
 export async function GET() {
   try {
@@ -17,32 +31,62 @@ export async function GET() {
     if (!user || user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const rows = await prisma.$queryRaw<Row[]>`
-      SELECT t.status, COUNT(*) AS count
-      FROM (
-        SELECT DISTINCT ON ("extensionId") "extensionId", "status"
-        FROM "ExtensionAnalysisResult"
-        ORDER BY "extensionId", "createdAt" DESC
-      ) t
-      GROUP BY t.status
+    const [aggregate] = await prisma.$queryRaw<AggregateRow[]>`
+      SELECT
+        COUNT(*) AS "totalRuns",
+        SUM(CASE WHEN "status" = 'COMPLETED' THEN 1 ELSE 0 END) AS "successfulRuns",
+        SUM(CASE WHEN "status" = 'FAILED' THEN 1 ELSE 0 END) AS "failedRuns",
+        COALESCE(SUM("checkedCount"), 0) AS "totalChecked",
+        COALESCE(SUM("updatedCount"), 0) AS "totalUpdated"
+      FROM "MonitorRun"
+      WHERE "status" IN ('COMPLETED', 'FAILED')
     `;
-    let queue = 0;
-    let processing = 0;
-    let finished = 0;
-    let failed = 0;
-    for (const r of rows) {
-      const c = Number(r.count);
-      if (r.status === "PENDING") queue += c;
-      if (r.status === "RUNNING") processing += c;
-      if (r.status === "COMPLETED") finished += c;
-      if (r.status === "FAILED") failed += c;
-    }
+    const history = await prisma.$queryRaw<HistoryRow[]>`
+      SELECT
+        "id",
+        "status",
+        "checkedCount",
+        "succeededCount",
+        "failedCount",
+        "updatedCount",
+        "startedAt",
+        "endedAt"
+      FROM "MonitorRun"
+      ORDER BY "startedAt" DESC
+      LIMIT 12
+    `;
+    const latest = history[0] || null
+    const periodMinutes = Number(process.env.EXT_MONITOR_PERIOD_MINUTES ?? "30")
+    const periodMs = Number.isFinite(periodMinutes) && periodMinutes > 0 ? periodMinutes * 60000 : 1800000
+    const nextRunAt = latest?.startedAt ? new Date(new Date(latest.startedAt).getTime() + periodMs).toISOString() : null
+    const monitorEnabled = process.env.EXT_MONITOR_ENABLED !== "0"
+    const serviceHealth =
+      !monitorEnabled
+        ? "DISABLED"
+        : latest?.status === "FAILED"
+          ? "DEGRADED"
+          : latest
+            ? "HEALTHY"
+            : "NO_DATA"
     return NextResponse.json({
-      queue,
-      processing,
-      finished,
-      failed,
-      total: queue + processing + finished + failed,
+      serviceHealth,
+      monitorEnabled,
+      totalRuns: Number(aggregate?.totalRuns ?? 0),
+      successfulRuns: Number(aggregate?.successfulRuns ?? 0),
+      failedRuns: Number(aggregate?.failedRuns ?? 0),
+      totalChecked: Number(aggregate?.totalChecked ?? 0),
+      totalUpdated: Number(aggregate?.totalUpdated ?? 0),
+      nextRunAt,
+      history: history.map((r) => ({
+        id: r.id,
+        status: r.status,
+        checkedCount: r.checkedCount,
+        succeededCount: r.succeededCount,
+        failedCount: r.failedCount,
+        updatedCount: r.updatedCount,
+        startedAt: new Date(r.startedAt).toISOString(),
+        endedAt: r.endedAt ? new Date(r.endedAt).toISOString() : null,
+      })),
       updatedAt: new Date().toISOString(),
     });
   } catch {

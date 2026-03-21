@@ -4,12 +4,25 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type MonitorStats = {
-  queue: number;
-  processing: number;
-  finished: number;
-  failed: number;
-  total: number;
-  updatedAt: string;
+  serviceHealth: string
+  monitorEnabled: boolean
+  totalRuns: number
+  successfulRuns: number
+  failedRuns: number
+  totalChecked: number
+  totalUpdated: number
+  nextRunAt: string | null
+  updatedAt: string
+  history: Array<{
+    id: string
+    status: string
+    checkedCount: number
+    succeededCount: number
+    failedCount: number
+    updatedCount: number
+    startedAt: string
+    endedAt: string | null
+  }>
 };
 
 export function MonitorJobsDashboard() {
@@ -37,42 +50,75 @@ export function MonitorJobsDashboard() {
   }, []);
 
   const value = (v: number | undefined) => (loading ? "..." : String(v ?? 0));
+  const toLocal = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "N/A")
 
   return (
     <div className="space-y-3">
-      <div className="text-sm font-medium">Monitor Job Dashboard</div>
+      <div className="text-sm font-medium">Monitor Service Dashboard</div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">In Queue</CardTitle>
+            <CardTitle className="text-sm">Service Health</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{value(stats?.queue)}</CardContent>
+          <CardContent className="text-2xl font-semibold">{loading ? "..." : stats?.serviceHealth || "NO_DATA"}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Processing</CardTitle>
+            <CardTitle className="text-sm">Total Runs</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{value(stats?.processing)}</CardContent>
+          <CardContent className="text-2xl font-semibold">{value(stats?.totalRuns)}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Finished</CardTitle>
+            <CardTitle className="text-sm">Successful Runs</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{value(stats?.finished)}</CardContent>
+          <CardContent className="text-2xl font-semibold">{value(stats?.successfulRuns)}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Failed</CardTitle>
+            <CardTitle className="text-sm">Failed Runs</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{value(stats?.failed)}</CardContent>
+          <CardContent className="text-2xl font-semibold">{value(stats?.failedRuns)}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Total</CardTitle>
+            <CardTitle className="text-sm">Updates Found</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold">{value(stats?.total)}</CardContent>
+          <CardContent className="text-2xl font-semibold">{value(stats?.totalUpdated)}</CardContent>
         </Card>
       </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Total Extensions Checked</CardTitle>
+          </CardHeader>
+          <CardContent className="text-2xl font-semibold">{value(stats?.totalChecked)}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Next Scheduled Run</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm font-medium">{loading ? "..." : toLocal(stats?.nextRunAt)}</CardContent>
+        </Card>
+      </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Recent Monitor Runs</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {(stats?.history || []).length === 0 ? (
+            <div className="text-sm text-muted-foreground">{loading ? "Loading..." : "No monitor runs yet"}</div>
+          ) : (
+            (stats?.history || []).map((run) => (
+              <div key={run.id} className="grid grid-cols-[180px_100px_1fr] gap-2 text-xs">
+                <div>{toLocal(run.startedAt)}</div>
+                <div>{run.status}</div>
+                <div>{`checked ${run.checkedCount}, succeeded ${run.succeededCount}, failed ${run.failedCount}, updated ${run.updatedCount}`}</div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

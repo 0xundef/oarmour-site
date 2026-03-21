@@ -253,6 +253,20 @@ model DomainEnrichment {
   expiresDate DateTime?
   fetchedAt DateTime @default(now())
 }
+
+model MonitorRun {
+  id             String   @id @default(uuid())
+  status         JobStatus
+  checkedCount   Int      @default(0)
+  succeededCount Int      @default(0)
+  failedCount    Int      @default(0)
+  updatedCount   Int      @default(0)
+  error          String?
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
 // ==========================================
 // 4. Security Intelligence (The "Brain")
 // ==========================================

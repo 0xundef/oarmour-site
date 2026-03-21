@@ -2,6 +2,7 @@ import 'server-only'
 import axios from 'axios'
 import os from 'os'
 import path from 'path'
+import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { downloadExtension } from '@/lib/extension-analyzer'
 
@@ -32,6 +33,46 @@ async function fetchStoreVersion(extensionId: string) {
 }
 
 export async function monitorExtensionsOnce() {
+  let runId: string | null = null
+  let failedCount = 0
+  let succeededCount = 0
+  const monitorRunDelegate = (prisma as unknown as {
+    monitorRun?: {
+      create: (args: { data: { status: 'RUNNING' }, select: { id: true } }) => Promise<{ id: string }>
+      update: (args: {
+        where: { id: string }
+        data: {
+          status: 'FAILED' | 'COMPLETED'
+          checkedCount?: number
+          succeededCount?: number
+          failedCount?: number
+          updatedCount?: number
+          error?: string
+          endedAt: Date
+        }
+      }) => Promise<unknown>
+    }
+  }).monitorRun
+  try {
+    if (monitorRunDelegate) {
+      const run = await monitorRunDelegate.create({
+        data: {
+          status: 'RUNNING',
+        },
+        select: { id: true },
+      })
+      runId = run.id
+    } else {
+      runId = randomUUID()
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "MonitorRun" ("id","status","startedAt","createdAt","updatedAt")
+         VALUES ($1,'RUNNING',NOW(),NOW(),NOW())`,
+        runId,
+      )
+    }
+  } catch (e) {
+    console.warn('Monitor: failed to create monitor run record.', e)
+  }
   let list: Array<{ id: string; storeId: string; version: string | null }>
   try {
     list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
@@ -39,6 +80,34 @@ export async function monitorExtensionsOnce() {
     `
   } catch (e) {
     console.warn('Monitor: isMonitored flag query failed. Skipping monitoring.', e)
+    if (runId) {
+      try {
+        if (monitorRunDelegate) {
+          await monitorRunDelegate.update({
+            where: { id: runId },
+            data: {
+              status: 'FAILED',
+              checkedCount: 0,
+              succeededCount: 0,
+              failedCount: 0,
+              updatedCount: 0,
+              error: String(e),
+              endedAt: new Date(),
+            },
+          })
+        } else {
+          await prisma.$executeRawUnsafe(
+            `UPDATE "MonitorRun"
+             SET "status"='FAILED',"checkedCount"=0,"succeededCount"=0,"failedCount"=0,"updatedCount"=0,"error"=$2,"endedAt"=NOW(),"updatedAt"=NOW()
+             WHERE "id"=$1`,
+            runId,
+            String(e),
+          )
+        }
+      } catch (updateError) {
+        console.warn('Monitor: failed to update failed monitor run record.', updateError)
+      }
+    }
     return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> }
   }
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> = []
@@ -59,8 +128,41 @@ export async function monitorExtensionsOnce() {
         }
         updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: latest, crxPath })
       }
+      succeededCount += 1
     } catch (e) {
       console.error('Monitor check failed for', ext.storeId, e)
+      failedCount += 1
+    }
+  }
+  if (runId) {
+    try {
+      if (monitorRunDelegate) {
+        await monitorRunDelegate.update({
+          where: { id: runId },
+          data: {
+            status: failedCount > 0 ? 'FAILED' : 'COMPLETED',
+            checkedCount: list.length,
+            succeededCount,
+            failedCount,
+            updatedCount: updated.length,
+            endedAt: new Date(),
+          },
+        })
+      } else {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "MonitorRun"
+           SET "status"=$2::"JobStatus","checkedCount"=$3,"succeededCount"=$4,"failedCount"=$5,"updatedCount"=$6,"endedAt"=NOW(),"updatedAt"=NOW()
+           WHERE "id"=$1`,
+          runId,
+          failedCount > 0 ? 'FAILED' : 'COMPLETED',
+          list.length,
+          succeededCount,
+          failedCount,
+          updated.length,
+        )
+      }
+    } catch (e) {
+      console.warn('Monitor: failed to finalize monitor run record.', e)
     }
   }
   return { checked: list.length, updated }
