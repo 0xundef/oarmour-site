@@ -98,7 +98,7 @@ export default async function AdminPage({
     content = (
       <Tabs key="monitoring-tabs" defaultValue={defaultTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="extensions">Extension Monitor</TabsTrigger>
+          <TabsTrigger value="extensions">Extension Management</TabsTrigger>
           <TabsTrigger value="service-health">Service Health</TabsTrigger>
         </TabsList>
         <TabsContent value="extensions" className="space-y-4">
