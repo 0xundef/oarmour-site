@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -39,7 +39,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         toast({ description: enabled ? "Monitoring enabled" : "Monitoring disabled" });
         setRows((prev) => prev.map((r) => (r.id === id ? { ...r, isMonitored: enabled } : r)));
         router.refresh();
-      } catch (e) {
+      } catch {
         toast({ variant: "destructive", description: "Failed to update monitoring setting" });
       }
     });
@@ -58,10 +58,19 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         toast({ description: "Extension deleted" });
         setRows((prev) => prev.filter((r) => r.id !== id));
         router.refresh();
-      } catch (e) {
+      } catch {
         toast({ variant: "destructive", description: "Failed to delete extension" });
       }
     });
+  };
+
+  const copyExtensionId = async (storeId: string) => {
+    try {
+      await navigator.clipboard.writeText(storeId);
+      toast({ description: "Extension ID copied to clipboard" });
+    } catch {
+      toast({ variant: "destructive", description: "Failed to copy extension ID" });
+    }
   };
 
   return (
@@ -70,7 +79,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead>Store ID</TableHead>
             <TableHead>Version</TableHead>
             <TableHead>Operation</TableHead>
           </TableRow>
@@ -78,7 +86,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center">
+              <TableCell colSpan={3} className="text-center">
                 No extensions found.
               </TableCell>
             </TableRow>
@@ -86,7 +94,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             rows.map((ext) => (
               <TableRow key={ext.id}>
                 <TableCell>{ext.name}</TableCell>
-                <TableCell className="font-mono text-xs">{ext.storeId}</TableCell>
                 <TableCell>{ext.version || "N/A"}</TableCell>
                 <TableCell className="flex items-center gap-3">
                   <Switch
@@ -94,6 +101,16 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                     onCheckedChange={(v) => toggleMonitor(ext.id, v)}
                     disabled={pending}
                   />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={pending}
+                    onClick={() => copyExtensionId(ext.storeId)}
+                    aria-label="Copy extension ID"
+                    title="Copy extension ID"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"
