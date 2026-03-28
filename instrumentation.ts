@@ -2,7 +2,10 @@ import 'server-only'
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
-  const g = globalThis as any
+  const g = globalThis as typeof globalThis & {
+    __extMonitorHandle?: ReturnType<typeof setInterval>
+    __extLookupHandle?: ReturnType<typeof setInterval>
+  }
   try {
     const { prisma } = await import('@/lib/prisma')
     await prisma.$queryRaw`SELECT 1`
@@ -11,7 +14,8 @@ export async function register() {
     return
   }
   if (process.env.EXT_MONITOR_ENABLED !== '0' && !g.__extMonitorHandle) {
-    const minutes = Number(process.env.EXT_MONITOR_PERIOD_MINUTES ?? '30')
+    const rawMinutes = Number(process.env.EXT_MONITOR_PERIOD_MINUTES ?? '30')
+    const minutes = Number.isFinite(rawMinutes) && rawMinutes > 0 ? rawMinutes : 30
     const { scheduleExtensionMonitor } = await import('@/lib/monitor/extensions-monitor')
     const handle = scheduleExtensionMonitor(minutes * 60 * 1000)
     g.__extMonitorHandle = handle

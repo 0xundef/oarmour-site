@@ -181,6 +181,5 @@ export function scheduleExtensionMonitor(periodMs: number) {
       running = false
     }
   }
-  tick()
   return setInterval(tick, periodMs)
 }
