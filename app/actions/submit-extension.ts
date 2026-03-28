@@ -29,7 +29,8 @@ export async function submitExtension(formData: FormData) {
       data: {
         userId: user.id,
         input: result.data.input,
-        status: "APPROVED", // Auto-approve since we trigger analysis
+        status: "PENDING",
+        feedback: "Lookup queued",
       },
     });
 
@@ -40,7 +41,6 @@ export async function submitExtension(formData: FormData) {
     
     if (idMatch) {
         extensionId = idMatch[1];
-        // Trigger analysis in background
         processExtension(extensionId).catch(err => {
             console.error(`Background analysis failed for submission ${submission.id}:`, err);
         });

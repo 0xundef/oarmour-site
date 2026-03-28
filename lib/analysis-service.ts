@@ -129,6 +129,294 @@ function getPublisher(manifest: Record<string, unknown>): string {
     return ''
 }
 
+async function runLookupFromSource(dbId: string, extensionId: string, analysisId: string, sourceDir: string) {
+    const startedAt = Date.now()
+    console.warn('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
+    const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
+    const results = scanDirectory(sourceDir);
+    console.warn('[analysis] runLookupFromSource:scanCompleted', {
+        extensionId,
+        analysisId,
+        fileCount: results.fileCount,
+        domainCount: results.domains.size,
+        ipCount: results.ips.size,
+        urlCount: results.urls.size,
+    })
+    const apexDomains = Array.from(
+        new Set(
+            Array.from(results.domains)
+                .map((d) => getDomain(String(d)) || null)
+                .filter((d): d is string => !!d)
+        )
+    ).slice(0, 20);
+    console.warn('[analysis] runLookupFromSource:apexDomainsPrepared', {
+        extensionId,
+        analysisId,
+        apexDomainCount: apexDomains.length,
+    })
+    const enrichments: Array<{
+        analysisId: string;
+        domain: string;
+        registrar?: string | null;
+        status?: string | null;
+        nameservers: string[];
+        createdDate?: Date | null;
+        expiresDate?: Date | null;
+    }> = [];
+    for (let i = 0; i < apexDomains.length; i++) {
+        const d = apexDomains[i]
+        let registrar: string | null = null
+        let status: string | null = null
+        let nameservers: string[] = []
+        let createdDate: Date | null = null
+        let expiresDate: Date | null = null
+        try {
+            const info = await rdapDomain(d)
+            registrar = info.registrar ?? null
+            status = info.status ?? null
+            nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
+            createdDate = info.createdDate ?? null
+            expiresDate = info.expiresDate ?? null
+        } catch {}
+        const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
+        if (insufficient) {
+            const w = await whoisInfo(d)
+            registrar = registrar ?? w.registrar
+            nameservers = nameservers.length ? nameservers : w.nameservers
+            createdDate = createdDate ?? w.createdDate
+            expiresDate = expiresDate ?? w.expiresDate
+        }
+        enrichments.push({
+            analysisId,
+            domain: d,
+            registrar,
+            status,
+            nameservers,
+            createdDate,
+            expiresDate,
+        })
+    }
+    const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
+    if (enrichments.length > 0) {
+        await domainEnrichment.createMany({
+            data: enrichments
+        });
+    }
+    const topDomains = await domainEnrichment.findMany({
+        where: { analysisId },
+        orderBy: { createdDate: 'desc' },
+        take: 3,
+        select: { id: true, domain: true, createdDate: true },
+    })
+    const topDomainSignals: Array<{
+        topDomainSignalId: string
+        domain: string
+        createTime: string | null
+        isMalicious: boolean
+    }> = await Promise.all(
+        topDomains.map(async (item) => {
+            let isMalicious = false
+            try {
+                const vt = await vtGetDomain(item.domain)
+                isMalicious = isDomainMalicious(vt)
+            } catch {}
+            await domainEnrichment.update({
+                where: { id: item.id },
+                data: { isMalicious },
+            })
+            return {
+                topDomainSignalId: item.id,
+                domain: item.domain,
+                createTime: item.createdDate ? item.createdDate.toISOString() : null,
+                isMalicious,
+            }
+        }),
+    )
+    const hasMaliciousDomain = topDomainSignals.some((d) => d.isMalicious)
+    await prisma.extensionAnalysisResult.update({
+        where: { id: analysisId },
+        data: {
+            status: 'COMPLETED',
+            domains: topDomainSignals.map((d) => JSON.stringify(d)),
+            ips: Array.from(results.ips).slice(0, 200),
+            urls: Array.from(results.urls).slice(0, 200),
+            filesScanned: results.fileCount,
+            updatedAt: new Date()
+        }
+    });
+    await prisma.globalExtension.update({
+        where: { id: dbId },
+        data: {
+            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+        },
+    });
+    console.warn('[analysis] runLookupFromSource:completed', {
+        extensionId,
+        analysisId,
+        filesScanned: results.fileCount,
+        elapsedMs: Date.now() - startedAt,
+        riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+    })
+}
+
+async function runLookupForExtension(dbId: string, extensionId: string) {
+    const pendingAnalysis = await prisma.extensionAnalysisResult.findFirst({
+        where: { extensionId: dbId, status: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+    })
+    const analysis = pendingAnalysis
+        ? await prisma.extensionAnalysisResult.update({
+            where: { id: pendingAnalysis.id },
+            data: { status: 'RUNNING', updatedAt: new Date() },
+            select: { id: true },
+        })
+        : await prisma.extensionAnalysisResult.create({
+            data: {
+                extensionId: dbId,
+                status: 'RUNNING',
+            },
+            select: { id: true },
+        })
+    const tempDir = path.join(os.tmpdir(), 'chrome-extension-lookup', extensionId);
+    const crxDir = path.join(tempDir, 'crx');
+    const sourceDir = path.join(tempDir, 'source');
+    try {
+        const crxPath = await downloadExtension(extensionId, crxDir);
+        console.warn('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath, analysisId: analysis.id })
+        await extractExtension(crxPath, sourceDir);
+        console.warn('[analysis] runLookupForExtension:extracted', { extensionId, sourceDir, analysisId: analysis.id })
+        await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
+    } catch (e) {
+        await prisma.extensionAnalysisResult.update({
+            where: { id: analysis.id },
+            data: {
+                status: 'FAILED',
+                updatedAt: new Date(),
+            },
+        })
+        throw e
+    } finally {
+        if (fs.existsSync(tempDir)) {
+            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+        }
+    }
+}
+
+export async function enqueueExtensionLookupJob(dbId: string) {
+    const existing = await prisma.scanJob.findFirst({
+        where: {
+            targetType: 'EXTENSION',
+            targetId: dbId,
+            status: { in: ['PENDING', 'RUNNING'] },
+        },
+        orderBy: { startedAt: 'desc' },
+        select: { id: true, status: true },
+    })
+    if (existing) {
+        return {
+            jobId: existing.id,
+            status: existing.status,
+            queued: false,
+        }
+    }
+    const hasInFlightAnalysis = await prisma.extensionAnalysisResult.findFirst({
+        where: {
+            extensionId: dbId,
+            status: { in: ['PENDING', 'RUNNING'] },
+        },
+        select: { id: true },
+    })
+    if (!hasInFlightAnalysis) {
+        await prisma.extensionAnalysisResult.create({
+            data: {
+                extensionId: dbId,
+                status: 'PENDING',
+            },
+        })
+    }
+    const job = await prisma.scanJob.create({
+        data: {
+            targetType: 'EXTENSION',
+            targetId: dbId,
+            status: 'PENDING',
+        },
+        select: { id: true, status: true },
+    })
+    return {
+        jobId: job.id,
+        status: job.status,
+        queued: true,
+    }
+}
+
+export async function processPendingLookupJob() {
+    const pending = await prisma.scanJob.findFirst({
+        where: {
+            targetType: 'EXTENSION',
+            status: 'PENDING',
+        },
+        orderBy: { startedAt: 'asc' },
+        select: { id: true, targetId: true },
+    })
+    if (!pending) {
+        return { processed: false as const }
+    }
+    const claim = await prisma.scanJob.updateMany({
+        where: { id: pending.id, status: 'PENDING' },
+        data: { status: 'RUNNING', startedAt: new Date() },
+    })
+    if (claim.count === 0) {
+        return { processed: false as const }
+    }
+    const startedAt = Date.now()
+    try {
+        const extension = await prisma.globalExtension.findUnique({
+            where: { id: pending.targetId },
+            select: { id: true, storeId: true },
+        })
+        if (!extension) {
+            throw new Error(`Extension not found for job ${pending.id}`)
+        }
+        await runLookupForExtension(extension.id, extension.storeId)
+        await prisma.scanJob.update({
+            where: { id: pending.id },
+            data: {
+                status: 'COMPLETED',
+                durationMs: Date.now() - startedAt,
+            },
+        })
+        return { processed: true as const, id: pending.id, status: 'COMPLETED' as const }
+    } catch (e) {
+        await prisma.scanJob.update({
+            where: { id: pending.id },
+            data: {
+                status: 'FAILED',
+                durationMs: Date.now() - startedAt,
+            },
+        })
+        console.error('[analysis] processPendingLookupJob:failed', { jobId: pending.id, error: e })
+        return { processed: true as const, id: pending.id, status: 'FAILED' as const }
+    }
+}
+
+export function scheduleExtensionLookupService(periodMs: number) {
+    let running = false
+    const tick = async () => {
+        if (running) return
+        running = true
+        try {
+            await processPendingLookupJob()
+        } catch (e) {
+            console.error('[analysis] lookup tick failed', e)
+        } finally {
+            running = false
+        }
+    }
+    tick()
+    return setInterval(tick, periodMs)
+}
+
 export async function processExtension(extensionId: string) {
     const tempDir = path.join(os.tmpdir(), 'chrome-extension-analyzer', extensionId);
     const crxDir = path.join(tempDir, 'crx');
@@ -203,213 +491,36 @@ export async function processExtension(extensionId: string) {
             requestedPermissions: manifestPermissions.allRequestedPermissions.length,
             hasPackagedIcon: manifestIconAssets.hasPackagedIcon,
         })
-
-        // 5. Trigger Async Analysis
-        // Fire and forget, but catch errors to avoid unhandled rejections
-        triggerAsyncAnalysis(extension.id, extensionId, sourceDir).catch(e => console.error("Async analysis error:", e));
-        console.warn('[analysis] processExtension:asyncTriggered', { extensionId, dbId: extension.id })
+        const queueJob = await enqueueExtensionLookupJob(extension.id)
+        console.warn('[analysis] processExtension:lookupEnqueued', {
+            extensionId,
+            dbId: extension.id,
+            queueJob,
+        })
 
         return extension;
     } catch (error) {
         console.error('[analysis] processExtension:failed', { extensionId, error })
-        // Cleanup if error occurs before analysis starts
-        if (fs.existsSync(tempDir)) {
-             try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
-        }
         throw error;
+    } finally {
+        if (fs.existsSync(tempDir)) {
+            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+        }
     }
 }
 
 export async function triggerAsyncAnalysis(dbId: string, extensionId: string, sourceDir: string) {
     try {
-        const startedAt = Date.now()
-        console.warn('[analysis] triggerAsyncAnalysis:start', { extensionId, dbId, sourceDir })
-        // Create initial analysis record
         const analysis = await prisma.extensionAnalysisResult.create({
             data: {
                 extensionId: dbId,
                 status: 'RUNNING',
-            }
-        });
-        console.warn('[analysis] triggerAsyncAnalysis:analysisCreated', { extensionId, analysisId: analysis.id })
-
-        // Import scanner dynamically or use the one we have
-        // lib/analysis-service.ts -> lib/extension-analyzer/scanner.ts
-        const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
-        console.warn('[analysis] triggerAsyncAnalysis:scannerReady', { extensionId, analysisId: analysis.id })
-        
-        const results = scanDirectory(sourceDir);
-        console.warn('[analysis] triggerAsyncAnalysis:scanCompleted', {
-            extensionId,
-            analysisId: analysis.id,
-            fileCount: results.fileCount,
-            domainCount: results.domains.size,
-            ipCount: results.ips.size,
-            urlCount: results.urls.size,
-        })
-        
-        const apexDomains = Array.from(
-            new Set(
-                Array.from(results.domains)
-                    .map((d) => getDomain(String(d)) || null)
-                    .filter((d): d is string => !!d)
-            )
-        ).slice(0, 20);
-        console.warn('[analysis] triggerAsyncAnalysis:apexDomainsPrepared', {
-            extensionId,
-            analysisId: analysis.id,
-            apexDomainCount: apexDomains.length,
-        })
-        const enrichments: Array<{
-            analysisId: string;
-            domain: string;
-            registrar?: string | null;
-            status?: string | null;
-            nameservers: string[];
-            createdDate?: Date | null;
-            expiresDate?: Date | null;
-        }> = [];
-        for (let i = 0; i < apexDomains.length; i++) {
-            const d = apexDomains[i]
-            let registrar: string | null = null
-            let status: string | null = null
-            let nameservers: string[] = []
-            let createdDate: Date | null = null
-            let expiresDate: Date | null = null
-            try {
-                const info = await rdapDomain(d)
-                registrar = info.registrar ?? null
-                status = info.status ?? null
-                nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
-                createdDate = info.createdDate ?? null
-                expiresDate = info.expiresDate ?? null
-            } catch {}
-            const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
-            if (insufficient) {
-                const w = await whoisInfo(d)
-                registrar = registrar ?? w.registrar
-                nameservers = nameservers.length ? nameservers : w.nameservers
-                createdDate = createdDate ?? w.createdDate
-                expiresDate = expiresDate ?? w.expiresDate
-            }
-            enrichments.push({
-                analysisId: analysis.id,
-                domain: d,
-                registrar,
-                status,
-                nameservers,
-                createdDate,
-                expiresDate,
-            })
-            if ((i + 1) % 2 === 0) {
-                console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentProgress', {
-                    extensionId,
-                    analysisId: analysis.id,
-                    processedDomains: i + 1,
-                    totalDomains: apexDomains.length,
-                    currentDomain: d,
-                })
-            }
-        }
-        console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentBuilt', {
-            extensionId,
-            analysisId: analysis.id,
-            enrichmentCount: enrichments.length,
-        })
-        const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
-        if (enrichments.length > 0) {
-            await domainEnrichment.createMany({
-                data: enrichments
-            });
-        }
-        console.warn('[analysis] triggerAsyncAnalysis:domainEnrichmentStored', {
-            extensionId,
-            analysisId: analysis.id,
-            enrichmentCount: enrichments.length,
-        })
-
-        const topDomains = await domainEnrichment.findMany({
-            where: { analysisId: analysis.id },
-            orderBy: { createdDate: 'desc' },
-            take: 3,
-            select: { id: true, domain: true, createdDate: true },
-        })
-        console.warn('[analysis] triggerAsyncAnalysis:topDomainsSelected', {
-            extensionId,
-            analysisId: analysis.id,
-            topDomainCount: topDomains.length,
-        })
-        const topDomainSignals: Array<{
-            topDomainSignalId: string
-            domain: string
-            createTime: string | null
-            isMalicious: boolean
-        }> = await Promise.all(
-            topDomains.map(async (item) => {
-                let isMalicious = false
-                try {
-                    const vt = await vtGetDomain(item.domain)
-                    isMalicious = isDomainMalicious(vt)
-                } catch {}
-                await domainEnrichment.update({
-                    where: { id: item.id },
-                    data: { isMalicious },
-                })
-                return {
-                    topDomainSignalId: item.id,
-                    domain: item.domain,
-                    createTime: item.createdDate ? item.createdDate.toISOString() : null,
-                    isMalicious,
-                }
-            }),
-        )
-        const hasMaliciousDomain = topDomainSignals.some((d) => d.isMalicious)
-        console.warn('[analysis] triggerAsyncAnalysis:topDomainSignalsReady', {
-            extensionId,
-            analysisId: analysis.id,
-            maliciousDomainCount: topDomainSignals.filter((d) => d.isMalicious).length,
-            hasMaliciousDomain,
-        })
-
-        await prisma.extensionAnalysisResult.update({
-            where: { id: analysis.id },
-            data: {
-                status: 'COMPLETED',
-                domains: topDomainSignals.map((d) => JSON.stringify(d)),
-                ips: Array.from(results.ips).slice(0, 200),
-                urls: Array.from(results.urls).slice(0, 200),
-                filesScanned: results.fileCount,
-                updatedAt: new Date()
-            }
-        });
-        console.warn('[analysis] triggerAsyncAnalysis:analysisUpdated', {
-            extensionId,
-            analysisId: analysis.id,
-            filesScanned: results.fileCount,
-            elapsedMs: Date.now() - startedAt,
-        })
-        await prisma.globalExtension.update({
-            where: { id: dbId },
-            data: {
-                riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
             },
+            select: { id: true },
         });
-        console.warn('[analysis] triggerAsyncAnalysis:riskUpdated', {
-            extensionId,
-            dbId,
-            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
-        })
-
-        // Cleanup temp files
-        const tempExtensionDir = path.dirname(sourceDir); // .../extensionId
-        if (fs.existsSync(tempExtensionDir)) {
-            fs.rmSync(tempExtensionDir, { recursive: true, force: true });
-        }
-        console.warn('[analysis] triggerAsyncAnalysis:cleanupDone', { extensionId, tempExtensionDir })
-
+        await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
     } catch (e) {
         console.error('Async analysis failed:', e);
         console.error('[analysis] triggerAsyncAnalysis:failed', { extensionId, dbId, error: e })
-        // We might want to update the status to FAILED here if we had the ID
     }
 }

@@ -11,6 +11,7 @@ type AggregateRow = {
   failedRuns: number | bigint
   totalChecked: number | bigint
   totalUpdated: number | bigint
+  monitoredExtensions: number | bigint
 }
 
 type HistoryRow = {
@@ -37,7 +38,8 @@ export async function GET() {
         SUM(CASE WHEN "status" = 'COMPLETED' THEN 1 ELSE 0 END) AS "successfulRuns",
         SUM(CASE WHEN "status" = 'FAILED' THEN 1 ELSE 0 END) AS "failedRuns",
         COALESCE(SUM("checkedCount"), 0) AS "totalChecked",
-        COALESCE(SUM("updatedCount"), 0) AS "totalUpdated"
+        COALESCE(SUM("updatedCount"), 0) AS "totalUpdated",
+        (SELECT COUNT(*) FROM "GlobalExtension" WHERE "isMonitored" = true) AS "monitoredExtensions"
       FROM "MonitorRun"
       WHERE "status" IN ('COMPLETED', 'FAILED')
     `;
@@ -76,6 +78,7 @@ export async function GET() {
       failedRuns: Number(aggregate?.failedRuns ?? 0),
       totalChecked: Number(aggregate?.totalChecked ?? 0),
       totalUpdated: Number(aggregate?.totalUpdated ?? 0),
+      monitoredExtensions: Number(aggregate?.monitoredExtensions ?? 0),
       nextRunAt,
       history: history.map((r) => ({
         id: r.id,

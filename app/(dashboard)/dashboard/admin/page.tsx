@@ -94,7 +94,7 @@ export default async function AdminPage({
     }));
     title = "Monitoring";
     description = "Manage extension monitoring and monitor service health in one place.";
-    const defaultTab = rawSection === "monitor" ? "service-health" : "extensions";
+    const defaultTab = "service-health";
     content = (
       <Tabs key="monitoring-tabs" defaultValue={defaultTab} className="space-y-4">
         <TabsList>
