@@ -78,18 +78,31 @@ export default async function AdminPage({
   }
 
   if (section === "monitoring") {
-    const rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null }> =
-      await prisma.$queryRaw`
+    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; testingMode: boolean; checkFrequencyMinutes: number | null }> = []
+    try {
+      rawExtensions = await prisma.$queryRaw`
+        SELECT "id","name","storeId","version","isMonitored","testingMode","checkFrequencyMinutes"
+        FROM "GlobalExtension"
+        ORDER BY "updatedAt" DESC
+      `;
+    } catch {
+      const legacyExtensions = await prisma.$queryRaw<Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null }>>`
         SELECT "id","name","storeId","version","isMonitored","checkFrequencyMinutes"
         FROM "GlobalExtension"
         ORDER BY "updatedAt" DESC
       `;
+      rawExtensions = legacyExtensions.map((e) => ({
+        ...e,
+        testingMode: false,
+      }))
+    }
     const extensions = rawExtensions.map((e) => ({
       id: e.id,
       name: e.name,
       storeId: e.storeId,
       version: e.version,
       isMonitored: e.isMonitored,
+      testingMode: e.testingMode,
       checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
     }));
     title = "Monitoring";

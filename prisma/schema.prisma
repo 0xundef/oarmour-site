@@ -150,6 +150,7 @@ model GlobalExtension {
   
   // Monitoring Config
   isMonitored           Boolean   @default(false)
+  testingMode           Boolean   @default(false)
   checkFrequencyMinutes Int       @default(30)
   riskLevel             RiskLevel @default(UNKNOWN)
   

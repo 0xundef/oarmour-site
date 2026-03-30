@@ -14,6 +14,7 @@ type ExtRow = {
   storeId: string;
   version: string | null;
   isMonitored?: boolean;
+  testingMode?: boolean;
   checkFrequencyMinutes?: number;
 };
 
@@ -41,6 +42,24 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         router.refresh();
       } catch {
         toast({ variant: "destructive", description: "Failed to update monitoring setting" });
+      }
+    });
+  };
+
+  const toggleTestingMode = (id: string, enabled: boolean) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/admin/extensions/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, testingMode: enabled }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        toast({ description: enabled ? "Testing mode enabled" : "Testing mode disabled" });
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, testingMode: enabled } : r)));
+        router.refresh();
+      } catch {
+        toast({ variant: "destructive", description: "Failed to update testing mode" });
       }
     });
   };
@@ -80,13 +99,14 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Version</TableHead>
+            <TableHead>Testing Mode</TableHead>
             <TableHead>Operation</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={3} className="text-center">
+              <TableCell colSpan={4} className="text-center">
                 No extensions found.
               </TableCell>
             </TableRow>
@@ -95,6 +115,13 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
               <TableRow key={ext.id}>
                 <TableCell>{ext.name}</TableCell>
                 <TableCell>{ext.version || "N/A"}</TableCell>
+                <TableCell>
+                  <Switch
+                    checked={!!ext.testingMode}
+                    onCheckedChange={(v) => toggleTestingMode(ext.id, v)}
+                    disabled={pending}
+                  />
+                </TableCell>
                 <TableCell className="flex items-center gap-3">
                   <Switch
                     checked={!!ext.isMonitored}
