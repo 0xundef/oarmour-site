@@ -18,9 +18,16 @@ import {
 } from "@/components/ui/command"
 import { useToast } from "@/components/ui/use-toast"
 
+type AnalyzeInput = {
+  extensionId: string | null
+  downloadUrl?: string
+  isOarmourCdn?: boolean
+}
+
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
+  const [submitting, setSubmitting] = React.useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -38,74 +45,118 @@ export function GlobalSearch() {
 
   // removed unused runCommand
 
-  const extractExtensionId = (input: string): string | null => {
+  const resolveAnalyzeInput = (input: string): AnalyzeInput => {
     const trimmed = input.trim()
     const idRegex = /^[a-z]{32}$/
-    if (idRegex.test(trimmed)) return trimmed
+    if (idRegex.test(trimmed)) return { extensionId: trimmed }
     try {
       const url = new URL(trimmed)
-      const host = url.hostname
+      const host = url.hostname.toLowerCase()
       const path = url.pathname
       const isChromeWebStore =
         host.includes("chromewebstore.google.com") ||
         (host.includes("chrome.google.com") && path.includes("/webstore/"))
       if (isChromeWebStore && path.includes("/detail/")) {
         const match = path.match(/[a-z]{32}/)
-        if (match) return match[0]
+        if (match) return { extensionId: match[0] }
+      }
+      const customMatch = path.match(/^\/([a-z]{32})\/([^/]+)$/)
+      if (customMatch && host === "cdn.oarmour.com") {
+        return {
+          extensionId: customMatch[1],
+          downloadUrl: trimmed,
+          isOarmourCdn: true,
+        }
       }
     } catch {
-      // not a valid URL, fall through
+      
     }
-    return null
+    return { extensionId: null }
   }
 
+  const extractExtensionId = (input: string): string | null => {
+    return resolveAnalyzeInput(input).extensionId
+  }
+  const parsedInput = React.useMemo(() => resolveAnalyzeInput(query), [query])
+
   const handleAnalyze = async () => {
-    if (!query) return;
-    const extensionId = extractExtensionId(query);
+    if (!query || submitting) return;
+    const parsed = parsedInput
+    const extensionId = parsed.extensionId
     if (!extensionId) {
         toast({
             variant: "destructive",
             title: "输入不合法",
-            description: "请输入 32 位插件 ID 或 Chrome Web Store 链接。",
+            description: "请输入 32 位插件 ID、Chrome Web Store 链接或自定义 ZIP 下载链接。",
         });
         return;
     }
 
     setOpen(false);
+    setSubmitting(true)
+
+    let fakeProgress = 5
+    const renderProgress = (value: number, text: string) => (
+      <div className="space-y-2">
+        <div>{text} {value}%</div>
+        <div className="h-2 w-full rounded bg-muted">
+          <div className="h-2 rounded bg-primary transition-all duration-500" style={{ width: `${value}%` }} />
+        </div>
+      </div>
+    )
+    const loadingToast = toast({
+      title: "Downloading extension package",
+      description: renderProgress(fakeProgress, "Preparing download"),
+      duration: 180000,
+    })
+    const progressTimer = setInterval(() => {
+      fakeProgress = Math.min(95, fakeProgress + Math.max(1, Math.round((100 - fakeProgress) / 10)))
+      loadingToast.update({
+        id: loadingToast.id,
+        title: "Downloading extension package",
+        description: renderProgress(fakeProgress, "Downloading and preparing analysis"),
+      })
+    }, 700)
 
     try {
         const res = await fetch('/api/extensions/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extensionId })
+            body: JSON.stringify({ extensionId, downloadUrl: parsed.downloadUrl })
         });
 
         if (!res.ok) throw new Error('Failed to start analysis');
         
         const data = await res.json();
         const fromCache = data?.message === "Extension found in cache" || !!data?.analysis
+        const queued = !!data?.queued
 
-        toast(
-          fromCache
-            ? {
-                title: "Extension Already Analyzed",
-                description: `No need to submit again. Showing existing analysis for ${data?.data?.name || extensionId}.`,
-              }
-            : {
-                title: "Analysis Started",
-                description: `Processing extension: ${data?.data?.name || extensionId}`,
-              },
-        )
+        clearInterval(progressTimer)
+        loadingToast.update({
+          id: loadingToast.id,
+          title: fromCache ? "Extension Already Analyzed" : queued ? "Analysis Queued" : "Analysis Started",
+          description: fromCache
+            ? `No need to submit again. Showing existing analysis for ${data?.data?.name || extensionId}.`
+            : queued
+              ? `Download and analysis are running in background for ${data?.data?.name || extensionId}. Progress bar is estimated only before queueing.`
+              : parsed.downloadUrl
+                ? renderProgress(100, `Processing extension: ${data?.data?.name || extensionId} (custom package URI)`)
+                : renderProgress(100, `Processing extension: ${data?.data?.name || extensionId}`),
+        })
         
         // Maybe refresh dashboard data?
         router.refresh();
 
     } catch {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Failed to submit extension for analysis."
+        clearInterval(progressTimer)
+        loadingToast.update({
+          id: loadingToast.id,
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to submit extension for analysis."
         });
+    } finally {
+        setSubmitting(false)
     }
   }
 
@@ -114,7 +165,7 @@ export function GlobalSearch() {
     setOpen(false);
     // Navigate to search page or handle search
     // For now, let's redirect to dashboard with search param
-    const extensionId = extractExtensionId(query);
+    const extensionId = parsedInput.extensionId;
     const searchQuery = extensionId || query;
     router.push(`/dashboard/extension?search=${searchQuery}`);
   }
@@ -133,9 +184,18 @@ export function GlobalSearch() {
       </button>
       <CommandDialog open={open} onOpenChange={setOpen} commandProps={{ shouldFilter: false }}>
         <CommandInput 
-            placeholder="Type extension ID to analyze..."  
+            placeholder="Type extension ID, store URL, or custom ZIP URI..."  
             value={query}
             onValueChange={setQuery}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return
+              e.preventDefault()
+              if (parsedInput.extensionId) {
+                handleAnalyze()
+              } else {
+                handleSearch()
+              }
+            }}
         />
         <CommandList>
           <CommandEmpty>
@@ -154,9 +214,20 @@ export function GlobalSearch() {
           <CommandGroup heading="Quick Actions">
              <CommandItem onSelect={handleAnalyze}>
               <PlusIcon className="mr-2 h-4 w-4" />
-              <span>Analyze Extension: {extractExtensionId(query) || query || "..."}</span>
+              <span>{submitting ? "Analyzing..." : "Analyze Extension"}: {parsedInput.extensionId || query || "..."}</span>
             </CommandItem>
           </CommandGroup>
+          {parsedInput.isOarmourCdn && parsedInput.extensionId && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="CDN Analyze">
+                <CommandItem onSelect={handleAnalyze}>
+                  <PlusIcon className="mr-2 h-4 w-4" />
+                  <span>Analyze for testing: {parsedInput.extensionId}</span>
+                </CommandItem>
+              </CommandGroup>
+            </>
+          )}
         </CommandList>
       </CommandDialog>
     </>

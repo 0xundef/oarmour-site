@@ -124,6 +124,26 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
       },
     },
     {
+      accessorKey: "analysisStatus",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.analysisStatus
+        const statusClass =
+          status === "FAILED"
+            ? "bg-red-500 text-white"
+            : status === "COMPLETED"
+              ? "bg-green-500 text-white"
+              : status === "RUNNING"
+                ? "bg-blue-500 text-white"
+                : "bg-gray-400 text-white"
+        return (
+          <Badge className={`h-5 px-2 text-[10px] leading-none ${statusClass}`}>
+            {status}
+          </Badge>
+        )
+      },
+    },
+    {
       id: "operation",
       header: "Operation",
       cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} />,

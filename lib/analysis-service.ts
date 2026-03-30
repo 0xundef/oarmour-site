@@ -14,10 +14,6 @@ type DomainEnrichmentDelegate = {
         take: number
         select: { id: true; domain: true; createdDate: true }
     }) => Promise<Array<{ id: string; domain: string; createdDate: Date | null }>>
-    update: (args: {
-        where: { id: string }
-        data: { isMalicious: boolean }
-    }) => Promise<unknown>
 }
 
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { default_locale?: string }): string => {
@@ -114,6 +110,32 @@ function extractManifestIconAssets(manifest: Record<string, unknown>, sourceDir:
         declaredIconPaths,
         existingIconPaths,
     }
+}
+
+function findManifestPath(sourceDir: string): string | null {
+    const directPath = path.join(sourceDir, 'manifest.json')
+    if (fs.existsSync(directPath)) return directPath
+    const queue: string[] = [sourceDir]
+    while (queue.length > 0) {
+        const current = queue.shift()
+        if (!current) continue
+        let entries: fs.Dirent[] = []
+        try {
+            entries = fs.readdirSync(current, { withFileTypes: true })
+        } catch {
+            continue
+        }
+        for (const entry of entries) {
+            const fullPath = path.join(current, entry.name)
+            if (entry.isFile() && entry.name === 'manifest.json') {
+                return fullPath
+            }
+            if (entry.isDirectory()) {
+                queue.push(fullPath)
+            }
+        }
+    }
+    return null
 }
 
 function getPublisher(manifest: Record<string, unknown>): string {
@@ -220,10 +242,6 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 const vt = await vtGetDomain(item.domain)
                 isMalicious = isDomainMalicious(vt)
             } catch {}
-            await domainEnrichment.update({
-                where: { id: item.id },
-                data: { isMalicious },
-            })
             return {
                 topDomainSignalId: item.id,
                 domain: item.domain,
@@ -417,7 +435,7 @@ export function scheduleExtensionLookupService(periodMs: number) {
     return setInterval(tick, periodMs)
 }
 
-export async function processExtension(extensionId: string) {
+export async function processExtension(extensionId: string, downloadUrl?: string) {
     const tempDir = path.join(os.tmpdir(), 'chrome-extension-analyzer', extensionId);
     const crxDir = path.join(tempDir, 'crx');
     const sourceDir = path.join(tempDir, 'source');
@@ -426,7 +444,7 @@ export async function processExtension(extensionId: string) {
     try {
         console.warn('[analysis] processExtension:start', { extensionId, tempDir })
         // 1. Download
-        const crxPath = await downloadExtension(extensionId, crxDir);
+        const crxPath = await downloadExtension(extensionId, crxDir, downloadUrl);
         console.warn('[analysis] processExtension:downloaded', { extensionId, crxPath })
         
         // 2. Extract
@@ -434,20 +452,21 @@ export async function processExtension(extensionId: string) {
         console.warn('[analysis] processExtension:extracted', { extensionId, sourceDir })
         
         // 3. Read Manifest
-        const manifestPath = path.join(sourceDir, 'manifest.json');
-        if (!fs.existsSync(manifestPath)) {
+        const manifestPath = findManifestPath(sourceDir);
+        if (!manifestPath) {
              throw new Error('Manifest file not found');
         }
+        const extensionRootDir = path.dirname(manifestPath)
         
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
         console.warn('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
         
         const publisher = getPublisher(manifest)
 
-        const resolvedName = resolveLocalizedString(manifest.name, sourceDir, manifest);
+        const resolvedName = resolveLocalizedString(manifest.name, extensionRootDir, manifest);
         const version = typeof manifest.version === 'string' ? manifest.version : null
         const manifestPermissions = extractManifestPermissions(manifest)
-        const manifestIconAssets = extractManifestIconAssets(manifest, sourceDir)
+        const manifestIconAssets = extractManifestIconAssets(manifest, extensionRootDir)
         
         // 4. Upsert Extension
         const extension = await prisma.globalExtension.upsert({
@@ -455,7 +474,7 @@ export async function processExtension(extensionId: string) {
             update: {
                 name: resolvedName || extensionId,
                 version,
-                description: resolveLocalizedString(manifest.description, sourceDir, manifest),
+                description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
                 updatedAt: new Date()
             },
@@ -463,7 +482,7 @@ export async function processExtension(extensionId: string) {
                 storeId: extensionId,
                 name: resolvedName || extensionId,
                 version,
-                description: resolveLocalizedString(manifest.description, sourceDir, manifest),
+                description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
                 platform: 'CHROME'
             }
