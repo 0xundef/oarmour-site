@@ -51,7 +51,7 @@ async function hasCdnPackage(downloadUrl: string) {
   return res.status === 200 || res.status === 206
 }
 
-export async function monitorExtensionsOnce() {
+export async function monitorExtensionsOnce(targetStoreId?: string) {
   let runId: string | null = null
   let failedCount = 0
   let succeededCount = 0
@@ -94,14 +94,27 @@ export async function monitorExtensionsOnce() {
   }
   let list: Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>
   try {
-    list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
-      SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "isMonitored" = true
-    `
+    if (targetStoreId) {
+      list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
+        SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
+      `
+    } else {
+      list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
+        SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "isMonitored" = true
+      `
+    }
   } catch (e) {
     try {
-      const legacyList = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
-        SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "isMonitored" = true
-      `
+      let legacyList: Array<{ id: string; storeId: string; version: string | null }>
+      if (targetStoreId) {
+        legacyList = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
+          SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
+        `
+      } else {
+        legacyList = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
+          SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "isMonitored" = true
+        `
+      }
       list = legacyList.map((item) => ({
         ...item,
         testingMode: false,

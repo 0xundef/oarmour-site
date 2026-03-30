@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell } from "lucide-react"
+import { Copy, Bell, Play } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState, useRef } from "react"
@@ -18,6 +18,7 @@ type ThreatAlert = {
   extensionId: string
   version: string
   publisher: string
+  testingMode: boolean
   lastUpdate: string
   risk: string
   analysisStatus: string
@@ -37,8 +38,9 @@ function getAgeDaysFromCreateTime(createTime: string | null | undefined): number
   return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000))
 }
 
-const OperationCell = ({ extensionId }: { extensionId: string }) => {
+const OperationCell = ({ extensionId, testingMode }: { extensionId: string; testingMode: boolean }) => {
   const { toast } = useToast()
+  const [running, setRunning] = useState(false)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(extensionId)
@@ -49,10 +51,51 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
     toast({ description: "Subscribed to alert events" })
   }
 
+  const handleImmediateCheck = async () => {
+    if (!testingMode || running) return
+    setRunning(true)
+    try {
+      const res = await fetch("/api/monitor/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: extensionId }),
+      })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message = typeof payload?.error === "string" ? payload.error : "Immediate check failed"
+        throw new Error(message)
+      }
+      const updatedCount = Array.isArray(payload?.updated) ? payload.updated.length : 0
+      toast({
+        description:
+          updatedCount > 0
+            ? `Immediate check finished. ${updatedCount} update(s) detected and analyzed.`
+            : "Immediate check finished. No new version found.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Immediate check failed"
+      toast({ variant: "destructive", description: message })
+    } finally {
+      setRunning(false)
+    }
+  }
+
   // analyze removed
 
   return (
     <div className="flex items-center gap-2">
+      {testingMode ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleImmediateCheck}
+          disabled={running}
+          title="Run immediate check now"
+        >
+          <Play className="mr-1 h-3.5 w-3.5" />
+          Check
+        </Button>
+      ) : null}
       <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy Extension ID">
         <Copy className="h-4 w-4" />
       </Button>
@@ -146,7 +189,7 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
     {
       id: "operation",
       header: "Operation",
-      cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} />,
+      cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} testingMode={row.original.testingMode} />,
     },
   ]
 }
@@ -198,6 +241,7 @@ export function ThreatAlerts() {
             extensionId: ext.storeId,
             version: ext.version || 'N/A',
             publisher: ext.publisher || 'N/A',
+            testingMode: !!ext.testingMode,
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus
