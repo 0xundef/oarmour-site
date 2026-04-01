@@ -401,29 +401,6 @@ export function ThreatAlerts() {
                   )}
                 </div>
               </div>
-              <div className="pt-4">
-                <div className="text-sm font-medium">Manifest Icons</div>
-                <div className="text-xs text-muted-foreground">
-                  {details === null ? (
-                    <div className="text-muted-foreground">Loading...</div>
-                  ) : (
-                    <>
-                      <div className="mb-1">
-                        Declared in manifest: {details.manifestIconAssets?.hasDeclaredIcon ? "Yes" : "No"}
-                      </div>
-                      <div className="mb-1">
-                        Found in package: {details.manifestIconAssets?.hasPackagedIcon ? "Yes" : "No"}
-                      </div>
-                      {(details.manifestIconAssets?.existingIconPaths || []).slice(0, 10).map((iconPath) => (
-                        <div key={iconPath} className="mb-px truncate">+ {iconPath}</div>
-                      ))}
-                      {(details.manifestIconAssets?.existingIconPaths || []).length === 0 && (
-                        <div className="text-muted-foreground">No packaged icon file found</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           </SheetContent>
         </Sheet>
