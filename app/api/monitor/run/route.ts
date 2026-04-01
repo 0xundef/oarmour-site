@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   }
   const payload = await req.json().catch(() => ({}))
   const storeId = typeof payload?.storeId === 'string' && payload.storeId.trim() ? payload.storeId.trim() : undefined
-  const result = await monitorExtensionsOnce(storeId)
+  const result = await monitorExtensionsOnce(storeId, { preferCdnNextVersion: !!storeId })
   if (storeId && result.checked === 0) {
     return NextResponse.json({ error: 'Extension not found', storeId }, { status: 404 })
   }

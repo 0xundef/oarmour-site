@@ -18,6 +18,13 @@ type ExtRow = {
   checkFrequencyMinutes?: number;
 };
 
+function getNextVersion(version?: string | null) {
+  if (!version || !/^\d+(\.\d+)*$/.test(version)) return null;
+  const parts = version.split(".").map((x) => Number.parseInt(x, 10));
+  parts[parts.length - 1] = (parts[parts.length - 1] ?? 0) + 1;
+  return parts.join(".");
+}
+
 export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -83,9 +90,12 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
-  const runImmediateCheck = (storeId: string) => {
+  const runImmediateCheck = (storeId: string, currentVersion?: string | null) => {
     startTransition(async () => {
       try {
+        const nextVersion = getNextVersion(currentVersion) ?? "{next-version}";
+        const downloadUri = `https://cdn.oarmour.com/${storeId}/${nextVersion}.zip`;
+        console.info("[monitor-check] next download uri:", downloadUri);
         const res = await fetch("/api/monitor/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -154,7 +164,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                     variant="outline"
                     size="icon"
                     disabled={pending}
-                    onClick={() => runImmediateCheck(ext.storeId)}
+                    onClick={() => runImmediateCheck(ext.storeId, ext.version)}
                     aria-label="Run immediate check"
                     title="Run immediate check now"
                   >

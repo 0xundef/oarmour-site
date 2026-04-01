@@ -51,7 +51,10 @@ async function hasCdnPackage(downloadUrl: string) {
   return res.status === 200 || res.status === 206
 }
 
-export async function monitorExtensionsOnce(targetStoreId?: string) {
+export async function monitorExtensionsOnce(
+  targetStoreId?: string,
+  options?: { preferCdnNextVersion?: boolean }
+) {
   let runId: string | null = null
   let failedCount = 0
   let succeededCount = 0
@@ -158,7 +161,7 @@ export async function monitorExtensionsOnce(targetStoreId?: string) {
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> = []
   for (const ext of list) {
     try {
-      if (ext.testingMode) {
+      if (options?.preferCdnNextVersion || ext.testingMode) {
         const nextVersion = getNextVersion(ext.version)
         if (!nextVersion) {
           succeededCount += 1
