@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Play, Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -83,6 +83,35 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
+  const runImmediateCheck = (storeId: string) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/monitor/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storeId }),
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => null);
+          const message = typeof payload?.error === "string" ? payload.error : "Immediate check failed";
+          throw new Error(message);
+        }
+        const result = await res.json();
+        const updatedCount = Array.isArray(result?.updated) ? result.updated.length : 0;
+        toast({
+          description:
+            updatedCount > 0
+              ? `Immediate check finished. ${updatedCount} update(s) detected and analyzed.`
+              : "Immediate check finished. No new version found.",
+        });
+        router.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Immediate check failed";
+        toast({ variant: "destructive", description: message });
+      }
+    });
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -121,6 +150,16 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                     onCheckedChange={(v) => toggleMonitor(ext.id, v)}
                     disabled={pending}
                   />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={pending}
+                    onClick={() => runImmediateCheck(ext.storeId)}
+                    aria-label="Run immediate check"
+                    title="Run immediate check now"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"

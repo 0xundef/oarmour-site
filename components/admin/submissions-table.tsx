@@ -8,10 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { updateSubmissionStatus } from "@/app/actions/update-submission";
-import { useToast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 
 interface Submission {
@@ -30,25 +27,6 @@ interface SubmissionsTableProps {
 }
 
 export function SubmissionsTable({ submissions }: SubmissionsTableProps) {
-  const { toast } = useToast();
-
-  async function handleStatusUpdate(id: string, status: "APPROVED" | "REJECTED") {
-    const result = await updateSubmissionStatus(id, status);
-
-    if (result?.error) {
-      toast({
-        title: "Error",
-        description: result.error,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: `Submission ${status.toLowerCase()}.`,
-      });
-    }
-  }
-
   return (
     <div className="rounded-md border">
       <Table>
@@ -58,13 +36,12 @@ export function SubmissionsTable({ submissions }: SubmissionsTableProps) {
             <TableHead>Input</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Date</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {submissions.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center">
+              <TableCell colSpan={4} className="text-center">
                 No submissions found.
               </TableCell>
             </TableRow>
@@ -94,26 +71,6 @@ export function SubmissionsTable({ submissions }: SubmissionsTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell>{formatDate(submission.createdAt)}</TableCell>
-                <TableCell className="text-right space-x-2">
-                  {submission.status === "PENDING" && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStatusUpdate(submission.id, "APPROVED")}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleStatusUpdate(submission.id, "REJECTED")}
-                      >
-                        Reject
-                      </Button>
-                    </>
-                  )}
-                </TableCell>
               </TableRow>
             ))
           )}
