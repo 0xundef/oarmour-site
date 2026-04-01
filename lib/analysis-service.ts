@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import { getDomain } from 'tldts';
 import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
+import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 
 type DomainEnrichmentDelegate = {
     createMany: (args: { data: unknown[] }) => Promise<unknown>
@@ -153,6 +154,7 @@ function getPublisher(manifest: Record<string, unknown>): string {
 
 async function runLookupFromSource(dbId: string, extensionId: string, analysisId: string, sourceDir: string) {
     const startedAt = Date.now()
+    setAnalyzeProgressStage(extensionId, 'ANALYZING', 80, 'Scanning extension and enriching domains')
     console.warn('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
     const results = scanDirectory(sourceDir);
@@ -268,6 +270,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
         },
     });
+    setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
     console.warn('[analysis] runLookupFromSource:completed', {
         extensionId,
         analysisId,
@@ -300,12 +303,15 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     const crxDir = path.join(tempDir, 'crx');
     const sourceDir = path.join(tempDir, 'source');
     try {
+        setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
         const crxPath = await downloadExtension(extensionId, crxDir);
         console.warn('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath, analysisId: analysis.id })
         await extractExtension(crxPath, sourceDir);
+        setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
         console.warn('[analysis] runLookupForExtension:extracted', { extensionId, sourceDir, analysisId: analysis.id })
         await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
     } catch (e) {
+        setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Analysis failed')
         await prisma.extensionAnalysisResult.update({
             where: { id: analysis.id },
             data: {
@@ -443,11 +449,13 @@ export async function processExtension(extensionId: string, downloadUrl?: string
 
     try {
         console.warn('[analysis] processExtension:start', { extensionId, tempDir })
+        setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
         // 1. Download
         const crxPath = await downloadExtension(extensionId, crxDir, downloadUrl);
         console.warn('[analysis] processExtension:downloaded', { extensionId, crxPath })
         
         // 2. Extract
+        setAnalyzeProgressStage(extensionId, 'EXTRACTING', 70, 'Extracting package')
         await extractExtension(crxPath, sourceDir);
         console.warn('[analysis] processExtension:extracted', { extensionId, sourceDir })
         
@@ -511,6 +519,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
             hasPackagedIcon: manifestIconAssets.hasPackagedIcon,
         })
         const queueJob = await enqueueExtensionLookupJob(extension.id)
+        setAnalyzeProgressStage(extensionId, 'QUEUED', 75, 'Queued for analysis')
         console.warn('[analysis] processExtension:lookupEnqueued', {
             extensionId,
             dbId: extension.id,
@@ -519,6 +528,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
 
         return extension;
     } catch (error) {
+        setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Processing failed')
         console.error('[analysis] processExtension:failed', { extensionId, error })
         throw error;
     } finally {

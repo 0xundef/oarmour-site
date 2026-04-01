@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { enqueueExtensionLookupJob, processExtension } from "@/lib/analysis-service";
+import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 
 const EXT_ID_REGEX = /^[a-z]{32}$/;
 
@@ -77,11 +78,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let extension = await prisma.globalExtension.findUnique({
+    const extension = await prisma.globalExtension.findUnique({
       where: { storeId: extensionId }
     });
 
     if (downloadUrl) {
+      setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
       void processExtension(extensionId, downloadUrl).catch((error) => {
         console.error('Async custom URI analysis failed:', error);
       });
@@ -116,6 +118,7 @@ export async function POST(req: NextRequest) {
             });
         }
         const queue = await enqueueExtensionLookupJob(extension.id)
+        setAnalyzeProgressStage(extensionId, 'QUEUED', 75, 'Queued for analysis')
         return NextResponse.json({
           success: true,
           data: extension,
@@ -128,6 +131,7 @@ export async function POST(req: NextRequest) {
     void processExtension(extensionId, downloadUrl).catch((error) => {
       console.error('Async extension analysis failed:', error);
     });
+    setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
 
     return NextResponse.json({ 
         success: true, 

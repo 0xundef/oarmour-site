@@ -74,9 +74,6 @@ export function GlobalSearch() {
     return { extensionId: null }
   }
 
-  const extractExtensionId = (input: string): string | null => {
-    return resolveAnalyzeInput(input).extensionId
-  }
   const parsedInput = React.useMemo(() => resolveAnalyzeInput(query), [query])
 
   const handleAnalyze = async () => {
@@ -95,7 +92,6 @@ export function GlobalSearch() {
     setOpen(false);
     setSubmitting(true)
 
-    let fakeProgress = 5
     const renderProgress = (value: number, text: string) => (
       <div className="space-y-2">
         <div>{text} {value}%</div>
@@ -106,17 +102,48 @@ export function GlobalSearch() {
     )
     const loadingToast = toast({
       title: "Downloading extension package",
-      description: renderProgress(fakeProgress, "Preparing download"),
+      description: renderProgress(5, "Preparing download"),
       duration: 180000,
     })
-    const progressTimer = setInterval(() => {
-      fakeProgress = Math.min(95, fakeProgress + Math.max(1, Math.round((100 - fakeProgress) / 10)))
+
+    const stageText = (stage: string) => {
+      if (stage === "DOWNLOADING") return "Downloading package"
+      if (stage === "EXTRACTING") return "Extracting package"
+      if (stage === "QUEUED") return "Queued for analysis"
+      if (stage === "ANALYZING") return "Running analysis"
+      if (stage === "COMPLETED") return "Analysis completed"
+      if (stage === "FAILED") return "Analysis failed"
+      return "Processing extension"
+    }
+
+    const pollStatus = async (targetExtensionId: string) => {
+      const startedAt = Date.now()
+      while (Date.now() - startedAt < 8 * 60 * 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        const statusRes = await fetch(`/api/extensions/analyze/status?extensionId=${encodeURIComponent(targetExtensionId)}`, {
+          cache: "no-store",
+        })
+        if (!statusRes.ok) continue
+        const statusData = await statusRes.json()
+        const stage = typeof statusData?.stage === "string" ? statusData.stage : "PROCESSING"
+        const progress = typeof statusData?.progress === "number" ? statusData.progress : 50
+        const done = !!statusData?.done
+        const success = statusData?.success !== false
+        const text = stageText(stage)
+        loadingToast.update({
+          id: loadingToast.id,
+          title: done ? (success ? "Analysis Completed" : "Analysis Failed") : "Extension Analysis Progress",
+          description: renderProgress(progress, text),
+          variant: done && !success ? "destructive" : "default",
+        })
+        if (done) return
+      }
       loadingToast.update({
         id: loadingToast.id,
-        title: "Downloading extension package",
-        description: renderProgress(fakeProgress, "Downloading and preparing analysis"),
+        title: "Analysis Running",
+        description: "Still running in background. Please check again shortly.",
       })
-    }, 700)
+    }
 
     try {
         const res = await fetch('/api/extensions/analyze', {
@@ -131,24 +158,26 @@ export function GlobalSearch() {
         const fromCache = data?.message === "Extension found in cache" || !!data?.analysis
         const queued = !!data?.queued
 
-        clearInterval(progressTimer)
-        loadingToast.update({
-          id: loadingToast.id,
-          title: fromCache ? "Extension Already Analyzed" : queued ? "Analysis Queued" : "Analysis Started",
-          description: fromCache
-            ? `No need to submit again. Showing existing analysis for ${data?.data?.name || extensionId}.`
-            : queued
-              ? `Download and analysis are running in background for ${data?.data?.name || extensionId}. Progress bar is estimated only before queueing.`
-              : parsed.downloadUrl
-                ? renderProgress(100, `Processing extension: ${data?.data?.name || extensionId} (custom package URI)`)
-                : renderProgress(100, `Processing extension: ${data?.data?.name || extensionId}`),
-        })
+        if (fromCache) {
+          loadingToast.update({
+            id: loadingToast.id,
+            title: "Extension Already Analyzed",
+            description: `No need to submit again. Showing existing analysis for ${data?.data?.name || extensionId}.`,
+          })
+        } else if (queued) {
+          await pollStatus(extensionId)
+        } else {
+          loadingToast.update({
+            id: loadingToast.id,
+            title: "Analysis Started",
+            description: renderProgress(90, "Processing extension"),
+          })
+        }
         
         // Maybe refresh dashboard data?
         router.refresh();
 
     } catch {
-        clearInterval(progressTimer)
         loadingToast.update({
           id: loadingToast.id,
           variant: "destructive",
