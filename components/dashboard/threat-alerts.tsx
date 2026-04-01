@@ -17,7 +17,6 @@ type ThreatAlert = {
   extensionName: string
   extensionId: string
   version: string
-  publisher: string
   lastUpdate: string
   risk: string
   analysisStatus: string
@@ -86,13 +85,6 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
     {
       accessorKey: "version",
       header: "Version",
-    },
-    {
-      accessorKey: "publisher",
-      header: "Publisher",
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.getValue("publisher") || 'N/A'}</span>
-      ),
     },
     {
       accessorKey: "lastUpdate",
@@ -197,7 +189,6 @@ export function ThreatAlerts() {
             extensionName: ext.name,
             extensionId: ext.storeId,
             version: ext.version || 'N/A',
-            publisher: ext.publisher || 'N/A',
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus
@@ -347,7 +338,6 @@ export function ThreatAlerts() {
             </SheetHeader>
             <div className="mt-4 space-y-2">
               <div className="text-sm">Version: {selected?.version}</div>
-              <div className="text-sm">Publisher: {selected?.publisher}</div>
               <div className="text-sm">Last Update: {selected?.lastUpdate}</div>
               <div className="text-sm">Status: {selected?.analysisStatus}</div>
               <div className="pt-4">
