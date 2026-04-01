@@ -100,7 +100,10 @@ export async function monitorExtensionsOnce(targetStoreId?: string) {
       `
     } else {
       list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
-        SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "isMonitored" = true
+        SELECT "id","storeId","version","testingMode"
+        FROM "GlobalExtension"
+        WHERE "isMonitored" = true
+          AND COALESCE("testingMode", false) = false
       `
     }
   } catch (e) {
