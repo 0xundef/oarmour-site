@@ -373,11 +373,10 @@ export function ThreatAlerts() {
                         <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
                           {displayAgeDays === null || displayAgeDays === undefined ? "N/A" : `${displayAgeDays}d`}
                         </Badge>
-                        <Badge
-                          className={`h-5 px-2 text-[10px] leading-none ${isMalicious ? "bg-red-500 text-white" : "bg-green-500 text-white"}`}
-                        >
-                          {isMalicious ? "MALICIOUS" : "SAFE"}
-                        </Badge>
+                        <span
+                          className={`inline-block h-3 w-3 rounded-full ${isMalicious ? "bg-red-500" : "bg-green-500"}`}
+                          title={isMalicious ? "Malicious" : "Safe"}
+                        />
                       </div>
                     </div>
                   )})}
