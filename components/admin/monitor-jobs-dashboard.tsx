@@ -41,7 +41,13 @@ type TrendDatum = {
   timeLabel: string
 }
 
-function MonitorOutcomeChart({ chartData }: { chartData: TrendDatum[] }) {
+function MonitorOutcomeChart({
+  chartData,
+  onSelectRun,
+}: {
+  chartData: TrendDatum[]
+  onSelectRun: (run: TrendDatum) => void
+}) {
   const completedHistory = chartData.filter((point) => point.status === "COMPLETED")
   if (completedHistory.length === 0) {
     return <div className="text-sm text-muted-foreground">No outcome data yet</div>
@@ -66,8 +72,22 @@ function MonitorOutcomeChart({ chartData }: { chartData: TrendDatum[] }) {
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <Tooltip contentStyle={{ borderRadius: 10, borderColor: "#e2e8f0" }} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="succeededCount" stackId="outcome" fill="#16a34a" name="Succeeded" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="failedCount" stackId="outcome" fill="#dc2626" name="Failed" radius={[4, 4, 0, 0]} />
+            <Bar
+              dataKey="succeededCount"
+              stackId="outcome"
+              fill="#16a34a"
+              name="Succeeded"
+              radius={[4, 4, 0, 0]}
+              onClick={(entry) => onSelectRun(entry as TrendDatum)}
+            />
+            <Bar
+              dataKey="failedCount"
+              stackId="outcome"
+              fill="#dc2626"
+              name="Failed"
+              radius={[4, 4, 0, 0]}
+              onClick={(entry) => onSelectRun(entry as TrendDatum)}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -89,6 +109,7 @@ export function MonitorJobsDashboard() {
   const [stats, setStats] = useState<MonitorStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [selectedRun, setSelectedRun] = useState<TrendDatum | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -131,6 +152,9 @@ export function MonitorJobsDashboard() {
         ? new Date(point.startedAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
         : new Date(point.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
   }))
+  const completedChartData = chartData.filter((point) => point.status === "COMPLETED")
+  const selectedRunInRange = completedChartData.find((item) => item.id === selectedRun?.id) || null
+  const activeRun = selectedRunInRange || completedChartData[completedChartData.length - 1] || null
 
   return (
     <div className="space-y-3">
@@ -216,24 +240,21 @@ export function MonitorJobsDashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? <div className="text-sm text-muted-foreground">Loading trend...</div> : <MonitorOutcomeChart chartData={chartData} />}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Recent Monitor Runs</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {(stats?.history || []).length === 0 ? (
-            <div className="text-sm text-muted-foreground">{loading ? "Loading..." : "No monitor runs yet"}</div>
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading trend...</div>
           ) : (
-            (stats?.history || []).map((run) => (
-              <div key={run.id} className="grid grid-cols-[180px_100px_1fr] gap-2 text-xs">
-                <div>{toLocal(run.startedAt)}</div>
-                <div>{run.status}</div>
-                <div>{`checked ${run.checkedCount}, succeeded ${run.succeededCount}, failed ${run.failedCount}, updated ${run.updatedCount}`}</div>
-              </div>
-            ))
+            <div className="space-y-4">
+              <MonitorOutcomeChart chartData={chartData} onSelectRun={setSelectedRun} />
+              {activeRun ? (
+                <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                  <div className="font-medium">Selected Run</div>
+                  <div className="mt-1">{toLocal(activeRun.startedAt)}</div>
+                  <div className="mt-1">{`status ${activeRun.status}, checked ${activeRun.checkedCount}, succeeded ${activeRun.succeededCount}, failed ${activeRun.failedCount}, updated ${activeRun.updatedCount}`}</div>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Click a green/red bar to view run details</div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
