@@ -28,7 +28,7 @@ type MonitorStats = {
   }>
 };
 
-type TimeRange = "1h" | "24h" | "7d"
+type TimeRange = "24h" | "7d"
 
 type TrendDatum = {
   id: string
@@ -47,7 +47,7 @@ function MonitorOutcomeChart({ chartData }: { chartData: TrendDatum[] }) {
     return <div className="text-sm text-muted-foreground">No outcome data yet</div>
   }
 
-  const latest = completedHistory.slice(-10).map((point) => ({
+  const latest = completedHistory.map((point) => ({
     ...point,
     outcomeTotal: point.succeededCount + point.failedCount,
   }))
@@ -94,7 +94,7 @@ export function MonitorJobsDashboard() {
     let mounted = true;
     const fetchStats = async () => {
       try {
-        const res = await fetch("/api/admin/monitor/jobs", { cache: "no-store" });
+        const res = await fetch(`/api/admin/monitor/jobs?range=${timeRange}`, { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();
         if (mounted) setStats(json);
@@ -108,7 +108,7 @@ export function MonitorJobsDashboard() {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [timeRange]);
 
   const value = (v: number | undefined) => (loading ? "..." : String(v ?? 0));
   const toLocal = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "N/A")
@@ -116,7 +116,6 @@ export function MonitorJobsDashboard() {
     (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
   )
   const rangeMsMap: Record<TimeRange, number> = {
-    "1h": 60 * 60 * 1000,
     "24h": 24 * 60 * 60 * 1000,
     "7d": 7 * 24 * 60 * 60 * 1000,
   }
@@ -127,7 +126,10 @@ export function MonitorJobsDashboard() {
   })
   const chartData: TrendDatum[] = filteredHistory.map((point) => ({
     ...point,
-    timeLabel: new Date(point.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    timeLabel:
+      timeRange === "7d"
+        ? new Date(point.startedAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+        : new Date(point.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
   }))
 
   return (
@@ -192,15 +194,6 @@ export function MonitorJobsDashboard() {
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="text-sm">Monitor Outcome Trend</CardTitle>
             <div className="flex items-center gap-1 rounded-md border p-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={timeRange === "1h" ? "secondary" : "ghost"}
-                className="h-7 px-2"
-                onClick={() => setTimeRange("1h")}
-              >
-                1h
-              </Button>
               <Button
                 type="button"
                 size="sm"

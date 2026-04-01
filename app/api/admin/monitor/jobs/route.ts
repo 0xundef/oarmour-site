@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
@@ -25,7 +25,7 @@ type HistoryRow = {
   endedAt: Date | null
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const user = session?.user;
@@ -43,6 +43,14 @@ export async function GET() {
       FROM "MonitorRun"
       WHERE "status" IN ('COMPLETED', 'FAILED')
     `;
+    const range = req.nextUrl.searchParams.get("range")
+    const rangeMsMap: Record<string, number> = {
+      "1h": 60 * 60 * 1000,
+      "24h": 24 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000,
+    }
+    const selectedRange = range && rangeMsMap[range] ? range : "24h"
+    const since = new Date(Date.now() - rangeMsMap[selectedRange])
     const history = await prisma.$queryRaw<HistoryRow[]>`
       SELECT
         "id",
@@ -54,10 +62,16 @@ export async function GET() {
         "startedAt",
         "endedAt"
       FROM "MonitorRun"
+      WHERE "startedAt" >= ${since}
       ORDER BY "startedAt" DESC
-      LIMIT 12
+      LIMIT 1000
     `;
-    const latest = history[0] || null
+    const [latest] = await prisma.$queryRaw<Array<{ startedAt: Date; status: string }>>`
+      SELECT "startedAt","status"
+      FROM "MonitorRun"
+      ORDER BY "startedAt" DESC
+      LIMIT 1
+    `;
     const periodMinutes = Number(process.env.EXT_MONITOR_PERIOD_MINUTES ?? "30")
     const periodMs = Number.isFinite(periodMinutes) && periodMinutes > 0 ? periodMinutes * 60000 : 1800000
     const nextRunAt = latest?.startedAt ? new Date(new Date(latest.startedAt).getTime() + periodMs).toISOString() : null
@@ -79,6 +93,7 @@ export async function GET() {
       totalChecked: Number(aggregate?.totalChecked ?? 0),
       totalUpdated: Number(aggregate?.totalUpdated ?? 0),
       monitoredExtensions: Number(aggregate?.monitoredExtensions ?? 0),
+      range: selectedRange,
       nextRunAt,
       history: history.map((r) => ({
         id: r.id,
