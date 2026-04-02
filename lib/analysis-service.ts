@@ -66,12 +66,12 @@ const promoteToVersionedLayout = (params: {
     const extensionDir = path.join(params.bucketRoot, params.extensionId)
     const versionDir = path.join(extensionDir, versionSegment)
     fs.mkdirSync(extensionDir, { recursive: true })
-    const finalCrxPath = path.join(extensionDir, `${versionSegment}.crx`)
+    const finalCrxPath = path.join(versionDir, `${versionSegment}.crx`)
     const finalSourceDir = versionDir
-    if (fs.existsSync(finalCrxPath)) fs.rmSync(finalCrxPath, { force: true })
     if (fs.existsSync(finalSourceDir)) fs.rmSync(finalSourceDir, { recursive: true, force: true })
-    fs.renameSync(params.pendingCrxPath, finalCrxPath)
     fs.renameSync(params.pendingSourceDir, finalSourceDir)
+    if (fs.existsSync(finalCrxPath)) fs.rmSync(finalCrxPath, { force: true })
+    fs.renameSync(params.pendingCrxPath, finalCrxPath)
     return { versionDir, crxPath: finalCrxPath, sourceDir: finalSourceDir, versionSegment }
 }
 
