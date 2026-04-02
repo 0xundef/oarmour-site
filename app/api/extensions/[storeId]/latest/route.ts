@@ -25,6 +25,32 @@ type ManifestIconAssetsPayload = {
   existingIconPaths: string[]
 }
 
+function normalizeDomainString(value: string): string {
+  return value.trim().toLowerCase().replace(/\.+$/, '')
+}
+
+function normalizeDomainList(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .flatMap((raw) => {
+          if (typeof raw !== 'string') return []
+          const text = raw.trim()
+          if (!text) return []
+          try {
+            const parsed: unknown = JSON.parse(text)
+            if (parsed && typeof parsed === 'object') {
+              const domain = (parsed as Record<string, unknown>).domain
+              if (typeof domain === 'string' && domain.trim()) return [normalizeDomainString(domain)]
+            }
+          } catch {}
+          return [normalizeDomainString(text)]
+        })
+        .filter((d) => d.length > 0),
+    ),
+  )
+}
+
 function parseManifestPermissions(raw: unknown): ManifestPermissionsPayload {
   if (!raw || typeof raw !== 'object') {
     return {
@@ -100,7 +126,7 @@ export async function GET(
       where: { extensionId: ext.id },
       orderBy: { createdAt: 'desc' },
       take: 2,
-      select: { domains: true, ips: true, urls: true, filesScanned: true, status: true },
+      select: { id: true, domains: true, ips: true, urls: true, filesScanned: true, status: true },
     })
     if (results.length === 0) {
       return NextResponse.json({ error: 'No analysis found' }, { status: 404 })
@@ -118,11 +144,30 @@ export async function GET(
         : null
     const manifestPermissions = parseManifestPermissions(snapshotMetadata?.manifestPermissions)
     const manifestIconAssets = parseManifestIconAssets(snapshotMetadata?.manifestIconAssets)
-    const latestDomainSignals = (latest.domains || []).map(parseTopDomainSignal)
-    const latestDomains = latestDomainSignals.map((d) => d.domain)
+    const latestDomains = normalizeDomainList(latest.domains || [])
     const latestIps = latest.ips || []
-    const prevDomains = (previous?.domains || []).map((x) => parseTopDomainSignal(x).domain)
+    const prevDomains = normalizeDomainList(previous?.domains || [])
     const prevIps = previous?.ips || []
+    const topEnrichments = await prisma.domainEnrichment.findMany({
+      where: { analysisId: latest.id, createdDate: { not: null } },
+      orderBy: { createdDate: 'desc' },
+      take: 20,
+      select: { id: true, domain: true, createdDate: true, isMalicious: true },
+    })
+    const latestDomainSignals = Array.from(
+      new Map(
+        topEnrichments
+          .filter((item) => !!item.createdDate && !isNaN(item.createdDate.getTime()))
+          .map((item) => [item.domain, item]),
+      ).values(),
+    )
+      .slice(0, 3)
+      .map((item) => ({
+        topDomainSignalId: item.id,
+        domain: item.domain,
+        createTime: item.createdDate ? item.createdDate.toISOString() : null,
+        isMalicious: typeof item.isMalicious === 'boolean' ? item.isMalicious : null,
+      }))
     const prevDomainSet = new Set(prevDomains)
     const prevIpSet = new Set(prevIps)
     const addedDomains = latestDomains.filter((d) => !prevDomainSet.has(d))

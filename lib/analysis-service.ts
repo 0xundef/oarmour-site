@@ -239,7 +239,8 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         .map((d) => String(d).trim())
         .filter((d) => d.length > 0)
         .sort((a, b) => a.localeCompare(b))
-    const domainListPath = path.join(sourceDir, 'domain_list.json')
+    const rawDomainListPath = path.join(sourceDir, 'raw_domain_list.txt')
+    const apexDomainListPath = path.join(sourceDir, 'apexdomain_list.json')
     logInfo('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,
@@ -247,9 +248,10 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         domainCount: results.domains.size,
         ipCount: results.ips.size,
         urlCount: results.urls.size,
-        domainListPath,
+        rawDomainListPath,
+        apexDomainListPath,
     })
-    const uniqueApexDomains = Array.from(
+    const allUniqueApexDomains = Array.from(
         new Set(
             normalizedDomains
                 .map((d) => getDomain(d) || null)
@@ -257,13 +259,15 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 .map((d) => d.trim().toLowerCase().replace(/\.+$/, ''))
                 .filter((d) => d.length > 0)
         )
-    ).slice(0, ANALYSIS_APEX_DOMAIN_LIMIT);
+    )
+    const apexDomainsForEnrichment = allUniqueApexDomains.slice(0, ANALYSIS_APEX_DOMAIN_LIMIT)
     logInfo('[analysis] runLookupFromSource:apexDomainsPrepared', {
         extensionId,
         analysisId,
-        apexDomainCount: uniqueApexDomains.length,
+        apexDomainCount: allUniqueApexDomains.length,
+        enrichmentApexDomainCount: apexDomainsForEnrichment.length,
     })
-    const totalEnrichmentRequests = uniqueApexDomains.length
+    const totalEnrichmentRequests = apexDomainsForEnrichment.length
     let completedEnrichmentRequests = 0
     let whoisFallbackCount = 0
     const enrichmentProgressTicker = setInterval(() => {
@@ -276,7 +280,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             whoisFallbackCount,
         })
     }, 10000)
-    const enrichments = await mapWithConcurrency(uniqueApexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
+    const enrichments = await mapWithConcurrency(apexDomainsForEnrichment, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
         try {
             let registrar: string | null = null
             let status: string | null = null
@@ -330,19 +334,19 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         });
     }
     const enrichmentByDomain = new Map(enrichments.map((item) => [item.domain, item]))
-    const domainList = normalizedDomains.flatMap((domain) => {
-        const apexDomain = getDomain(domain) || null
-        const enrichment = apexDomain ? enrichmentByDomain.get(apexDomain) : null
-        const createdDate = enrichment?.createdDate ? enrichment.createdDate.toISOString() : null
-        if (!createdDate || createdDate === 'N/A') return []
-        return [{
-            domain,
+    const apexDomainList = allUniqueApexDomains.map((apexDomain) => {
+        const enrichment = enrichmentByDomain.get(apexDomain) || null
+        return {
             apexDomain,
-            createdDate,
+            createdDate: enrichment?.createdDate ? enrichment.createdDate.toISOString() : null,
             expiresDate: enrichment?.expiresDate ? enrichment.expiresDate.toISOString() : null,
-        }]
+            registrar: enrichment?.registrar ?? null,
+            status: enrichment?.status ?? null,
+            nameservers: enrichment?.nameservers ?? [],
+        }
     })
-    fs.writeFileSync(domainListPath, JSON.stringify(domainList, null, 2), 'utf-8')
+    fs.writeFileSync(rawDomainListPath, `${normalizedDomains.join('\n')}\n`, 'utf-8')
+    fs.writeFileSync(apexDomainListPath, JSON.stringify(apexDomainList, null, 2), 'utf-8')
     const topDomains = await domainEnrichment.findMany({
         where: { analysisId, createdDate: { not: null } },
         orderBy: { createdDate: 'desc' },
@@ -381,7 +385,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         where: { id: analysisId },
         data: {
             status: 'COMPLETED',
-            domains: topDomainSignals.map((d) => JSON.stringify(d)),
+            domains: allUniqueApexDomains,
             ips: Array.from(results.ips).slice(0, 200),
             urls: Array.from(results.urls).slice(0, 200),
             filesScanned: results.fileCount,
@@ -401,7 +405,8 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         filesScanned: results.fileCount,
         elapsedMs: Date.now() - startedAt,
         riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
-        domainListPath,
+        rawDomainListPath,
+        apexDomainListPath,
     })
 }
 
