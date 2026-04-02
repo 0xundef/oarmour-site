@@ -17,6 +17,24 @@ type DomainEnrichmentDelegate = {
     }) => Promise<Array<{ id: string; domain: string; createdDate: Date | null }>>
 }
 
+const nowIso = () => new Date().toISOString()
+
+const logInfo = (message: string, payload?: unknown) => {
+    if (typeof payload === 'undefined') {
+        console.warn(`${nowIso()} ${message}`)
+        return
+    }
+    console.warn(`${nowIso()} ${message}`, payload)
+}
+
+const logError = (message: string, payload?: unknown) => {
+    if (typeof payload === 'undefined') {
+        console.error(`${nowIso()} ${message}`)
+        return
+    }
+    console.error(`${nowIso()} ${message}`, payload)
+}
+
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { default_locale?: string }): string => {
     if (typeof value !== 'string') return String(value ?? '');
     const match = value.match(/^__MSG_(.+)__$/);
@@ -155,7 +173,7 @@ function getPublisher(manifest: Record<string, unknown>): string {
 async function runLookupFromSource(dbId: string, extensionId: string, analysisId: string, sourceDir: string) {
     const startedAt = Date.now()
     setAnalyzeProgressStage(extensionId, 'ANALYZING', 80, 'Scanning extension and enriching domains')
-    console.warn('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
+    logInfo('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
     const results = scanDirectory(sourceDir);
     const normalizedDomains = Array.from(results.domains)
@@ -163,7 +181,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         .filter((d) => d.length > 0)
         .sort((a, b) => a.localeCompare(b))
     const domainListPath = path.join(sourceDir, 'domain_list.json')
-    console.warn('[analysis] runLookupFromSource:scanCompleted', {
+    logInfo('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,
         fileCount: results.fileCount,
@@ -179,7 +197,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 .filter((d): d is string => !!d)
         )
     ).slice(0, 20);
-    console.warn('[analysis] runLookupFromSource:apexDomainsPrepared', {
+    logInfo('[analysis] runLookupFromSource:apexDomainsPrepared', {
         extensionId,
         analysisId,
         apexDomainCount: apexDomains.length,
@@ -289,7 +307,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         },
     });
     setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
-    console.warn('[analysis] runLookupFromSource:completed', {
+    logInfo('[analysis] runLookupFromSource:completed', {
         extensionId,
         analysisId,
         filesScanned: results.fileCount,
@@ -324,10 +342,10 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     try {
         setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
         const crxPath = await downloadExtension(extensionId, crxDir);
-        console.warn('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath, analysisId: analysis.id })
+        logInfo('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath, analysisId: analysis.id })
         await extractExtension(crxPath, sourceDir);
         setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
-        console.warn('[analysis] runLookupForExtension:extracted', { extensionId, sourceDir, analysisId: analysis.id })
+        logInfo('[analysis] runLookupForExtension:extracted', { extensionId, sourceDir, analysisId: analysis.id })
         await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
     } catch (e) {
         setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Analysis failed')
@@ -438,7 +456,7 @@ export async function processPendingLookupJob() {
                 durationMs: Date.now() - startedAt,
             },
         })
-        console.error('[analysis] processPendingLookupJob:failed', { jobId: pending.id, error: e })
+        logError('[analysis] processPendingLookupJob:failed', { jobId: pending.id, error: e })
         return { processed: true as const, id: pending.id, status: 'FAILED' as const }
     }
 }
@@ -451,7 +469,7 @@ export function scheduleExtensionLookupService(periodMs: number) {
         try {
             await processPendingLookupJob()
         } catch (e) {
-            console.error('[analysis] lookup tick failed', e)
+            logError('[analysis] lookup tick failed', e)
         } finally {
             running = false
         }
@@ -467,16 +485,16 @@ export async function processExtension(extensionId: string, downloadUrl?: string
     const startedAt = Date.now()
 
     try {
-        console.warn('[analysis] processExtension:start', { extensionId, tempDir })
+        logInfo('[analysis] processExtension:start', { extensionId, tempDir })
         setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
         // 1. Download
         const crxPath = await downloadExtension(extensionId, crxDir, downloadUrl);
-        console.warn('[analysis] processExtension:downloaded', { extensionId, crxPath })
+        logInfo('[analysis] processExtension:downloaded', { extensionId, crxPath })
         
         // 2. Extract
         setAnalyzeProgressStage(extensionId, 'EXTRACTING', 70, 'Extracting package')
         await extractExtension(crxPath, sourceDir);
-        console.warn('[analysis] processExtension:extracted', { extensionId, sourceDir })
+        logInfo('[analysis] processExtension:extracted', { extensionId, sourceDir })
         
         // 3. Read Manifest
         const manifestPath = findManifestPath(sourceDir);
@@ -486,7 +504,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
         const extensionRootDir = path.dirname(manifestPath)
         
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
-        console.warn('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
+        logInfo('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
         
         const publisher = getPublisher(manifest)
 
@@ -514,7 +532,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
                 platform: 'CHROME'
             }
         });
-        console.warn('[analysis] processExtension:upserted', {
+        logInfo('[analysis] processExtension:upserted', {
             extensionId,
             dbId: extension.id,
             version: extension.version,
@@ -531,7 +549,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
                 },
             },
         })
-        console.warn('[analysis] processExtension:snapshotStored', {
+        logInfo('[analysis] processExtension:snapshotStored', {
             extensionId,
             dbId: extension.id,
             requestedPermissions: manifestPermissions.allRequestedPermissions.length,
@@ -539,7 +557,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
         })
         const queueJob = await enqueueExtensionLookupJob(extension.id)
         setAnalyzeProgressStage(extensionId, 'QUEUED', 75, 'Queued for analysis')
-        console.warn('[analysis] processExtension:lookupEnqueued', {
+        logInfo('[analysis] processExtension:lookupEnqueued', {
             extensionId,
             dbId: extension.id,
             queueJob,
@@ -548,7 +566,7 @@ export async function processExtension(extensionId: string, downloadUrl?: string
         return extension;
     } catch (error) {
         setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Processing failed')
-        console.error('[analysis] processExtension:failed', { extensionId, error })
+        logError('[analysis] processExtension:failed', { extensionId, error })
         throw error;
     } finally {
         if (fs.existsSync(tempDir)) {
@@ -568,7 +586,7 @@ export async function triggerAsyncAnalysis(dbId: string, extensionId: string, so
         });
         await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
     } catch (e) {
-        console.error('Async analysis failed:', e);
-        console.error('[analysis] triggerAsyncAnalysis:failed', { extensionId, dbId, error: e })
+        logError('Async analysis failed:', e)
+        logError('[analysis] triggerAsyncAnalysis:failed', { extensionId, dbId, error: e })
     }
 }
