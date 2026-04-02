@@ -82,13 +82,46 @@ export async function POST(req: NextRequest) {
       where: { storeId: extensionId }
     });
 
+    const ensureExtensionShell = async () => {
+      return prisma.globalExtension.upsert({
+        where: { storeId: extensionId },
+        update: { updatedAt: new Date() },
+        create: {
+          storeId: extensionId,
+          name: extensionId,
+          platform: 'CHROME',
+        },
+      })
+    }
+
+    const ensurePendingAnalysis = async (dbId: string) => {
+      const inFlight = await prisma.extensionAnalysisResult.findFirst({
+        where: {
+          extensionId: dbId,
+          status: { in: ['PENDING', 'RUNNING'] },
+        },
+        select: { id: true },
+      })
+      if (!inFlight) {
+        await prisma.extensionAnalysisResult.create({
+          data: {
+            extensionId: dbId,
+            status: 'PENDING',
+          },
+        })
+      }
+    }
+
     if (downloadUrl) {
+      const targetExtension = extension ?? await ensureExtensionShell()
+      await ensurePendingAnalysis(targetExtension.id)
       setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
       void processExtension(extensionId, downloadUrl).catch((error) => {
         console.error('Async custom URI analysis failed:', error);
       });
       return NextResponse.json({
         success: true,
+        data: targetExtension,
         queued: true,
         message: 'Extension submitted from custom download URI. Download and analysis started in background.'
       }, { status: 202 });
@@ -128,6 +161,9 @@ export async function POST(req: NextRequest) {
         }, { status: 202 })
     }
 
+    const targetExtension = await ensureExtensionShell()
+    await ensurePendingAnalysis(targetExtension.id)
+
     void processExtension(extensionId, downloadUrl).catch((error) => {
       console.error('Async extension analysis failed:', error);
     });
@@ -135,6 +171,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ 
         success: true, 
+        data: targetExtension,
         queued: true,
         message: 'Extension submitted. Download and analysis started in background.' 
     }, { status: 202 });

@@ -22,6 +22,11 @@ type ThreatAlert = {
   analysisStatus: string
 }
 
+type LiveAnalyzeStatus = {
+  stage: string
+  progress: number
+}
+
 function isAbortError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false
   if (!("name" in e)) return false
@@ -63,7 +68,15 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
   )
 }
 
-function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>[] {
+function makeColumns(
+  onOpen: (row: ThreatAlert) => void,
+  liveStatusByExtensionId: Record<string, LiveAnalyzeStatus>,
+): ColumnDef<ThreatAlert>[] {
+  const getRowStage = (row: ThreatAlert) => {
+    const liveStage = liveStatusByExtensionId[row.extensionId]?.stage
+    if (liveStage && liveStage.length > 0) return liveStage
+    return row.analysisStatus
+  }
   return [
     {
       accessorKey: "extensionName",
@@ -95,8 +108,8 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
       header: "Risk Level",
       cell: ({ row }) => {
         const risk = row.getValue("risk") as string
-        const status = row.original.analysisStatus
-        if (status === 'RUNNING' || status === 'PENDING') {
+        const stage = getRowStage(row.original)
+        if (stage === "RUNNING" || stage === "PENDING" || stage === "DOWNLOADING" || stage === "EXTRACTING" || stage === "QUEUED" || stage === "ANALYZING") {
           return (
             <div className="flex items-center gap-2" title="Analysis In Progress">
               <div className="h-2 w-12 rounded-full bg-gray-300 animate-pulse" />
@@ -119,7 +132,21 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
       accessorKey: "analysisStatus",
       header: "Status",
       cell: ({ row }) => {
-        const status = row.original.analysisStatus
+        const stage = getRowStage(row.original)
+        if (stage === "DOWNLOADING") {
+          const progress = liveStatusByExtensionId[row.original.extensionId]?.progress ?? 0
+          return <span className="text-sm font-medium text-orange-600">Downloading {progress}%</span>
+        }
+        if (stage === "EXTRACTING") {
+          return <Badge className="h-5 px-2 text-[10px] leading-none bg-blue-500 text-white">EXTRACTING</Badge>
+        }
+        if (stage === "QUEUED") {
+          return <Badge className="h-5 px-2 text-[10px] leading-none bg-gray-500 text-white">QUEUED</Badge>
+        }
+        if (stage === "ANALYZING") {
+          return <Badge className="h-5 px-2 text-[10px] leading-none bg-blue-500 text-white">ANALYZING</Badge>
+        }
+        const status = stage
         const statusClass =
           status === "FAILED"
             ? "bg-red-500 text-white"
@@ -145,6 +172,7 @@ function makeColumns(onOpen: (row: ThreatAlert) => void): ColumnDef<ThreatAlert>
 
 export function ThreatAlerts() {
   const [data, setData] = useState<ThreatAlert[]>([])
+  const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
@@ -204,10 +232,50 @@ export function ThreatAlerts() {
 
   useEffect(() => {
     fetchData();
-    // Poll every 5 seconds to update status
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (data.length === 0) return
+    let alive = true
+    const load = async () => {
+      const activeRows = data.filter((row) => row.analysisStatus === "PENDING" || row.analysisStatus === "RUNNING")
+      if (activeRows.length === 0) return
+      const updates = await Promise.all(
+        activeRows.map(async (row) => {
+          try {
+            const res = await fetch(`/api/extensions/analyze/status?extensionId=${encodeURIComponent(row.extensionId)}`, {
+              cache: "no-store",
+            })
+            if (!res.ok) return null
+            const json = await res.json()
+            const stage = typeof json?.stage === "string" ? json.stage : null
+            const progress = typeof json?.progress === "number" ? json.progress : null
+            if (!stage || progress === null) return null
+            return { extensionId: row.extensionId, stage, progress }
+          } catch {
+            return null
+          }
+        }),
+      )
+      if (!alive) return
+      setLiveStatusByExtensionId((prev) => {
+        const next = { ...prev }
+        for (const item of updates) {
+          if (!item) continue
+          next[item.extensionId] = { stage: item.stage, progress: item.progress }
+        }
+        return next
+      })
+    }
+    load()
+    const interval = setInterval(load, 1200)
+    return () => {
+      alive = false
+      clearInterval(interval)
+    }
+  }, [data])
   
   useEffect(() => {
     const loadDetails = async () => {
@@ -308,7 +376,7 @@ export function ThreatAlerts() {
             setDetails(null)
             setSelected(row)
             setOpen(true)
-          })}
+          }, liveStatusByExtensionId)}
           searchKey="extensionName"
         />
         <Sheet open={open} onOpenChange={setOpen}>
