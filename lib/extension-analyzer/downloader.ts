@@ -1,11 +1,30 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { createHash } from 'crypto';
 import { setAnalyzeDownloadProgress, setAnalyzeProgressStage } from '@/lib/analyze-progress';
+
+const TESTING_DOWNLOAD_CACHE_ROOT = path.join(os.tmpdir(), 'chrome-extension-download-cache')
+
+function getTestingModeCachePath(downloadUrl?: string): string | null {
+  if (!downloadUrl) return null
+  try {
+    const parsed = new URL(downloadUrl)
+    if (parsed.hostname.toLowerCase() !== 'cdn.oarmour.com') return null
+    const key = createHash('sha256').update(parsed.toString()).digest('hex')
+    const ext = path.extname(parsed.pathname).toLowerCase()
+    const suffix = ext && ext.length <= 10 ? ext : '.bin'
+    return path.join(TESTING_DOWNLOAD_CACHE_ROOT, `${key}${suffix}`)
+  } catch {
+    return null
+  }
+}
 
 export async function downloadExtension(extensionId: string, outputDir: string, downloadUrl?: string): Promise<string> {
   const url = downloadUrl || `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=131.0.0.0&acceptformat=crx2,crx3&x=id%3D${extensionId}%26uc`;
   const filePath = path.join(outputDir, `${extensionId}.crx`);
+  const testingCachePath = getTestingModeCachePath(downloadUrl)
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -13,6 +32,16 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
 
   console.warn('[analysis] downloadExtension:start', { extensionId, url, filePath });
   setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Starting download')
+  if (testingCachePath && fs.existsSync(testingCachePath)) {
+    const stats = fs.statSync(testingCachePath)
+    if (stats.size > 0) {
+      fs.copyFileSync(testingCachePath, filePath)
+      setAnalyzeDownloadProgress(extensionId, stats.size, stats.size)
+      setAnalyzeProgressStage(extensionId, 'EXTRACTING', 65, 'Reused cached testing package, extracting')
+      console.warn('[analysis] downloadExtension:cacheHit', { extensionId, url, filePath, testingCachePath, bytesWritten: stats.size })
+      return filePath
+    }
+  }
   const writer = fs.createWriteStream(filePath);
 
   try {
@@ -51,6 +80,13 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
 
     return new Promise((resolve, reject) => {
       writer.on('finish', () => {
+        if (testingCachePath) {
+          if (!fs.existsSync(TESTING_DOWNLOAD_CACHE_ROOT)) {
+            fs.mkdirSync(TESTING_DOWNLOAD_CACHE_ROOT, { recursive: true })
+          }
+          fs.copyFileSync(filePath, testingCachePath)
+          console.warn('[analysis] downloadExtension:cacheStored', { extensionId, url, testingCachePath, bytesWritten })
+        }
         console.warn('[analysis] downloadExtension:finished', { extensionId, filePath, bytesWritten });
         setAnalyzeProgressStage(extensionId, 'EXTRACTING', 65, 'Download complete, extracting package');
         resolve(filePath);
