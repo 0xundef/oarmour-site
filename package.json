@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "mkdir -p .logs && next dev 2>&1 | perl -MPOSIX=strftime -ne '$ts=strftime(\"[%Y-%m-%d %H:%M:%S]\", localtime); $line=$ts.\" \".$_; print $line; if (/\\[analysis\\]/) { open my $fh, \">>\", \".logs/extension.log\"; print $fh $line; close $fh; } else { open my $fh, \">>\", \".logs/next.log\"; print $fh $line; close $fh; }'",  
+    "dev": "mkdir -p .logs && next dev 1>> .logs/next.log",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
