@@ -10,7 +10,7 @@ import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 type DomainEnrichmentDelegate = {
     createMany: (args: { data: unknown[] }) => Promise<unknown>
     findMany: (args: {
-        where: { analysisId: string }
+        where: { analysisId: string; createdDate?: { not: null } }
         orderBy: { createdDate: 'desc' }
         take: number
         select: { id: true; domain: true; createdDate: true }
@@ -328,19 +328,21 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         });
     }
     const enrichmentByDomain = new Map(enrichments.map((item) => [item.domain, item]))
-    const domainList = normalizedDomains.map((domain) => {
+    const domainList = normalizedDomains.flatMap((domain) => {
         const apexDomain = getDomain(domain) || null
         const enrichment = apexDomain ? enrichmentByDomain.get(apexDomain) : null
-        return {
+        const createdDate = enrichment?.createdDate ? enrichment.createdDate.toISOString() : null
+        if (!createdDate || createdDate === 'N/A') return []
+        return [{
             domain,
             apexDomain,
-            createdDate: enrichment?.createdDate ? enrichment.createdDate.toISOString() : null,
+            createdDate,
             expiresDate: enrichment?.expiresDate ? enrichment.expiresDate.toISOString() : null,
-        }
+        }]
     })
     fs.writeFileSync(domainListPath, JSON.stringify(domainList, null, 2), 'utf-8')
     const topDomains = await domainEnrichment.findMany({
-        where: { analysisId },
+        where: { analysisId, createdDate: { not: null } },
         orderBy: { createdDate: 'desc' },
         take: 3,
         select: { id: true, domain: true, createdDate: true },
