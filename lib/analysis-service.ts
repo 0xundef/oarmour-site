@@ -41,7 +41,7 @@ const readPositiveIntEnv = (name: string, fallback: number) => {
 }
 
 const ANALYSIS_APEX_DOMAIN_LIMIT = readPositiveIntEnv('ANALYSIS_APEX_DOMAIN_LIMIT', 400)
-const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 4)
+const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 6)
 
 const mapWithConcurrency = async <T, R>(
     items: T[],
