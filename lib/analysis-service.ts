@@ -261,37 +261,65 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         analysisId,
         apexDomainCount: apexDomains.length,
     })
-    const enrichments = await mapWithConcurrency(apexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
-        let registrar: string | null = null
-        let status: string | null = null
-        let nameservers: string[] = []
-        let createdDate: Date | null = null
-        let expiresDate: Date | null = null
-        try {
-            const info = await rdapDomain(d)
-            registrar = info.registrar ?? null
-            status = info.status ?? null
-            nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
-            createdDate = info.createdDate ?? null
-            expiresDate = info.expiresDate ?? null
-        } catch {}
-        const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
-        if (insufficient) {
-            const w = await whoisInfo(d)
-            registrar = registrar ?? w.registrar
-            nameservers = nameservers.length ? nameservers : w.nameservers
-            createdDate = createdDate ?? w.createdDate
-            expiresDate = expiresDate ?? w.expiresDate
-        }
-        return {
+    const totalEnrichmentRequests = apexDomains.length
+    let completedEnrichmentRequests = 0
+    let whoisFallbackCount = 0
+    const enrichmentProgressTicker = setInterval(() => {
+        logInfo('[analysis] runLookupFromSource:enrichmentProgress', {
+            extensionId,
             analysisId,
-            domain: d,
-            registrar,
-            status,
-            nameservers,
-            createdDate,
-            expiresDate,
+            completed: completedEnrichmentRequests,
+            total: totalEnrichmentRequests,
+            progress: `${completedEnrichmentRequests}/${totalEnrichmentRequests}`,
+            whoisFallbackCount,
+        })
+    }, 10000)
+    const enrichments = await mapWithConcurrency(apexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
+        try {
+            let registrar: string | null = null
+            let status: string | null = null
+            let nameservers: string[] = []
+            let createdDate: Date | null = null
+            let expiresDate: Date | null = null
+            try {
+                const info = await rdapDomain(d)
+                registrar = info.registrar ?? null
+                status = info.status ?? null
+                nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
+                createdDate = info.createdDate ?? null
+                expiresDate = info.expiresDate ?? null
+            } catch {}
+            const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
+            if (insufficient) {
+                whoisFallbackCount += 1
+                const w = await whoisInfo(d)
+                registrar = registrar ?? w.registrar
+                nameservers = nameservers.length ? nameservers : w.nameservers
+                createdDate = createdDate ?? w.createdDate
+                expiresDate = expiresDate ?? w.expiresDate
+            }
+            return {
+                analysisId,
+                domain: d,
+                registrar,
+                status,
+                nameservers,
+                createdDate,
+                expiresDate,
+            }
+        } finally {
+            completedEnrichmentRequests += 1
         }
+    }).finally(() => {
+        clearInterval(enrichmentProgressTicker)
+    })
+    logInfo('[analysis] runLookupFromSource:enrichmentProgress', {
+        extensionId,
+        analysisId,
+        completed: completedEnrichmentRequests,
+        total: totalEnrichmentRequests,
+        progress: `${completedEnrichmentRequests}/${totalEnrichmentRequests}`,
+        whoisFallbackCount,
     })
     const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
     if (enrichments.length > 0) {
