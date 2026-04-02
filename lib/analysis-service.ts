@@ -249,19 +249,21 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         urlCount: results.urls.size,
         domainListPath,
     })
-    const apexDomains = Array.from(
+    const uniqueApexDomains = Array.from(
         new Set(
             normalizedDomains
                 .map((d) => getDomain(d) || null)
                 .filter((d): d is string => !!d)
+                .map((d) => d.trim().toLowerCase().replace(/\.+$/, ''))
+                .filter((d) => d.length > 0)
         )
     ).slice(0, ANALYSIS_APEX_DOMAIN_LIMIT);
     logInfo('[analysis] runLookupFromSource:apexDomainsPrepared', {
         extensionId,
         analysisId,
-        apexDomainCount: apexDomains.length,
+        apexDomainCount: uniqueApexDomains.length,
     })
-    const totalEnrichmentRequests = apexDomains.length
+    const totalEnrichmentRequests = uniqueApexDomains.length
     let completedEnrichmentRequests = 0
     let whoisFallbackCount = 0
     const enrichmentProgressTicker = setInterval(() => {
@@ -274,7 +276,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             whoisFallbackCount,
         })
     }, 10000)
-    const enrichments = await mapWithConcurrency(apexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
+    const enrichments = await mapWithConcurrency(uniqueApexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
         try {
             let registrar: string | null = null
             let status: string | null = null
