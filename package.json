@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev 2>&1 | perl -pe 'BEGIN { use POSIX qw(strftime) } s/^/\"[\" . strftime(\"%Y-%m-%d %H:%M:%S\", localtime) . \"] \"/e'", 
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
