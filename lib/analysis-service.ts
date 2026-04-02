@@ -158,6 +158,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     console.warn('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
     const results = scanDirectory(sourceDir);
+    const normalizedDomains = Array.from(results.domains)
+        .map((d) => String(d).trim())
+        .filter((d) => d.length > 0)
+        .sort((a, b) => a.localeCompare(b))
+    const domainListPath = path.join(sourceDir, 'domain_list.json')
+    fs.writeFileSync(domainListPath, JSON.stringify(normalizedDomains, null, 2), 'utf-8')
     console.warn('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,
@@ -165,11 +171,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         domainCount: results.domains.size,
         ipCount: results.ips.size,
         urlCount: results.urls.size,
+        domainListPath,
     })
     const apexDomains = Array.from(
         new Set(
-            Array.from(results.domains)
-                .map((d) => getDomain(String(d)) || null)
+            normalizedDomains
+                .map((d) => getDomain(d) || null)
                 .filter((d): d is string => !!d)
         )
     ).slice(0, 20);
@@ -277,6 +284,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         filesScanned: results.fileCount,
         elapsedMs: Date.now() - startedAt,
         riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+        domainListPath,
     })
 }
 
