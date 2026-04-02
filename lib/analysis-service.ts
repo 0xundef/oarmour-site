@@ -43,6 +43,38 @@ const readPositiveIntEnv = (name: string, fallback: number) => {
 const ANALYSIS_APEX_DOMAIN_LIMIT = readPositiveIntEnv('ANALYSIS_APEX_DOMAIN_LIMIT', 400)
 const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 6)
 
+const toPathSegment = (value: string | null | undefined, fallback: string) => {
+    const trimmed = String(value ?? '').trim()
+    if (!trimmed) return fallback
+    const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]+/g, '_')
+    return sanitized.length > 0 ? sanitized : fallback
+}
+
+const buildPendingDir = (bucketRoot: string, extensionId: string) => {
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    return path.join(bucketRoot, extensionId, `_pending-${runId}`)
+}
+
+const promoteToVersionedLayout = (params: {
+    bucketRoot: string
+    extensionId: string
+    version: string | null | undefined
+    pendingCrxPath: string
+    pendingSourceDir: string
+}) => {
+    const versionSegment = toPathSegment(params.version, 'unknown')
+    const extensionDir = path.join(params.bucketRoot, params.extensionId)
+    const versionDir = path.join(extensionDir, versionSegment)
+    fs.mkdirSync(extensionDir, { recursive: true })
+    const finalCrxPath = path.join(extensionDir, `${versionSegment}.crx`)
+    const finalSourceDir = versionDir
+    if (fs.existsSync(finalCrxPath)) fs.rmSync(finalCrxPath, { force: true })
+    if (fs.existsSync(finalSourceDir)) fs.rmSync(finalSourceDir, { recursive: true, force: true })
+    fs.renameSync(params.pendingCrxPath, finalCrxPath)
+    fs.renameSync(params.pendingSourceDir, finalSourceDir)
+    return { versionDir, crxPath: finalCrxPath, sourceDir: finalSourceDir, versionSegment }
+}
+
 const mapWithConcurrency = async <T, R>(
     items: T[],
     limit: number,
@@ -353,17 +385,35 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
             },
             select: { id: true },
         })
-    const tempDir = path.join(os.tmpdir(), 'chrome-extension-lookup', extensionId);
-    const crxDir = path.join(tempDir, 'crx');
-    const sourceDir = path.join(tempDir, 'source');
+    const bucketRoot = path.join(os.tmpdir(), 'chrome-extension-lookup');
+    const pendingDir = buildPendingDir(bucketRoot, extensionId);
+    const pendingSourceDir = path.join(pendingDir, 'source');
     try {
         setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
-        const crxPath = await downloadExtension(extensionId, crxDir);
-        logInfo('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath, analysisId: analysis.id })
-        await extractExtension(crxPath, sourceDir);
+        const pendingCrxPath = await downloadExtension(extensionId, pendingDir);
+        logInfo('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath: pendingCrxPath, analysisId: analysis.id })
+        await extractExtension(pendingCrxPath, pendingSourceDir);
         setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
-        logInfo('[analysis] runLookupForExtension:extracted', { extensionId, sourceDir, analysisId: analysis.id })
-        await runLookupFromSource(dbId, extensionId, analysis.id, sourceDir)
+        const manifestPath = findManifestPath(pendingSourceDir)
+        const manifest = manifestPath
+            ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>)
+            : null
+        const version = manifest && typeof manifest.version === 'string' ? manifest.version : null
+        const promoted = promoteToVersionedLayout({
+            bucketRoot,
+            extensionId,
+            version,
+            pendingCrxPath,
+            pendingSourceDir,
+        })
+        logInfo('[analysis] runLookupForExtension:extracted', {
+            extensionId,
+            sourceDir: promoted.sourceDir,
+            crxPath: promoted.crxPath,
+            version: promoted.versionSegment,
+            analysisId: analysis.id,
+        })
+        await runLookupFromSource(dbId, extensionId, analysis.id, promoted.sourceDir)
     } catch (e) {
         setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Analysis failed')
         await prisma.extensionAnalysisResult.update({
@@ -375,8 +425,8 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
         })
         throw e
     } finally {
-        if (fs.existsSync(tempDir)) {
-            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+        if (fs.existsSync(pendingDir)) {
+            try { fs.rmSync(pendingDir, { recursive: true, force: true }); } catch {}
         }
     }
 }
@@ -496,41 +546,50 @@ export function scheduleExtensionLookupService(periodMs: number) {
 }
 
 export async function processExtension(extensionId: string, downloadUrl?: string) {
-    const tempDir = path.join(os.tmpdir(), 'chrome-extension-analyzer', extensionId);
-    const crxDir = path.join(tempDir, 'crx');
-    const sourceDir = path.join(tempDir, 'source');
+    const bucketRoot = path.join(os.tmpdir(), 'chrome-extension-analyzer');
+    const pendingDir = buildPendingDir(bucketRoot, extensionId);
+    const pendingSourceDir = path.join(pendingDir, 'source');
     const startedAt = Date.now()
 
     try {
-        logInfo('[analysis] processExtension:start', { extensionId, tempDir })
+        logInfo('[analysis] processExtension:start', { extensionId, pendingDir })
         setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
-        // 1. Download
-        const crxPath = await downloadExtension(extensionId, crxDir, downloadUrl);
-        logInfo('[analysis] processExtension:downloaded', { extensionId, crxPath })
-        
-        // 2. Extract
+        const pendingCrxPath = await downloadExtension(extensionId, pendingDir, downloadUrl);
+        logInfo('[analysis] processExtension:downloaded', { extensionId, crxPath: pendingCrxPath })
         setAnalyzeProgressStage(extensionId, 'EXTRACTING', 70, 'Extracting package')
-        await extractExtension(crxPath, sourceDir);
-        logInfo('[analysis] processExtension:extracted', { extensionId, sourceDir })
-        
-        // 3. Read Manifest
-        const manifestPath = findManifestPath(sourceDir);
+        await extractExtension(pendingCrxPath, pendingSourceDir);
+        const pendingManifestPath = findManifestPath(pendingSourceDir);
+        if (!pendingManifestPath) {
+             throw new Error('Manifest file not found');
+        }
+        const pendingManifest = JSON.parse(fs.readFileSync(pendingManifestPath, 'utf-8')) as Record<string, unknown>;
+        const pendingVersion = typeof pendingManifest.version === 'string' ? pendingManifest.version : null
+        const promoted = promoteToVersionedLayout({
+            bucketRoot,
+            extensionId,
+            version: pendingVersion,
+            pendingCrxPath,
+            pendingSourceDir,
+        })
+        logInfo('[analysis] processExtension:extracted', {
+            extensionId,
+            sourceDir: promoted.sourceDir,
+            crxPath: promoted.crxPath,
+            version: promoted.versionSegment,
+        })
+        const manifestPath = findManifestPath(promoted.sourceDir);
         if (!manifestPath) {
              throw new Error('Manifest file not found');
         }
         const extensionRootDir = path.dirname(manifestPath)
-        
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
-        logInfo('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath })
-        
+        logInfo('[analysis] processExtension:manifestLoaded', { extensionId, manifestPath, versionDir: promoted.versionDir })
         const publisher = getPublisher(manifest)
 
         const resolvedName = resolveLocalizedString(manifest.name, extensionRootDir, manifest);
         const version = typeof manifest.version === 'string' ? manifest.version : null
         const manifestPermissions = extractManifestPermissions(manifest)
         const manifestIconAssets = extractManifestIconAssets(manifest, extensionRootDir)
-        
-        // 4. Upsert Extension
         const extension = await prisma.globalExtension.upsert({
             where: { storeId: extensionId },
             update: {
@@ -586,8 +645,8 @@ export async function processExtension(extensionId: string, downloadUrl?: string
         logError('[analysis] processExtension:failed', { extensionId, error })
         throw error;
     } finally {
-        if (fs.existsSync(tempDir)) {
-            try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+        if (fs.existsSync(pendingDir)) {
+            try { fs.rmSync(pendingDir, { recursive: true, force: true }); } catch {}
         }
     }
 }
