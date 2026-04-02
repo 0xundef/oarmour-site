@@ -363,6 +363,16 @@ export function ThreatAlerts() {
     }
   }, [details, open])
 
+  const filteredAddedDomains = (details?.addedDomains || [])
+    .slice(0, 10)
+    .flatMap((domain) => {
+      const signal = details?.topDomainSignals?.find((s) => s.domain === domain)
+      const signalAgeDays = getAgeDaysFromCreateTime(signal?.createTime)
+      const displayAgeDays = signalAgeDays ?? domainAgeDays[domain] ?? null
+      if (displayAgeDays === null || displayAgeDays === undefined) return []
+      return [{ domain, signal, displayAgeDays }]
+    })
+
   if (loading && data.length === 0) {
       return <div className="p-4 text-center text-muted-foreground">Loading extensions...</div>
   }
@@ -416,20 +426,17 @@ export function ThreatAlerts() {
                   ) : (
                     <>
                       <div className="mb-1">Total: {details.totalDomains}</div>
-                      <div className="mb-1">New since last analysis: {details.addedDomains.length}</div>
+                      <div className="mb-1">New since last analysis: {filteredAddedDomains.length}</div>
                     </>
                   )}
-                  {(details?.addedDomains || []).slice(0, 10).map((d) => {
-                    const signal = details?.topDomainSignals?.find((s) => s.domain === d)
+                  {filteredAddedDomains.map(({ domain, signal, displayAgeDays }) => {
                     const isMalicious = signal?.isMalicious === true
-                    const signalAgeDays = getAgeDaysFromCreateTime(signal?.createTime)
-                    const displayAgeDays = signalAgeDays ?? domainAgeDays[d] ?? null
                     return (
-                    <div key={d} className="mb-px grid grid-cols-[1fr_132px] items-center gap-2">
-                      <div className="min-w-0 truncate">+ {d}</div>
+                    <div key={domain} className="mb-px grid grid-cols-[1fr_132px] items-center gap-2">
+                      <div className="min-w-0 truncate">+ {domain}</div>
                       <div className="flex items-center justify-start gap-2">
                         <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
-                          {displayAgeDays === null || displayAgeDays === undefined ? "N/A" : `${displayAgeDays}d`}
+                          {`${displayAgeDays}d`}
                         </Badge>
                         <span
                           className={`inline-block h-3 w-3 rounded-full ${isMalicious ? "bg-red-500" : "bg-green-500"}`}
@@ -438,7 +445,7 @@ export function ThreatAlerts() {
                       </div>
                     </div>
                   )})}
-                  {details && (details.addedDomains || []).length === 0 && <div className="text-muted-foreground">No new domains</div>}
+                  {details && filteredAddedDomains.length === 0 && <div className="text-muted-foreground">No new domains</div>}
                 </div>
               </div>
               <div className="pt-4">

@@ -346,16 +346,23 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     const topDomains = await domainEnrichment.findMany({
         where: { analysisId, createdDate: { not: null } },
         orderBy: { createdDate: 'desc' },
-        take: 3,
+        take: 20,
         select: { id: true, domain: true, createdDate: true },
     })
+    const topYoungDomains = Array.from(
+        new Map(
+            topDomains
+                .filter((item) => !!item.createdDate && !isNaN(item.createdDate.getTime()))
+                .map((item) => [item.domain, item]),
+        ).values(),
+    ).slice(0, 3)
     const topDomainSignals: Array<{
         topDomainSignalId: string
         domain: string
         createTime: string | null
         isMalicious: boolean
     }> = await Promise.all(
-        topDomains.map(async (item) => {
+        topYoungDomains.map(async (item) => {
             let isMalicious = false
             try {
                 const vt = await vtGetDomain(item.domain)
