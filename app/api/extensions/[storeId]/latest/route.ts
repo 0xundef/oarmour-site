@@ -172,6 +172,14 @@ export async function GET(
     const prevIpSet = new Set(prevIps)
     const addedDomains = latestDomains.filter((d) => !prevDomainSet.has(d))
     const addedIps = latestIps.filter((ip) => !prevIpSet.has(ip))
+    console.warn('[analysis] latestRoute:domainDiff', {
+      storeId,
+      latestAnalysisId: latest.id,
+      previousAnalysisId: previous?.id ?? null,
+      prev_domains: prevDomains.length,
+      curr_domains: latestDomains.length,
+      diff_domains: addedDomains.length,
+    })
     return NextResponse.json({
       status: latest.status,
       filesScanned: latest.filesScanned,
