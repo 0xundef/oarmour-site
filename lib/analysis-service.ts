@@ -35,6 +35,33 @@ const logError = (message: string, payload?: unknown) => {
     console.error(`${nowIso()} ${message}`, payload)
 }
 
+const readPositiveIntEnv = (name: string, fallback: number) => {
+    const raw = Number(process.env[name] ?? '')
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback
+}
+
+const ANALYSIS_APEX_DOMAIN_LIMIT = readPositiveIntEnv('ANALYSIS_APEX_DOMAIN_LIMIT', 400)
+const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 4)
+
+const mapWithConcurrency = async <T, R>(
+    items: T[],
+    limit: number,
+    mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> => {
+    const safeLimit = Math.max(1, Math.floor(limit))
+    const results = new Array<R>(items.length)
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(safeLimit, items.length) }, async () => {
+        while (true) {
+            const current = cursor++
+            if (current >= items.length) return
+            results[current] = await mapper(items[current], current)
+        }
+    })
+    await Promise.all(workers)
+    return results
+}
+
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { default_locale?: string }): string => {
     if (typeof value !== 'string') return String(value ?? '');
     const match = value.match(/^__MSG_(.+)__$/);
@@ -196,23 +223,13 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 .map((d) => getDomain(d) || null)
                 .filter((d): d is string => !!d)
         )
-    ).slice(0, 20);
+    ).slice(0, ANALYSIS_APEX_DOMAIN_LIMIT);
     logInfo('[analysis] runLookupFromSource:apexDomainsPrepared', {
         extensionId,
         analysisId,
         apexDomainCount: apexDomains.length,
     })
-    const enrichments: Array<{
-        analysisId: string;
-        domain: string;
-        registrar?: string | null;
-        status?: string | null;
-        nameservers: string[];
-        createdDate?: Date | null;
-        expiresDate?: Date | null;
-    }> = [];
-    for (let i = 0; i < apexDomains.length; i++) {
-        const d = apexDomains[i]
+    const enrichments = await mapWithConcurrency(apexDomains, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
         let registrar: string | null = null
         let status: string | null = null
         let nameservers: string[] = []
@@ -234,7 +251,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             createdDate = createdDate ?? w.createdDate
             expiresDate = expiresDate ?? w.expiresDate
         }
-        enrichments.push({
+        return {
             analysisId,
             domain: d,
             registrar,
@@ -242,8 +259,8 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             nameservers,
             createdDate,
             expiresDate,
-        })
-    }
+        }
+    })
     const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
     if (enrichments.length > 0) {
         await domainEnrichment.createMany({
