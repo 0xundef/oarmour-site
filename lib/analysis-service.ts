@@ -163,7 +163,6 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         .filter((d) => d.length > 0)
         .sort((a, b) => a.localeCompare(b))
     const domainListPath = path.join(sourceDir, 'domain_list.json')
-    fs.writeFileSync(domainListPath, JSON.stringify(normalizedDomains, null, 2), 'utf-8')
     console.warn('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,
@@ -233,6 +232,18 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             data: enrichments
         });
     }
+    const enrichmentByDomain = new Map(enrichments.map((item) => [item.domain, item]))
+    const domainList = normalizedDomains.map((domain) => {
+        const apexDomain = getDomain(domain) || null
+        const enrichment = apexDomain ? enrichmentByDomain.get(apexDomain) : null
+        return {
+            domain,
+            apexDomain,
+            createdDate: enrichment?.createdDate ? enrichment.createdDate.toISOString() : null,
+            expiresDate: enrichment?.expiresDate ? enrichment.expiresDate.toISOString() : null,
+        }
+    })
+    fs.writeFileSync(domainListPath, JSON.stringify(domainList, null, 2), 'utf-8')
     const topDomains = await domainEnrichment.findMany({
         where: { analysisId },
         orderBy: { createdDate: 'desc' },
