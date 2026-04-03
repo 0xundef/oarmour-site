@@ -54,6 +54,33 @@ const buildPendingDir = (bucketRoot: string, extensionId: string) => {
     return path.join(bucketRoot, extensionId, `_pending-${runId}`)
 }
 
+const resolveReusableAnalyzerSourceDir = (extensionId: string, version: string | null | undefined) => {
+    const analyzerRoot = path.join(os.tmpdir(), 'chrome-extension-analyzer')
+    const extensionRoot = path.join(analyzerRoot, extensionId)
+    const preferred = path.join(extensionRoot, toPathSegment(version, 'unknown'))
+    if (fs.existsSync(preferred) && !!findManifestPath(preferred)) {
+        return preferred
+    }
+    if (!fs.existsSync(extensionRoot)) return null
+    let entries: fs.Dirent[] = []
+    try {
+        entries = fs.readdirSync(extensionRoot, { withFileTypes: true })
+    } catch {
+        return null
+    }
+    const candidates = entries
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith('_pending-'))
+        .map((entry) => path.join(extensionRoot, entry.name))
+        .filter((dir) => fs.existsSync(dir) && !!findManifestPath(dir))
+    if (candidates.length === 0) return null
+    const sorted = candidates.sort((a, b) => {
+        const aTime = fs.statSync(a).mtimeMs
+        const bTime = fs.statSync(b).mtimeMs
+        return bTime - aTime
+    })
+    return sorted[0]
+}
+
 const promoteToVersionedLayout = (params: {
     bucketRoot: string
     extensionId: string
@@ -507,31 +534,47 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     const pendingDir = buildPendingDir(bucketRoot, extensionId);
     const pendingSourceDir = path.join(pendingDir, 'source');
     try {
-        setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
-        const pendingCrxPath = await downloadExtension(extensionId, pendingDir);
-        logInfo('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath: pendingCrxPath, analysisId: analysis.id })
-        await extractExtension(pendingCrxPath, pendingSourceDir);
-        setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
-        const manifestPath = findManifestPath(pendingSourceDir)
-        const manifest = manifestPath
-            ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>)
-            : null
-        const version = manifest && typeof manifest.version === 'string' ? manifest.version : null
-        const promoted = promoteToVersionedLayout({
-            bucketRoot,
-            extensionId,
-            version,
-            pendingCrxPath,
-            pendingSourceDir,
+        const ext = await prisma.globalExtension.findUnique({
+            where: { id: dbId },
+            select: { version: true },
         })
-        logInfo('[analysis] runLookupForExtension:extracted', {
-            extensionId,
-            sourceDir: promoted.sourceDir,
-            crxPath: promoted.crxPath,
-            version: promoted.versionSegment,
-            analysisId: analysis.id,
-        })
-        await runLookupFromSource(dbId, extensionId, analysis.id, promoted.sourceDir)
+        const reusableSourceDir = resolveReusableAnalyzerSourceDir(extensionId, ext?.version)
+        if (reusableSourceDir) {
+            setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
+            logInfo('[analysis] runLookupForExtension:reusedExtractedSource', {
+                extensionId,
+                sourceDir: reusableSourceDir,
+                version: ext?.version ?? null,
+                analysisId: analysis.id,
+            })
+            await runLookupFromSource(dbId, extensionId, analysis.id, reusableSourceDir)
+        } else {
+            setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
+            const pendingCrxPath = await downloadExtension(extensionId, pendingDir);
+            logInfo('[analysis] runLookupForExtension:downloaded', { extensionId, crxPath: pendingCrxPath, analysisId: analysis.id })
+            await extractExtension(pendingCrxPath, pendingSourceDir);
+            setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
+            const manifestPath = findManifestPath(pendingSourceDir)
+            const manifest = manifestPath
+                ? (JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>)
+                : null
+            const version = manifest && typeof manifest.version === 'string' ? manifest.version : null
+            const promoted = promoteToVersionedLayout({
+                bucketRoot,
+                extensionId,
+                version,
+                pendingCrxPath,
+                pendingSourceDir,
+            })
+            logInfo('[analysis] runLookupForExtension:extracted', {
+                extensionId,
+                sourceDir: promoted.sourceDir,
+                crxPath: promoted.crxPath,
+                version: promoted.versionSegment,
+                analysisId: analysis.id,
+            })
+            await runLookupFromSource(dbId, extensionId, analysis.id, promoted.sourceDir)
+        }
     } catch (e) {
         setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Analysis failed')
         await prisma.extensionAnalysisResult.update({
