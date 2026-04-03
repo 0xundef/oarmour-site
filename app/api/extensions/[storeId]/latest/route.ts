@@ -148,30 +148,24 @@ export async function GET(
     const latestIps = latest.ips || []
     const prevDomains = normalizeDomainList(previous?.domains || [])
     const prevIps = previous?.ips || []
-    const topEnrichments = await prisma.domainEnrichment.findMany({
-      where: { analysisId: latest.id, createdDate: { not: null } },
-      orderBy: { createdDate: 'desc' },
-      take: 20,
-      select: { id: true, domain: true, createdDate: true, isMalicious: true },
-    })
-    const latestDomainSignals = Array.from(
-      new Map(
-        topEnrichments
-          .filter((item) => !!item.createdDate && !isNaN(item.createdDate.getTime()))
-          .map((item) => [item.domain, item]),
-      ).values(),
-    )
-      .slice(0, 3)
-      .map((item) => ({
-        topDomainSignalId: item.id,
-        domain: item.domain,
-        createTime: item.createdDate ? item.createdDate.toISOString() : null,
-        isMalicious: typeof item.isMalicious === 'boolean' ? item.isMalicious : null,
-      }))
     const prevDomainSet = new Set(prevDomains)
     const prevIpSet = new Set(prevIps)
     const addedDomains = latestDomains.filter((d) => !prevDomainSet.has(d))
     const addedIps = latestIps.filter((ip) => !prevIpSet.has(ip))
+    const topEnrichments = addedDomains.length > 0
+      ? await prisma.domainEnrichment.findMany({
+        where: { analysisId: latest.id, createdDate: { not: null }, domain: { in: addedDomains } },
+        orderBy: { createdDate: 'desc' },
+        take: 3,
+        select: { id: true, domain: true, createdDate: true, isMalicious: true },
+      })
+      : []
+    const latestDomainSignals = topEnrichments.map((item) => ({
+      topDomainSignalId: item.id,
+      domain: item.domain,
+      createTime: item.createdDate ? item.createdDate.toISOString() : null,
+      isMalicious: typeof item.isMalicious === 'boolean' ? item.isMalicious : null,
+    }))
     console.warn('[analysis] latestRoute:domainDiff', {
       storeId,
       latestAnalysisId: latest.id,

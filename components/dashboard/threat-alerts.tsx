@@ -304,9 +304,15 @@ export function ThreatAlerts() {
 
   useEffect(() => {
     if (!open || !details) return
+    const prioritizedDomains = Array.from(
+      new Set([
+        ...(details.topDomainSignals || []).map((s) => s.domain),
+        ...(details.addedDomains || []),
+      ]),
+    )
     const domains = Array.from(
       new Set(
-        (details.addedDomains || [])
+        prioritizedDomains
           .slice(0, 10)
           .filter((domain) => {
             const signal = details.topDomainSignals?.find((s) => s.domain === domain)
@@ -363,7 +369,14 @@ export function ThreatAlerts() {
     }
   }, [details, open])
 
-  const filteredAddedDomains = (details?.addedDomains || [])
+  const prioritizedDomains = Array.from(
+    new Set([
+      ...((details?.topDomainSignals || []).map((s) => s.domain)),
+      ...(details?.addedDomains || []),
+    ]),
+  )
+
+  const filteredAddedDomains = prioritizedDomains
     .slice(0, 10)
     .flatMap((domain) => {
       const signal = details?.topDomainSignals?.find((s) => s.domain === domain)
@@ -426,7 +439,7 @@ export function ThreatAlerts() {
                   ) : (
                     <>
                       <div className="mb-1">Total: {details.totalDomains}</div>
-                      <div className="mb-1">New since last analysis: {filteredAddedDomains.length}</div>
+                      <div className="mb-1">New since last analysis: {(details.addedDomains || []).length}</div>
                     </>
                   )}
                   {filteredAddedDomains.map(({ domain, signal, displayAgeDays }) => {

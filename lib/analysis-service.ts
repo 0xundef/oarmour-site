@@ -7,16 +7,6 @@ import { getDomain } from 'tldts';
 import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 
-type DomainEnrichmentDelegate = {
-    createMany: (args: { data: unknown[] }) => Promise<unknown>
-    findMany: (args: {
-        where: { analysisId: string; createdDate?: { not: null } }
-        orderBy: { createdDate: 'desc' }
-        take: number
-        select: { id: true; domain: true; createdDate: true }
-    }) => Promise<Array<{ id: string; domain: string; createdDate: Date | null }>>
-}
-
 const nowIso = () => new Date().toISOString()
 
 const logInfo = (message: string, payload?: unknown) => {
@@ -35,12 +25,21 @@ const logError = (message: string, payload?: unknown) => {
     console.error(`${nowIso()} ${message}`, payload)
 }
 
+const isDatabaseUnavailableError = (error: unknown) => {
+    if (!error || typeof error !== 'object') return false
+    const code = (error as { code?: unknown }).code
+    if (code === 'P1001') return true
+    const message = (error as { message?: unknown }).message
+    return typeof message === 'string' && message.includes("Can't reach database server")
+}
+
+let lastDbUnavailableLookupLogAt = 0
+
 const readPositiveIntEnv = (name: string, fallback: number) => {
     const raw = Number(process.env[name] ?? '')
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback
 }
 
-const ANALYSIS_APEX_DOMAIN_LIMIT = readPositiveIntEnv('ANALYSIS_APEX_DOMAIN_LIMIT', 400)
 const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 6)
 
 const toPathSegment = (value: string | null | undefined, fallback: string) => {
@@ -130,6 +129,32 @@ function isDomainMalicious(vt: unknown): boolean {
 function toStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return []
     return value.filter((item): item is string => typeof item === 'string')
+}
+
+function normalizeApexDomain(value: string): string {
+    return value.trim().toLowerCase().replace(/\.+$/, '')
+}
+
+function normalizeStoredDomainList(values: string[]): string[] {
+    return Array.from(
+        new Set(
+            values
+                .flatMap((raw) => {
+                    if (typeof raw !== 'string') return []
+                    const text = raw.trim()
+                    if (!text) return []
+                    try {
+                        const parsed: unknown = JSON.parse(text)
+                        if (parsed && typeof parsed === 'object') {
+                            const domain = (parsed as Record<string, unknown>).domain
+                            if (typeof domain === 'string' && domain.trim()) return [normalizeApexDomain(domain)]
+                        }
+                    } catch {}
+                    return [normalizeApexDomain(text)]
+                })
+                .filter((d) => d.length > 0),
+        ),
+    )
 }
 
 function extractManifestPermissions(manifest: Record<string, unknown>) {
@@ -260,12 +285,29 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 .filter((d) => d.length > 0)
         )
     )
-    const apexDomainsForEnrichment = allUniqueApexDomains.slice(0, ANALYSIS_APEX_DOMAIN_LIMIT)
+    const previousCompletedAnalysis = await prisma.extensionAnalysisResult.findFirst({
+        where: {
+            extensionId: dbId,
+            status: 'COMPLETED',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, domains: true },
+    })
+    const previousApexDomains = normalizeStoredDomainList(previousCompletedAnalysis?.domains || [])
+    const previousApexDomainSet = new Set(previousApexDomains)
+    const isFirstSeenAnalysis = !previousCompletedAnalysis
+    const newlyAddedApexDomains = allUniqueApexDomains.filter((domain) => !previousApexDomainSet.has(domain))
+    const inheritedApexDomains = allUniqueApexDomains.filter((domain) => previousApexDomainSet.has(domain))
+    const apexDomainsForEnrichment = isFirstSeenAnalysis ? allUniqueApexDomains : newlyAddedApexDomains
     logInfo('[analysis] runLookupFromSource:apexDomainsPrepared', {
         extensionId,
         analysisId,
         apexDomainCount: allUniqueApexDomains.length,
-        enrichmentApexDomainCount: apexDomainsForEnrichment.length,
+        prevApexDomainCount: previousApexDomains.length,
+        newApexDomainCount: newlyAddedApexDomains.length,
+        inheritedApexDomainCount: inheritedApexDomains.length,
+        whoisApexDomainCount: apexDomainsForEnrichment.length,
+        mode: isFirstSeenAnalysis ? 'first_seen_full' : 'upgrade_incremental',
     })
     const totalEnrichmentRequests = apexDomainsForEnrichment.length
     let completedEnrichmentRequests = 0
@@ -327,13 +369,41 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         progress: `${completedEnrichmentRequests}/${totalEnrichmentRequests}`,
         whoisFallbackCount,
     })
-    const domainEnrichment = (prisma as unknown as { domainEnrichment: DomainEnrichmentDelegate }).domainEnrichment
-    if (enrichments.length > 0) {
+    const domainEnrichment = prisma.domainEnrichment
+    const inheritedEnrichments =
+        previousCompletedAnalysis && inheritedApexDomains.length > 0
+            ? await domainEnrichment.findMany({
+                where: { analysisId: previousCompletedAnalysis.id, domain: { in: inheritedApexDomains } },
+                select: {
+                    domain: true,
+                    registrar: true,
+                    status: true,
+                    nameservers: true,
+                    createdDate: true,
+                    expiresDate: true,
+                    isMalicious: true,
+                },
+            })
+            : []
+    const allEnrichmentRows = [
+        ...inheritedEnrichments.map((item) => ({
+            analysisId,
+            domain: item.domain,
+            registrar: item.registrar,
+            status: item.status,
+            nameservers: item.nameservers,
+            createdDate: item.createdDate,
+            expiresDate: item.expiresDate,
+            isMalicious: item.isMalicious ?? null,
+        })),
+        ...enrichments,
+    ]
+    if (allEnrichmentRows.length > 0) {
         await domainEnrichment.createMany({
-            data: enrichments
+            data: allEnrichmentRows
         });
     }
-    const enrichmentByDomain = new Map(enrichments.map((item) => [item.domain, item]))
+    const enrichmentByDomain = new Map(allEnrichmentRows.map((item) => [item.domain, item]))
     const apexDomainList = allUniqueApexDomains.map((apexDomain) => {
         const enrichment = enrichmentByDomain.get(apexDomain) || null
         return {
@@ -347,19 +417,17 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     })
     fs.writeFileSync(rawDomainListPath, `${normalizedDomains.join('\n')}\n`, 'utf-8')
     fs.writeFileSync(apexDomainListPath, JSON.stringify(apexDomainList, null, 2), 'utf-8')
-    const topDomains = await domainEnrichment.findMany({
-        where: { analysisId, createdDate: { not: null } },
-        orderBy: { createdDate: 'desc' },
-        take: 20,
-        select: { id: true, domain: true, createdDate: true },
-    })
-    const topYoungDomains = Array.from(
-        new Map(
-            topDomains
-                .filter((item) => !!item.createdDate && !isNaN(item.createdDate.getTime()))
-                .map((item) => [item.domain, item]),
-        ).values(),
-    ).slice(0, 3)
+    const topYoungDomains = apexDomainsForEnrichment
+        .map((domain) => {
+            const enrichment = enrichmentByDomain.get(domain) || null
+            return {
+                domain,
+                createdDate: enrichment?.createdDate ?? null,
+            }
+        })
+        .filter((item): item is { domain: string; createdDate: Date } => !!item.createdDate && !isNaN(item.createdDate.getTime()))
+        .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime())
+        .slice(0, 3)
     const topDomainSignals: Array<{
         topDomainSignalId: string
         domain: string
@@ -372,8 +440,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 const vt = await vtGetDomain(item.domain)
                 isMalicious = isDomainMalicious(vt)
             } catch {}
+            await domainEnrichment.updateMany({
+                where: { analysisId, domain: item.domain },
+                data: { isMalicious },
+            })
             return {
-                topDomainSignalId: item.id,
+                topDomainSignalId: `${analysisId}:${item.domain}`,
                 domain: item.domain,
                 createTime: item.createdDate ? item.createdDate.toISOString() : null,
                 isMalicious,
@@ -392,12 +464,14 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             updatedAt: new Date()
         }
     });
-    await prisma.globalExtension.update({
-        where: { id: dbId },
-        data: {
-            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
-        },
-    });
+    if (isFirstSeenAnalysis || newlyAddedApexDomains.length > 0) {
+        await prisma.globalExtension.update({
+            where: { id: dbId },
+            data: {
+                riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+            },
+        });
+    }
     setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
     logInfo('[analysis] runLookupFromSource:completed', {
         extensionId,
@@ -523,26 +597,29 @@ export async function enqueueExtensionLookupJob(dbId: string) {
 }
 
 export async function processPendingLookupJob() {
-    const pending = await prisma.scanJob.findFirst({
-        where: {
-            targetType: 'EXTENSION',
-            status: 'PENDING',
-        },
-        orderBy: { startedAt: 'asc' },
-        select: { id: true, targetId: true },
-    })
-    if (!pending) {
-        return { processed: false as const }
-    }
-    const claim = await prisma.scanJob.updateMany({
-        where: { id: pending.id, status: 'PENDING' },
-        data: { status: 'RUNNING', startedAt: new Date() },
-    })
-    if (claim.count === 0) {
-        return { processed: false as const }
-    }
-    const startedAt = Date.now()
+    let activeJobId: string | null = null
+    let activeStartedAt = Date.now()
     try {
+        const pending = await prisma.scanJob.findFirst({
+            where: {
+                targetType: 'EXTENSION',
+                status: 'PENDING',
+            },
+            orderBy: { startedAt: 'asc' },
+            select: { id: true, targetId: true },
+        })
+        if (!pending) {
+            return { processed: false as const }
+        }
+        const claim = await prisma.scanJob.updateMany({
+            where: { id: pending.id, status: 'PENDING' },
+            data: { status: 'RUNNING', startedAt: new Date() },
+        })
+        if (claim.count === 0) {
+            return { processed: false as const }
+        }
+        activeJobId = pending.id
+        activeStartedAt = Date.now()
         const extension = await prisma.globalExtension.findUnique({
             where: { id: pending.targetId },
             select: { id: true, storeId: true },
@@ -555,20 +632,34 @@ export async function processPendingLookupJob() {
             where: { id: pending.id },
             data: {
                 status: 'COMPLETED',
-                durationMs: Date.now() - startedAt,
+                durationMs: Date.now() - activeStartedAt,
             },
         })
         return { processed: true as const, id: pending.id, status: 'COMPLETED' as const }
     } catch (e) {
-        await prisma.scanJob.update({
-            where: { id: pending.id },
-            data: {
-                status: 'FAILED',
-                durationMs: Date.now() - startedAt,
-            },
-        })
-        logError('[analysis] processPendingLookupJob:failed', { jobId: pending.id, error: e })
-        return { processed: true as const, id: pending.id, status: 'FAILED' as const }
+        if (isDatabaseUnavailableError(e)) {
+            const now = Date.now()
+            if (now - lastDbUnavailableLookupLogAt > 30000) {
+                lastDbUnavailableLookupLogAt = now
+                logInfo('[analysis] lookup tick skipped: database unavailable')
+            }
+            return { processed: false as const }
+        }
+        if (activeJobId) {
+            try {
+                await prisma.scanJob.update({
+                    where: { id: activeJobId },
+                    data: {
+                        status: 'FAILED',
+                        durationMs: Date.now() - activeStartedAt,
+                    },
+                })
+            } catch {}
+        }
+        logError('[analysis] processPendingLookupJob:failed', { error: e })
+        return activeJobId
+            ? { processed: true as const, id: activeJobId, status: 'FAILED' as const }
+            : { processed: false as const }
     }
 }
 
