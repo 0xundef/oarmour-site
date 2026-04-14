@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oarmour
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d oarmour"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: change-me-for-local-dev
+      NEXTAUTH_USE_ADAPTER: "1"
+      db1_POSTGRES_PRISMA_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=public
+      db1_POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@db:5432/oarmour?schema=public
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+      GITHUB_ID: ""
+      GITHUB_SECRET: ""
+      NEXTAUTH_DEV_ADMIN_EMAILS: "*"
+      STRIPE_API_KEY: sk_test_mock_key
+      STRIPE_WEBHOOK_SECRET: ""
+      NEXT_PUBLIC_POSTHOG_KEY: ""
+      NEXT_PUBLIC_POSTHOG_HOST: ""
+      UPLOADTHING_SECRET: ""
+      UPLOADTHING_APP_ID: ""
+      VIRUSTOTAL_API_KEY: ""
+      EXT_MONITOR_ENABLED: "1"
+      EXT_MONITOR_PERIOD_MINUTES: "30"
+      EXT_LOOKUP_ENABLED: "1"
+      EXT_LOOKUP_PERIOD_SECONDS: "8"
+
+volumes:
+  postgres-data:
