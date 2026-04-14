@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Blog | OArmour",
+  title: "Blog | OArmourjj",
   description: "Latest news, updates, and security insights from the OArmour team.",
   alternates: { canonical: "https://oarmour.com/blog" },
   openGraph: {
