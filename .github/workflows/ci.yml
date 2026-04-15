@@ -87,13 +87,14 @@ jobs:
           npm run build
 
           if command -v pm2 >/dev/null 2>&1; then
-            sudo pm2 delete oarmour-site >/dev/null 2>&1 || true
+            SUDO_PRESERVE_ENV="--preserve-env=DEPLOY_PATH,APP_PORT,PORT,db1_POSTGRES_PRISMA_URL,db1_POSTGRES_URL_NON_POOLING,NEXTAUTH_URL,NEXTAUTH_SECRET,NEXTAUTH_USE_ADAPTER,NEXTAUTH_DEV_ADMIN_EMAILS,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,OAUTH_GITHUB_ID,OAUTH_GITHUB_SECRET,STRIPE_API_KEY,STRIPE_WEBHOOK_SECRET,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_POSTHOG_HOST,VIRUSTOTAL_API_KEY,UPLOADTHING_SECRET,UPLOADTHING_APP_ID"
+            sudo "$SUDO_PRESERVE_ENV" pm2 delete oarmour-site >/dev/null 2>&1 || true
             if [ -n "${APP_PORT:-}" ]; then
-              PORT="$APP_PORT" sudo pm2 start npm --name oarmour-site -- run start -- -p "$APP_PORT"
+              PORT="$APP_PORT" sudo "$SUDO_PRESERVE_ENV" pm2 start npm --name oarmour-site -- run start -- -p "$APP_PORT"
             else
-              sudo pm2 start npm --name oarmour-site -- run start
+              sudo "$SUDO_PRESERVE_ENV" pm2 start npm --name oarmour-site -- run start
             fi
-            sudo pm2 save
+            sudo "$SUDO_PRESERVE_ENV" pm2 save
           else
             pkill -f "next start" >/dev/null 2>&1 || true
             if [ -n "${APP_PORT:-}" ]; then
