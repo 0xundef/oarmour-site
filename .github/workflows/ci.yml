@@ -87,13 +87,13 @@ jobs:
           npm run build
 
           if command -v pm2 >/dev/null 2>&1; then
-            pm2 delete oarmour-site >/dev/null 2>&1 || true
+            sudo pm2 delete oarmour-site >/dev/null 2>&1 || true
             if [ -n "${APP_PORT:-}" ]; then
-              PORT="$APP_PORT" pm2 start npm --name oarmour-site -- run start -- -p "$APP_PORT"
+              PORT="$APP_PORT" sudo pm2 start npm --name oarmour-site -- run start -- -p "$APP_PORT"
             else
-              pm2 start npm --name oarmour-site -- run start
+              sudo pm2 start npm --name oarmour-site -- run start
             fi
-            pm2 save
+            sudo pm2 save
           else
             pkill -f "next start" >/dev/null 2>&1 || true
             if [ -n "${APP_PORT:-}" ]; then
