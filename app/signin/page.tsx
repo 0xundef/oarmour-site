@@ -4,7 +4,7 @@ import UserAuthForm from "@/components/forms/user-auth-form";
 import Logo from "@/components/logo";
 
 export const metadata: Metadata = {
-  title: "Authentication",
+  title: "Authentication1",
   description: "Authentication forms built using the components.",
 };
 
