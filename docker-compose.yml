@@ -35,8 +35,8 @@ services:
       db1_POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@db:5432/oarmour?schema=public
       GOOGLE_CLIENT_ID: ""
       GOOGLE_CLIENT_SECRET: ""
-      GITHUB_ID: ""
-      GITHUB_SECRET: ""
+      OAUTH_GITHUB_ID: ""
+      OAUTH_GITHUB_SECRET: ""
       NEXTAUTH_DEV_ADMIN_EMAILS: "*"
       STRIPE_API_KEY: sk_test_mock_key
       STRIPE_WEBHOOK_SECRET: ""
