@@ -71,7 +71,19 @@ jobs:
 
           mkdir -p .logs
           npm install --no-audit --no-fund
-          npx prisma migrate deploy
+          if ! npx prisma migrate deploy 2> >(tee .logs/prisma-migrate-deploy.err >&2); then
+            if grep -q "P3005" .logs/prisma-migrate-deploy.err; then
+              for m in prisma/migrations/*; do
+                if [ -d "$m" ]; then
+                  name="$(basename "$m")"
+                  npx prisma migrate resolve --applied "$name"
+                fi
+              done
+              npx prisma migrate deploy
+            else
+              exit 1
+            fi
+          fi
           npm run build
 
           if command -v pm2 >/dev/null 2>&1; then
