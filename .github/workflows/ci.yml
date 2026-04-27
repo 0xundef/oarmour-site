@@ -5,7 +5,12 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git ref to deploy (commit SHA, branch, or tag). Leave empty to use main.'
+        required: false
+        default: ''
 
 concurrency:
   group: ci-deploy-${{ github.ref }}
@@ -33,7 +38,9 @@ jobs:
         run: npm test || echo "No tests specified"
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     steps:
       - name: Deploy on server
@@ -41,6 +48,7 @@ jobs:
         env:
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
           APP_PORT: ${{ vars.APP_PORT }}
+          TARGET_REF: ${{ github.event.inputs.target_ref || 'main' }}
           db1_POSTGRES_PRISMA_URL: ${{ secrets.DB1_POSTGRES_PRISMA_URL }}
           db1_POSTGRES_URL_NON_POOLING: ${{ secrets.DB1_POSTGRES_URL_NON_POOLING }}
           NEXTAUTH_URL: ${{ vars.NEXTAUTH_URL }}
@@ -65,9 +73,13 @@ jobs:
             exit 1
           fi
           cd "$DEPLOY_PATH"
-          git fetch origin main
-          git checkout -f main
-          git reset --hard origin/main
+          git fetch origin --prune --tags "${TARGET_REF}"
+          if git cat-file -t "origin/${TARGET_REF}" 2>/dev/null | grep -q 'commit'; then
+            git checkout -f "${TARGET_REF}"
+            git reset --hard "origin/${TARGET_REF}"
+          else
+            git checkout -f "${TARGET_REF}"
+          fi
 
           mkdir -p .logs
           npm install --no-audit --no-fund
