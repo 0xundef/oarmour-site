@@ -107,16 +107,15 @@ function makeColumns(
       accessorKey: "risk",
       header: "Risk Level",
       cell: ({ row }) => {
-        const risk = row.getValue("risk") as string
         const stage = getRowStage(row.original)
-        if (stage === "RUNNING" || stage === "PENDING" || stage === "DOWNLOADING" || stage === "EXTRACTING" || stage === "QUEUED" || stage === "ANALYZING") {
+        if (stage !== "COMPLETED") {
           return (
-            <div className="flex items-center gap-2" title="Analysis In Progress">
-              <div className="h-2 w-12 rounded-full bg-gray-300 animate-pulse" />
-              <span className="text-xs text-gray-500">Analyzing...</span>
+            <div className="flex items-center" title="Unknown">
+              <div className="h-2 w-12 rounded-full bg-gray-300" />
             </div>
           )
         }
+        const risk = row.getValue("risk") as string
         let colorClass = "bg-gray-400"
         if (risk === "SAFE") colorClass = "bg-green-500"
         if (risk === "CAUTION") colorClass = "bg-yellow-500"

@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
     }
 
     const memory = getAnalyzeProgress(extensionId)
-    if (memory) {
+    const inFlightMemory = memory && !memory.done ? memory : null
+    if (memory?.done) {
       return NextResponse.json({
         extensionId,
         stage: memory.stage,
@@ -32,6 +33,19 @@ export async function GET(req: NextRequest) {
     })
 
     if (!extension) {
+      if (inFlightMemory) {
+        return NextResponse.json({
+          extensionId,
+          stage: inFlightMemory.stage,
+          progress: inFlightMemory.progress,
+          message: inFlightMemory.message,
+          done: inFlightMemory.done,
+          success: inFlightMemory.success,
+          bytesReceived: inFlightMemory.bytesReceived,
+          totalBytes: inFlightMemory.totalBytes,
+          source: 'memory',
+        })
+      }
       return NextResponse.json({
         extensionId,
         stage: 'DOWNLOADING',
@@ -56,7 +70,7 @@ export async function GET(req: NextRequest) {
       }),
     ])
 
-    if (job?.status === 'FAILED' || analysis?.status === 'FAILED') {
+    if (analysis?.status === 'FAILED' || job?.status === 'FAILED') {
       return NextResponse.json({
         extensionId,
         stage: 'FAILED',
@@ -67,7 +81,31 @@ export async function GET(req: NextRequest) {
         source: 'fallback',
       })
     }
-    if (job?.status === 'RUNNING' || analysis?.status === 'RUNNING') {
+    if (analysis?.status === 'COMPLETED' || job?.status === 'COMPLETED') {
+      return NextResponse.json({
+        extensionId,
+        stage: 'COMPLETED',
+        progress: 100,
+        message: 'Analysis completed',
+        done: true,
+        success: true,
+        source: 'fallback',
+      })
+    }
+    if (analysis?.status === 'RUNNING' || job?.status === 'RUNNING') {
+      if (inFlightMemory) {
+        return NextResponse.json({
+          extensionId,
+          stage: inFlightMemory.stage,
+          progress: inFlightMemory.progress,
+          message: inFlightMemory.message,
+          done: inFlightMemory.done,
+          success: inFlightMemory.success,
+          bytesReceived: inFlightMemory.bytesReceived,
+          totalBytes: inFlightMemory.totalBytes,
+          source: 'memory',
+        })
+      }
       return NextResponse.json({
         extensionId,
         stage: 'ANALYZING',
@@ -78,7 +116,20 @@ export async function GET(req: NextRequest) {
         source: 'fallback',
       })
     }
-    if (job?.status === 'PENDING') {
+    if (analysis?.status === 'PENDING' || job?.status === 'PENDING') {
+      if (inFlightMemory) {
+        return NextResponse.json({
+          extensionId,
+          stage: inFlightMemory.stage,
+          progress: inFlightMemory.progress,
+          message: inFlightMemory.message,
+          done: inFlightMemory.done,
+          success: inFlightMemory.success,
+          bytesReceived: inFlightMemory.bytesReceived,
+          totalBytes: inFlightMemory.totalBytes,
+          source: 'memory',
+        })
+      }
       return NextResponse.json({
         extensionId,
         stage: 'QUEUED',
@@ -89,15 +140,17 @@ export async function GET(req: NextRequest) {
         source: 'fallback',
       })
     }
-    if (job?.status === 'COMPLETED' || analysis?.status === 'COMPLETED') {
+    if (inFlightMemory) {
       return NextResponse.json({
         extensionId,
-        stage: 'COMPLETED',
-        progress: 100,
-        message: 'Analysis completed',
-        done: true,
-        success: true,
-        source: 'fallback',
+        stage: inFlightMemory.stage,
+        progress: inFlightMemory.progress,
+        message: inFlightMemory.message,
+        done: inFlightMemory.done,
+        success: inFlightMemory.success,
+        bytesReceived: inFlightMemory.bytesReceived,
+        totalBytes: inFlightMemory.totalBytes,
+        source: 'memory',
       })
     }
 
