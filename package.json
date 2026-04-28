@@ -45,6 +45,7 @@
     "adm-zip": "^0.5.16",
     "autoprefixer": "10.4.15",
     "axios": "^1.13.3",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "cmdk": "^0.2.0",
@@ -81,6 +82,7 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
     "@types/adm-zip": "^0.5.7",
+    "@types/bcryptjs": "^2.4.6",
     "@types/nodemailer": "^8.0.0",
     "@types/react-cytoscapejs": "^1.2.5",
     "@types/uuid": "^9.0.7",
