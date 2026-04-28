@@ -6,7 +6,7 @@ import GoogleSignInButton from "../google-auth-button";
 import GithubSignInButton from "../github-auth-button";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 export default function UserAuthForm() {
   const searchParams = useSearchParams();
@@ -17,11 +17,24 @@ export default function UserAuthForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+
+  useEffect(() => {
+    const registered = searchParams.get("registered");
+    const registerError = searchParams.get("register_error");
+    if (registered === "1") {
+      setInfo("Email verified. Your account is now active. Please sign in.");
+      setMode("login");
+    } else if (registerError) {
+      setError("Verification link is invalid or expired. Please request a new one.");
+    }
+  }, [searchParams]);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
     setError("");
+    setInfo("");
     setLoading(true);
     try {
       if (!email.trim() || !password) {
@@ -44,6 +57,13 @@ export default function UserAuthForm() {
           setError(typeof data?.error === "string" ? data.error : "Registration failed");
           return;
         }
+        setInfo(
+          typeof data?.message === "string"
+            ? data.message
+            : "Verification email sent. Please check your inbox and click the link to activate your account.",
+        );
+        setMode("login");
+        return;
       }
 
       const result = await signIn("credentials", {
@@ -105,6 +125,11 @@ export default function UserAuthForm() {
               disabled={loading}
             />
           </div>
+          {mode === "register" ? (
+            <p className="text-xs text-muted-foreground">
+              We will send a time-limited verification link to your email before account activation.
+            </p>
+          ) : null}
           <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
             <Input
@@ -117,9 +142,10 @@ export default function UserAuthForm() {
               disabled={loading}
             />
           </div>
+          {info ? <p className="text-sm text-emerald-600">{info}</p> : null}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button variant="outline" className="w-full" type="submit" disabled={loading}>
-            {loading ? "Processing..." : mode === "login" ? "Continue with Email" : "Create account"}
+            {loading ? "Processing..." : mode === "login" ? "Continue with Email" : "Send verification email"}
           </Button>
           <Button
             variant="ghost"
@@ -128,6 +154,7 @@ export default function UserAuthForm() {
             disabled={loading}
             onClick={() => {
               setError("");
+              setInfo("");
               setMode(mode === "login" ? "register" : "login");
             }}
           >
