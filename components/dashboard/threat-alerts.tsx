@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell } from "lucide-react"
+import { Copy, Bell, Download } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { useEffect, useState, useRef } from "react"
@@ -17,6 +17,7 @@ type ThreatAlert = {
   extensionName: string
   extensionId: string
   version: string
+  testingMode: boolean
   lastUpdate: string
   risk: string
   analysisStatus: string
@@ -108,6 +109,13 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
       </Button>
     </div>
   )
+}
+
+function buildDownloadUrl(extensionId: string, version: string, testingMode: boolean): string {
+  if (testingMode && version && version !== "N/A") {
+    return `https://cdn.oarmour.com/${encodeURIComponent(extensionId)}/${encodeURIComponent(version)}.zip`
+  }
+  return `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=131.0.0.0&acceptformat=crx2,crx3&x=id%3D${encodeURIComponent(extensionId)}%26uc`
 }
 
 function makeColumns(
@@ -206,7 +214,23 @@ function makeColumns(
     {
       id: "operation",
       header: "Operation",
-      cell: ({ row }) => <OperationCell extensionId={row.original.extensionId} />,
+      cell: ({ row }) => {
+        const downloadUrl = buildDownloadUrl(
+          row.original.extensionId,
+          row.original.version,
+          row.original.testingMode,
+        )
+        return (
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" title="Download extension package">
+              <a href={downloadUrl} target="_blank" rel="noopener noreferrer" aria-label="Download extension package">
+                <Download className="h-4 w-4" />
+              </a>
+            </Button>
+            <OperationCell extensionId={row.original.extensionId} />
+          </div>
+        )
+      },
     },
   ]
 }
@@ -258,6 +282,7 @@ export function ThreatAlerts() {
             extensionName: ext.name,
             extensionId: ext.storeId,
             version: ext.version || 'N/A',
+            testingMode: ext.testingMode,
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus
