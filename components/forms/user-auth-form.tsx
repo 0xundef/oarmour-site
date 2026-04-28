@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import GoogleSignInButton from "../google-auth-button";
-import GithubSignInButton from "../github-auth-button";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -162,8 +161,6 @@ export default function UserAuthForm() {
           </Button>
         </form>
 
-        <GithubSignInButton />
-        
         <Button variant="outline" className="w-full">
           Skip for now
         </Button>
