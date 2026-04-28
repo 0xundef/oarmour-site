@@ -493,27 +493,26 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             updatedAt: new Date()
         }
     });
-    if (isFirstSeenAnalysis || newlyAddedApexDomains.length > 0) {
-        await prisma.globalExtension.update({
-            where: { id: dbId },
-            data: {
-                riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
-            },
-        });
-    }
-    if (hasMaliciousDomain && (isFirstSeenAnalysis || newlyAddedApexDomains.length > 0)) {
+    await prisma.globalExtension.update({
+        where: { id: dbId },
+        data: {
+            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+        },
+    });
+    {
         const ext = await prisma.globalExtension.findUnique({
             where: { id: dbId },
             select: { name: true, storeId: true },
         })
+        const riskLevel = hasMaliciousDomain ? 'HIGH' : 'SAFE'
         const maliciousDomainsList = topDomainSignals
             .filter((d) => d.isMalicious)
             .map((d) => d.domain)
-        const summary = `New malicious domains found during the latest scan.`
+        const summary = `Analysis completed with risk level: ${riskLevel}.`
         triggerMaliciousAlertNotifications(
             extensionId,
             ext?.name || extensionId,
-            'HIGH',
+            riskLevel,
             summary,
             maliciousDomainsList,
         ).catch((e) => console.error('[analysis] Failed to trigger notifications:', e))
