@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  logging: {
+    incomingRequests: false,
+  },
   images: {
     remotePatterns: [
       {

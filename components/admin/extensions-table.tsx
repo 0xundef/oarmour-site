@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Play, Trash2 } from "lucide-react";
+import { Bell, Play, Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -122,6 +122,43 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
+  const notifyMaliciousSubscribers = (ext: ExtRow) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/admin/extensions/notify-malicious", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: ext.id, storeId: ext.storeId }),
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message =
+            typeof payload?.error === "string" ? payload.error : "Failed to send malicious alert emails";
+          throw new Error(message);
+        }
+        const reason = typeof payload?.result?.reason === "string" ? payload.result.reason : "";
+        const sent = typeof payload?.result?.sent === "number" ? payload.result.sent : 0;
+        const attempted = typeof payload?.result?.attempted === "number" ? payload.result.attempted : 0;
+        if (reason === "degraded") {
+          toast({
+            variant: "destructive",
+            description: "Notification subscription is unavailable in this environment (degraded mode).",
+          });
+          return;
+        }
+        toast({
+          description:
+            attempted > 0
+              ? `Malicious alert email sent to ${sent}/${attempted} subscribed user(s).`
+              : "No subscribed users found for this extension.",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to send malicious alert emails";
+        toast({ variant: "destructive", description: message });
+      }
+    });
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -169,6 +206,16 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                     title="Run immediate check now"
                   >
                     <Play className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={pending}
+                    onClick={() => notifyMaliciousSubscribers(ext)}
+                    aria-label="Notify subscribed users"
+                    title="Notify subscribed users (malicious alert)"
+                  >
+                    <Bell className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     variant="destructive"

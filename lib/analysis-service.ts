@@ -6,6 +6,8 @@ import os from 'os';
 import { getDomain } from 'tldts';
 import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
+import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
+
 
 const nowIso = () => new Date().toISOString()
 
@@ -498,6 +500,23 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
             },
         });
+    }
+    if (hasMaliciousDomain && (isFirstSeenAnalysis || newlyAddedApexDomains.length > 0)) {
+        const ext = await prisma.globalExtension.findUnique({
+            where: { id: dbId },
+            select: { name: true, storeId: true },
+        })
+        const maliciousDomainsList = topDomainSignals
+            .filter((d) => d.isMalicious)
+            .map((d) => d.domain)
+        const summary = `New malicious domains found during the latest scan.`
+        triggerMaliciousAlertNotifications(
+            extensionId,
+            ext?.name || extensionId,
+            'HIGH',
+            summary,
+            maliciousDomainsList,
+        ).catch((e) => console.error('[analysis] Failed to trigger notifications:', e))
     }
     setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
     logInfo('[analysis] runLookupFromSource:completed', {

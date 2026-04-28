@@ -43,27 +43,69 @@ function getAgeDaysFromCreateTime(createTime: string | null | undefined): number
 
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
+  const [subscribed, setSubscribed] = useState(false)
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(extensionId)
-    toast({ description: "Extension ID copied to clipboard" })
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(extensionId)
+      toast({ description: "Extension ID copied to clipboard" })
+    } catch {
+      toast({
+        variant: "destructive",
+        description: "Copy failed. Please allow clipboard access.",
+      })
+    }
   }
 
-  const handleSubscribe = () => {
-    toast({ description: "Subscribed to alert events" })
+  const handleSubscribe = async () => {
+    try {
+      const res = await fetch('/api/notifications/subscribe', {
+        method: subscribed ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extensionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast({ description: data.error || 'Failed to update subscription', variant: 'destructive' })
+        return
+      }
+      if (data.degraded) {
+        toast({
+          description: 'Notification subscription unavailable (degraded mode).',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (typeof data.subscribed === 'boolean') {
+        setSubscribed(data.subscribed)
+        toast({ description: data.subscribed ? 'Subscribed to alert events' : 'Unsubscribed from alerts' })
+        return
+      }
+      if (typeof data.unsubscribed === 'boolean') {
+        setSubscribed(!data.unsubscribed)
+        toast({ description: data.unsubscribed ? 'Unsubscribed from alerts' : 'Subscribed to alert events' })
+        return
+      }
+      toast({ description: 'Failed to update subscription', variant: 'destructive' })
+    } catch {
+      toast({ description: 'Failed to update subscription', variant: 'destructive' })
+    }
   }
-
-  // analyze removed
 
   return (
     <div className="flex items-center gap-2">
       <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy Extension ID">
         <Copy className="h-4 w-4" />
       </Button>
-      <Button variant="ghost" size="icon" onClick={handleSubscribe} title="Subscribe Alert Event">
+      <Button
+        variant={subscribed ? 'default' : 'ghost'}
+        size="icon"
+        onClick={handleSubscribe}
+        title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe Alert Event'}
+        className={subscribed ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
+      >
         <Bell className="h-4 w-4" />
       </Button>
-      {/* Analyze button removed */}
     </div>
   )
 }

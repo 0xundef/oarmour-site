@@ -39,6 +39,7 @@ model User {
   apiKeys       ApiKey[]
   subscriptions AssetSubscription[]
   submissions   Submission[]
+  notificationSubscriptions NotificationSubscription[]
 
   // Stripe Subscription
   stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
@@ -160,6 +161,7 @@ model GlobalExtension {
   // Relations
   subscriptions AssetSubscription[]
   analysisResults ExtensionAnalysisResult[]
+  notificationSubscriptions NotificationSubscription[]
 }
 
 // Extension Analysis Results
@@ -253,6 +255,18 @@ model DomainEnrichment {
   createdDate DateTime?
   expiresDate DateTime?
   fetchedAt DateTime @default(now())
+}
+
+model NotificationSubscription {
+  id          String   @id @default(uuid())
+  userId      String
+  extensionId String
+  createdAt   DateTime @default(now())
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, extensionId])
 }
 
 model MonitorRun {
