@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token")?.trim();
-  const redirectUrl = new URL("/signin", req.url);
+  const redirectUrl = new URL("/signin", buildBaseUrl(req));
   if (!token) {
     redirectUrl.searchParams.set("register_error", "missing_token");
     return NextResponse.redirect(redirectUrl);
