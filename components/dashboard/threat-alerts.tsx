@@ -4,12 +4,14 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell, Download } from "lucide-react"
+import { Copy, Bell, Download, Maximize2, Minimize2, Link2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useState, useRef } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import Link from "next/link"
 
 type ThreatAlert = {
@@ -26,6 +28,12 @@ type ThreatAlert = {
 type LiveAnalyzeStatus = {
   stage: string
   progress: number
+}
+
+type AiTestingRecordingStep = {
+  time: string
+  thinking: string
+  image: string
 }
 
 function isAbortError(e: unknown): boolean {
@@ -236,6 +244,7 @@ function makeColumns(
 }
 
 export function ThreatAlerts() {
+  const { toast } = useToast()
   const [data, setData] = useState<ThreatAlert[]>([])
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
   const [loading, setLoading] = useState(true)
@@ -269,6 +278,11 @@ export function ThreatAlerts() {
     }
   } | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
+  const [aiDetailOpen, setAiDetailOpen] = useState(false)
+  const [aiDetailFullscreen, setAiDetailFullscreen] = useState(false)
+  const [aiDetailLoading, setAiDetailLoading] = useState(false)
+  const [aiDetailError, setAiDetailError] = useState("")
+  const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -435,6 +449,48 @@ export function ThreatAlerts() {
     }
   }, [details, open])
 
+  useEffect(() => {
+    if (!aiDetailOpen || !selected?.extensionId) return
+    const loadAiDetail = async () => {
+      setAiDetailLoading(true)
+      setAiDetailError("")
+      try {
+        const url = `/ai_testing/${encodeURIComponent(selected.extensionId)}/recordings.json`
+        const res = await fetch(url, { cache: "no-store" })
+        if (!res.ok) {
+          setAiDetailRecords([])
+          setAiDetailError("No AI testing record found for this extension.")
+          return
+        }
+        const json: unknown = await res.json()
+        if (!Array.isArray(json)) {
+          setAiDetailRecords([])
+          setAiDetailError("AI testing record format is invalid.")
+          return
+        }
+        const parsed = json.flatMap((item): AiTestingRecordingStep[] => {
+          if (!item || typeof item !== "object") return []
+          const obj = item as Record<string, unknown>
+          const time = typeof obj.time === "string" ? obj.time : ""
+          const thinking = typeof obj.thinking === "string" ? obj.thinking : ""
+          const image = typeof obj.image === "string" ? obj.image : ""
+          if (!time || !thinking || !image) return []
+          return [{ time, thinking, image }]
+        })
+        setAiDetailRecords(parsed)
+        if (parsed.length === 0) {
+          setAiDetailError("AI testing record is empty.")
+        }
+      } catch {
+        setAiDetailRecords([])
+        setAiDetailError("Failed to load AI testing record.")
+      } finally {
+        setAiDetailLoading(false)
+      }
+    }
+    loadAiDetail()
+  }, [aiDetailOpen, selected?.extensionId])
+
   const prioritizedDomains = Array.from(
     new Set([
       ...((details?.topDomainSignals || []).map((s) => s.domain)),
@@ -451,6 +507,29 @@ export function ThreatAlerts() {
       if (displayAgeDays === null || displayAgeDays === undefined) return []
       return [{ domain, signal, displayAgeDays }]
     })
+
+  const handleCopyAiShareLink = async () => {
+    if (!selected?.extensionId) return
+    try {
+      const shareUrl = `${window.location.origin}/ai-testing/${encodeURIComponent(selected.extensionId)}`
+      await navigator.clipboard.writeText(shareUrl)
+      toast({ description: "AI testing share link copied" })
+    } catch {
+      toast({
+        variant: "destructive",
+        description: "Failed to copy share link. Please allow clipboard access.",
+      })
+    }
+  }
+
+  const maliciousSignalCount =
+    details?.topDomainSignals?.filter((signal) => signal.isMalicious === true).length ?? 0
+  const aiVerdict =
+    selected?.risk === "HIGH" || selected?.risk === "CRITICAL"
+      ? "Potentially malicious behavior detected"
+      : selected?.risk === "CAUTION"
+        ? "Suspicious indicators found"
+        : "No high-risk indicators detected"
 
   if (loading && data.length === 0) {
       return <div className="p-4 text-center text-muted-foreground">Loading extensions...</div>
@@ -528,6 +607,31 @@ export function ThreatAlerts() {
                 </div>
               </div>
               <div className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">AI Testing</div>
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700"
+                    type="button"
+                    onClick={() => setAiDetailOpen(true)}
+                  >
+                    See detail
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {details === null ? (
+                    <div className="text-muted-foreground">Loading...</div>
+                  ) : (
+                    <>
+                      <div className="mb-1">Files scanned: {details.filesScanned}</div>
+                      <div className="mb-1">URLs detected: {(details.urls || []).length}</div>
+                      <div className="mb-1">Malicious domain signals: {maliciousSignalCount}</div>
+                      <div className="mb-1">Verdict: {aiVerdict}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="pt-4">
                 <div className="text-sm font-medium">Manifest Permissions</div>
                 <div className="text-xs text-muted-foreground">
                   {details === null ? (
@@ -548,6 +652,54 @@ export function ThreatAlerts() {
             </div>
           </SheetContent>
         </Sheet>
+        <Dialog
+          open={aiDetailOpen}
+          onOpenChange={(nextOpen) => {
+            setAiDetailOpen(nextOpen)
+            if (!nextOpen) setAiDetailFullscreen(false)
+          }}
+        >
+          <DialogContent
+            className={`overflow-hidden ${
+              aiDetailFullscreen ? "h-[92vh] w-[96vw] max-w-[96vw]" : "max-h-[80vh] max-w-3xl"
+            }`}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              type="button"
+              className="absolute right-20 top-3 h-8 w-8"
+              title="Copy share link"
+              onClick={handleCopyAiShareLink}
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              type="button"
+              className="absolute right-12 top-3 h-8 w-8"
+              title={aiDetailFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              onClick={() => setAiDetailFullscreen((v) => !v)}
+            >
+              {aiDetailFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+            <DialogHeader>
+              <DialogTitle>AI Testing Procedure</DialogTitle>
+              <DialogDescription>
+                Step-by-step automated testing record for {selected?.extensionName || "the selected extension"}.
+              </DialogDescription>
+            </DialogHeader>
+            <div className={`${aiDetailFullscreen ? "max-h-[78vh]" : "max-h-[64vh]"} overflow-y-auto pr-1`}>
+              <AiTestingProcedureContent
+                extensionId={selected?.extensionId || ""}
+                records={aiDetailRecords}
+                loading={aiDetailLoading}
+                error={aiDetailError}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )
