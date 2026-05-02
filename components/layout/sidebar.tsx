@@ -40,7 +40,7 @@ export default async function Sidebar() {
   finalNavItems.splice(1, 0, {
     title: "Subscribed",
     href: "/dashboard/extension?view=subscribed",
-    icon: "webExtension",
+    icon: "star",
     label: "Subscribed",
     tree: true,
     items:
