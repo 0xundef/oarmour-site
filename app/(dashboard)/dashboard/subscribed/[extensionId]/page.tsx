@@ -1,8 +1,10 @@
+import { SubscribedDetectionWorkbench } from "@/components/dashboard/subscribed-detection-workbench";
+import { getExtensions } from "@/app/actions/get-extensions";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export default async function SubscribedExtensionPage({
-  params: _params,
+  params,
 }: {
   params: Promise<{ extensionId: string }>;
 }) {
@@ -11,7 +13,13 @@ export default async function SubscribedExtensionPage({
     redirect("/signin");
   }
 
+  const { extensionId } = await params;
+  const all = await getExtensions();
+  const matched = all.find((item) => item.storeId === extensionId);
+
   return (
-    <div className="flex-1 p-4 md:px-8 md:pb-8 md:pt-4" />
+    <SubscribedDetectionWorkbench
+      extensionName={matched?.name || extensionId}
+    />
   );
 }
