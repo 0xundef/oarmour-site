@@ -4,15 +4,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell, Download, Maximize2, Minimize2, Link2 } from "lucide-react"
+import { Copy, Bell, Download, Maximize2, Minimize2, Link2, ShieldCheck, ShieldAlert, ScanSearch, FolderKanban } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import Link from "next/link"
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 
 type ThreatAlert = {
   id: string
@@ -53,6 +54,8 @@ function getAgeDaysFromCreateTime(createTime: string | null | undefined): number
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
+  const [checkingStatus, setCheckingStatus] = useState(true)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const handleCopy = async () => {
     try {
@@ -67,6 +70,7 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
   }
 
   const handleSubscribe = async () => {
+    setUpdatingStatus(true)
     try {
       const res = await fetch('/api/notifications/subscribe', {
         method: subscribed ? 'DELETE' : 'POST',
@@ -98,8 +102,40 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
       toast({ description: 'Failed to update subscription', variant: 'destructive' })
     } catch {
       toast({ description: 'Failed to update subscription', variant: 'destructive' })
+    } finally {
+      setUpdatingStatus(false)
     }
   }
+
+  useEffect(() => {
+    let mounted = true
+    const loadSubscriptionStatus = async () => {
+      setCheckingStatus(true)
+      try {
+        const res = await fetch(`/api/notifications/subscribe?extensionId=${encodeURIComponent(extensionId)}`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) return
+        const data = await res.json().catch(() => ({}))
+        if (!mounted) return
+        if (typeof data.subscribed === 'boolean') {
+          setSubscribed(data.subscribed)
+        }
+      } catch {
+        // Keep default state if status check fails.
+      } finally {
+        if (mounted) {
+          setCheckingStatus(false)
+        }
+      }
+    }
+    loadSubscriptionStatus()
+    return () => {
+      mounted = false
+    }
+  }, [extensionId])
+
+  const subscriptionLabel = checkingStatus ? 'Checking...' : subscribed ? 'Subscribed' : 'Not subscribed'
 
   return (
     <div className="flex items-center gap-2">
@@ -110,11 +146,20 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         variant={subscribed ? 'default' : 'ghost'}
         size="icon"
         onClick={handleSubscribe}
-        title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe Alert Event'}
+        title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe to alert events'}
         className={subscribed ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
+        aria-label={subscribed ? 'Subscribed to alert events' : 'Not subscribed to alert events'}
+        aria-pressed={subscribed}
+        disabled={checkingStatus || updatingStatus}
       >
         <Bell className="h-4 w-4" />
       </Button>
+      <Badge
+        variant={subscribed ? 'default' : 'secondary'}
+        className={subscribed ? 'bg-green-600 hover:bg-green-600 text-white' : ''}
+      >
+        {subscriptionLabel}
+      </Badge>
     </div>
   )
 }
@@ -286,6 +331,76 @@ export function ThreatAlerts() {
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
+
+  const isCompletedStatus = (status: string) => status === "COMPLETED"
+  const isInProgressStatus = (status: string) =>
+    status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
+  const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
+
+  const overview = useMemo(() => {
+    const total = data.length
+    const completedScans = data.filter((row) => isCompletedStatus(row.analysisStatus)).length
+    const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
+    const findings = data.filter((row) => row.risk !== "SAFE" && row.risk !== "UNKNOWN").length
+    const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
+    const inProgress = data.filter((row) => isInProgressStatus(row.analysisStatus)).length
+    const awaitingConfirmation = data.filter((row) => isHighOrCritical(row.risk) && isCompletedStatus(row.analysisStatus)).length
+    const confirmedMalicious = awaitingConfirmation
+    const awaitingFeedback = Math.max(0, confirmedMalicious - remediated)
+    const safeConfirmed = remediated
+
+    const severityCount = {
+      safe: 0,
+      low: 0,
+      medium: 0,
+      high: 0,
+      critical: 0,
+    }
+
+    for (const row of data) {
+      if (row.risk === "SAFE") severityCount.safe += 1
+      else if (row.risk === "CAUTION") severityCount.medium += 1
+      else if (row.risk === "HIGH") severityCount.high += 1
+      else if (row.risk === "CRITICAL") severityCount.critical += 1
+      else severityCount.low += 1
+    }
+
+    const severityData = [
+      { name: "Safe", value: severityCount.safe, color: "#16a34a" },
+      { name: "Low", value: severityCount.low, color: "#94a3b8" },
+      { name: "Medium", value: severityCount.medium, color: "#eab308" },
+      { name: "High", value: severityCount.high, color: "#f97316" },
+      { name: "Critical", value: severityCount.critical, color: "#dc2626" },
+    ]
+
+    return {
+      total,
+      completedScans,
+      findings,
+      highCritical,
+      remediated,
+      inProgress,
+      awaitingConfirmation,
+      confirmedMalicious,
+      awaitingFeedback,
+      safeConfirmed,
+      severityData,
+    }
+  }, [data])
+
+  const processingRows = useMemo(() => {
+    const total = Math.max(1, overview.total)
+    return [
+      { key: "in-progress", label: "Detection In Progress", count: overview.inProgress },
+      { key: "awaiting-confirmation", label: "Awaiting Confirmation", count: overview.awaitingConfirmation },
+      { key: "confirmed-malicious", label: "Confirmed Malicious", count: overview.confirmedMalicious },
+      { key: "awaiting-feedback", label: "Awaiting Feedback", count: overview.awaitingFeedback },
+      { key: "safe-confirmed", label: "Safe / Closed", count: overview.safeConfirmed },
+    ].map((row) => ({
+      ...row,
+      percent: Math.round((row.count / total) * 100),
+    }))
+  }, [overview])
 
   const fetchData = async () => {
     try {
@@ -538,6 +653,140 @@ export function ThreatAlerts() {
   return (
     <Card className="h-full border-none shadow-none">
       <CardContent className="p-0">
+        <div className="mb-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Projects Submitted</div>
+                  <div className="text-2xl font-semibold">{overview.total}</div>
+                </div>
+                <FolderKanban className="h-4 w-4 text-muted-foreground" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Scans Completed</div>
+                  <div className="text-2xl font-semibold">{overview.completedScans}</div>
+                </div>
+                <ScanSearch className="h-4 w-4 text-muted-foreground" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Findings</div>
+                  <div className="text-2xl font-semibold">{overview.findings}</div>
+                </div>
+                <ShieldAlert className="h-4 w-4 text-orange-500" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Critical + High</div>
+                  <div className="text-2xl font-semibold text-red-600">{overview.highCritical}</div>
+                </div>
+                <ShieldAlert className="h-4 w-4 text-red-500" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">Remediated / Safe</div>
+                  <div className="text-2xl font-semibold text-green-600">{overview.remediated}</div>
+                </div>
+                <ShieldCheck className="h-4 w-4 text-green-600" />
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-5">
+            <Card className="xl:col-span-3">
+              <CardContent className="p-4">
+                <div className="mb-3 text-sm font-medium">Severity Distribution</div>
+                <div className="grid gap-2 md:grid-cols-[320px_1fr]">
+                  <div className="h-[220px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={overview.severityData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={56}
+                          outerRadius={84}
+                          strokeWidth={3}
+                          stroke="#ffffff"
+                        >
+                          {overview.severityData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number, name: string) => [`${value}`, name]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="grid content-center gap-2 text-sm">
+                    {overview.severityData.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span>{item.name}</span>
+                        </div>
+                        <span className="font-medium">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="xl:col-span-2">
+              <CardContent className="p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">Processing Status</div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toast({ description: "Confirmation workflow triggered for selected findings." })}
+                    >
+                      Confirm Findings
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toast({ description: "Feedback workflow opened for security operations team." })}
+                    >
+                      Provide Feedback
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {processingRows.map((row) => (
+                    <div key={row.key} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{row.label}</span>
+                        <span className="text-muted-foreground">{row.percent}% · {row.count}</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-slate-600"
+                          style={{ width: `${Math.min(100, Math.max(0, row.percent))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
         <DataTable
           data={data}
           columns={makeColumns((row) => {
