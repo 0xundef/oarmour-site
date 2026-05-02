@@ -616,7 +616,7 @@ export function ThreatAlerts() {
             <Card>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs text-muted-foreground">Projects Submitted</div>
+                  <div className="text-xs text-muted-foreground">Extensions Submitted</div>
                   <div className="text-2xl font-semibold">{overview.total}</div>
                 </div>
                 <FolderKanban className="h-4 w-4 text-muted-foreground" />
