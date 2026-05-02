@@ -28,6 +28,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
       {items.map((item, index) => {
         const Icon = Icons[item.icon || "arrowRight"];
         const hasChildren = !!item.items?.length;
+        const treeMode = !!item.tree;
         const childIsActive = !!item.items?.some((child) => child.href === currentUrl);
         const itemIsActive = item.href === currentUrl || (!item.href && childIsActive) || (item.href === path && !item.href?.includes("?"));
         return (
@@ -103,7 +104,12 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
               </span>
             )}
             {!isMinimized && hasChildren && (
-              <div className="space-y-1">
+              <div
+                className={cn(
+                  "space-y-1",
+                  treeMode && "ml-6 border-l border-border/80 pl-3"
+                )}
+              >
                 {item.items?.map((child) => {
                   const ChildIcon = Icons[child.icon || "arrowRight"];
                   return child.href ? (
@@ -117,11 +123,12 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                       <span
                         className={cn(
                           "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                          treeMode && "px-2 py-1.5 text-[13px]",
                           child.href === currentUrl ? "bg-accent" : "transparent",
                           child.disabled && "cursor-not-allowed opacity-80"
                         )}
                       >
-                        <ChildIcon className="mr-2 h-4 w-4" />
+                        <ChildIcon className={cn("mr-2 h-4 w-4", treeMode && "h-3.5 w-3.5 text-emerald-500")} />
                         {child.title}
                       </span>
                     </Link>
