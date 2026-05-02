@@ -42,7 +42,11 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
             {item.href ? (
               <Link
                 href={item.disabled ? "/" : item.href}
-                onClick={() => {
+                onClick={(e) => {
+                  if (item.disabled) {
+                    e.preventDefault();
+                    return;
+                  }
                   if (setOpen) setOpen(false);
                 }}
               >
@@ -50,7 +54,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                   className={cn(
                     "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                     itemIsActive ? "bg-accent" : "transparent",
-                    item.disabled && "cursor-not-allowed opacity-80",
+                    item.disabled && "opacity-80",
                     isMinimized && "justify-center px-2"
                   )}
                   title={isMinimized ? item.title : undefined}
@@ -72,7 +76,11 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                       <Link
                         key={child.href}
                         href={child.disabled ? "/" : child.href}
-                        onClick={() => {
+                        onClick={(e) => {
+                          if (child.disabled) {
+                            e.preventDefault();
+                            return;
+                          }
                           if (setOpen) setOpen(false);
                         }}
                       >
@@ -80,7 +88,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                           className={cn(
                             "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground justify-center px-2",
                             child.href === currentUrl ? "bg-accent" : "transparent",
-                            child.disabled && "cursor-not-allowed opacity-80"
+                            child.disabled && "opacity-80"
                           )}
                           title={child.title}
                         >
@@ -116,7 +124,11 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                     <Link
                       key={child.href}
                       href={child.disabled ? "/" : child.href}
-                      onClick={() => {
+                      onClick={(e) => {
+                        if (child.disabled) {
+                          e.preventDefault();
+                          return;
+                        }
                         if (setOpen) setOpen(false);
                       }}
                     >
@@ -125,7 +137,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                           "group flex items-center rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
                           treeMode && "px-2 py-1.5 text-[13px]",
                           child.href === currentUrl ? "bg-accent" : "transparent",
-                          child.disabled && "cursor-not-allowed opacity-80"
+                          child.disabled && "opacity-80"
                         )}
                       >
                         <ChildIcon className={cn("mr-2 h-4 w-4", treeMode && "h-3.5 w-3.5 text-emerald-500")} />

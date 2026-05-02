@@ -42,6 +42,7 @@ export default async function Sidebar() {
     href: "/dashboard/subscribed",
     icon: "star",
     label: "Subscribed",
+    disabled: true,
     tree: true,
     items:
       subscribedChildren.length > 0
