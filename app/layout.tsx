@@ -77,7 +77,7 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={`${inter.className}`}>
         <PHProvider>
           <Providers session={session}>
