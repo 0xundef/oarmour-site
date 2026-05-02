@@ -54,8 +54,6 @@ function getAgeDaysFromCreateTime(createTime: string | null | undefined): number
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
-  const [checkingStatus, setCheckingStatus] = useState(true)
-  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const handleCopy = async () => {
     try {
@@ -70,7 +68,6 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
   }
 
   const handleSubscribe = async () => {
-    setUpdatingStatus(true)
     try {
       const res = await fetch('/api/notifications/subscribe', {
         method: subscribed ? 'DELETE' : 'POST',
@@ -102,40 +99,8 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
       toast({ description: 'Failed to update subscription', variant: 'destructive' })
     } catch {
       toast({ description: 'Failed to update subscription', variant: 'destructive' })
-    } finally {
-      setUpdatingStatus(false)
     }
   }
-
-  useEffect(() => {
-    let mounted = true
-    const loadSubscriptionStatus = async () => {
-      setCheckingStatus(true)
-      try {
-        const res = await fetch(`/api/notifications/subscribe?extensionId=${encodeURIComponent(extensionId)}`, {
-          cache: 'no-store',
-        })
-        if (!res.ok) return
-        const data = await res.json().catch(() => ({}))
-        if (!mounted) return
-        if (typeof data.subscribed === 'boolean') {
-          setSubscribed(data.subscribed)
-        }
-      } catch {
-        // Keep default state if status check fails.
-      } finally {
-        if (mounted) {
-          setCheckingStatus(false)
-        }
-      }
-    }
-    loadSubscriptionStatus()
-    return () => {
-      mounted = false
-    }
-  }, [extensionId])
-
-  const subscriptionLabel = checkingStatus ? 'Checking...' : subscribed ? 'Subscribed' : 'Not subscribed'
 
   return (
     <div className="flex items-center gap-2">
@@ -150,16 +115,9 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         className={subscribed ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
         aria-label={subscribed ? 'Subscribed to alert events' : 'Not subscribed to alert events'}
         aria-pressed={subscribed}
-        disabled={checkingStatus || updatingStatus}
       >
         <Bell className="h-4 w-4" />
       </Button>
-      <Badge
-        variant={subscribed ? 'default' : 'secondary'}
-        className={subscribed ? 'bg-green-600 hover:bg-green-600 text-white' : ''}
-      >
-        {subscriptionLabel}
-      </Badge>
     </div>
   )
 }
