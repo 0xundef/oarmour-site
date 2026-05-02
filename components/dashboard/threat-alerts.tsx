@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
+import { useSearchParams } from "next/navigation"
 
 type ThreatAlert = {
   id: string
@@ -248,6 +249,7 @@ function makeColumns(
 
 export function ThreatAlerts() {
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [data, setData] = useState<ThreatAlert[]>([])
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
   const [loading, setLoading] = useState(true)
@@ -289,6 +291,7 @@ export function ThreatAlerts() {
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
+  const autoOpenedExtensionIdRef = useRef<string | null>(null)
 
   const isCompletedStatus = (status: string) => status === "COMPLETED"
   const isInProgressStatus = (status: string) =>
@@ -388,6 +391,18 @@ export function ThreatAlerts() {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const wantedId = (searchParams.get("extensionId") || "").trim()
+    if (!wantedId || data.length === 0) return
+    if (autoOpenedExtensionIdRef.current === wantedId) return
+    const matched = data.find((row) => row.extensionId === wantedId)
+    if (!matched) return
+    autoOpenedExtensionIdRef.current = wantedId
+    setDetails(null)
+    setSelected(matched)
+    setOpen(true)
+  }, [searchParams, data])
 
   useEffect(() => {
     if (data.length === 0) return

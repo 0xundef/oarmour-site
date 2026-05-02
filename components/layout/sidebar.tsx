@@ -39,7 +39,7 @@ export default async function Sidebar() {
 
   finalNavItems.splice(1, 0, {
     title: "Subscribed",
-    href: "/dashboard/extension?view=subscribed",
+    href: "/dashboard/subscribed",
     icon: "star",
     label: "Subscribed",
     tree: true,
@@ -47,13 +47,13 @@ export default async function Sidebar() {
       subscribedChildren.length > 0
         ? subscribedChildren.map((item) => ({
             title: item.extension.name || item.extension.storeId,
-            href: `/dashboard/extension?search=${encodeURIComponent(item.extension.storeId)}`,
+            href: `/dashboard/subscribed/${encodeURIComponent(item.extension.storeId)}`,
             icon: "check",
           }))
         : [
             {
               title: "No subscriptions",
-              href: "/dashboard/extension",
+              href: "/dashboard/subscribed",
               icon: "arrowRight",
               disabled: true,
             },
