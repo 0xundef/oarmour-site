@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Icons } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { NavItem } from "@/types";
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, SetStateAction, useState } from "react";
 
 interface DashboardNavProps {
   items: NavItem[];
@@ -18,6 +18,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
   const path = usePathname();
   const searchParams = useSearchParams();
   const currentUrl = `${path}${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   if (!items?.length) {
     return null;
@@ -30,7 +31,10 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
         const hasChildren = !!item.items?.length;
         const treeMode = !!item.tree;
         const childIsActive = !!item.items?.some((child) => child.href === currentUrl);
+        const groupKey = item.href || item.title;
+        const isCollapsed = treeMode && !childIsActive ? collapsedGroups[groupKey] ?? false : false;
         const itemIsActive = item.href === currentUrl || (!item.href && childIsActive) || (item.href === path && !item.href?.includes("?"));
+
         return (
           <div
             key={index}
@@ -39,7 +43,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
               index > 0 && "mt-2 border-t pt-3"
             )}
           >
-            {item.href ? (
+            {item.href && !(treeMode && hasChildren) ? (
               <Link
                 href={item.disabled ? "/" : item.href}
                 onClick={(e) => {
@@ -65,9 +69,26 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
               </Link>
             ) : hasChildren ? (
               !isMinimized ? (
-                <div className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  {item.title}
-                </div>
+                treeMode ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center rounded-md px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => {
+                      setCollapsedGroups((prev) => ({
+                        ...prev,
+                        [groupKey]: !(prev[groupKey] ?? false),
+                      }));
+                    }}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <Icon className="mr-2 h-4 w-4" />
+                    <span>{item.title}</span>
+                  </button>
+                ) : (
+                  <div className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {item.title}
+                  </div>
+                )
               ) : (
                 <div className="space-y-1">
                   {item.items?.map((child) => {
@@ -111,7 +132,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                 {!isMinimized && <span>{item.title}</span>}
               </span>
             )}
-            {!isMinimized && hasChildren && (
+            {!isMinimized && hasChildren && !isCollapsed && (
               <div
                 className={cn(
                   "space-y-1",
