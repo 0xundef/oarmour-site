@@ -72,7 +72,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                 treeMode ? (
                   <button
                     type="button"
-                    className="flex w-full items-center rounded-md px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-medium hover:bg-accent hover:text-accent-foreground"
                     onClick={() => {
                       setCollapsedGroups((prev) => ({
                         ...prev,
