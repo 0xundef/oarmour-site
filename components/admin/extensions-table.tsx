@@ -6,7 +6,17 @@ import { useToast } from "@/components/ui/use-toast";
 import { useEffect, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Bell, Play, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Bell, Pencil, Play, Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -30,6 +40,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const [rows, setRows] = useState<ExtRow[]>(extensions);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   useEffect(() => {
     setRows(extensions);
@@ -67,6 +80,42 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         router.refresh();
       } catch {
         toast({ variant: "destructive", description: "Failed to update testing mode" });
+      }
+    });
+  };
+
+  const openEditModal = (ext: ExtRow) => {
+    setEditingId(ext.id);
+    setDraftName(ext.name);
+  };
+
+  const saveExtensionName = () => {
+    if (!editingExtension) return;
+    const name = draftName.trim();
+    if (!name) {
+      toast({ variant: "destructive", description: "Extension name is required" });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/admin/extensions/${editingExtension.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message = typeof payload?.error === "string" ? payload.error : "Failed to update extension";
+          throw new Error(message);
+        }
+        setRows((prev) => prev.map((r) => (r.id === editingExtension.id ? { ...r, name } : r)));
+        toast({ description: "Extension updated" });
+        setEditingId(null);
+        router.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update extension";
+        toast({ variant: "destructive", description: message });
       }
     });
   };
@@ -160,80 +209,154 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   };
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Store ID</TableHead>
-            <TableHead>Version</TableHead>
-            <TableHead>Testing Mode</TableHead>
-            <TableHead>Operation</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.length === 0 ? (
+    <>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={5} className="text-center">
-                No extensions found.
-              </TableCell>
+              <TableHead>Name</TableHead>
+              <TableHead>Version</TableHead>
+              <TableHead>Operation</TableHead>
             </TableRow>
-          ) : (
-            rows.map((ext) => (
-              <TableRow key={ext.id}>
-                <TableCell>{ext.name}</TableCell>
-                <TableCell className="font-mono text-xs">{ext.storeId}</TableCell>
-                <TableCell>{ext.version || "N/A"}</TableCell>
-                <TableCell>
-                  <Switch
-                    checked={!!ext.testingMode}
-                    onCheckedChange={(v) => toggleTestingMode(ext.id, v)}
-                    disabled={pending}
-                  />
-                </TableCell>
-                <TableCell className="flex items-center gap-3">
-                  <Switch
-                    checked={!!ext.isMonitored}
-                    onCheckedChange={(v) => toggleMonitor(ext.id, v)}
-                    disabled={pending}
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    disabled={pending}
-                    onClick={() => runImmediateCheck(ext.storeId, ext.version)}
-                    aria-label="Run immediate check"
-                    title="Run immediate check now"
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    disabled={pending}
-                    onClick={() => notifyMaliciousSubscribers(ext)}
-                    aria-label="Notify subscribed users"
-                    title="Notify subscribed users (malicious alert)"
-                  >
-                    <Bell className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="ml-2"
-                    disabled={pending}
-                    onClick={() => deleteExtension(ext.id)}
-                    aria-label="Delete extension"
-                    title="Delete extension"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center">
+                  No extensions found.
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            ) : (
+              rows.map((ext) => (
+                <TableRow key={ext.id}>
+                  <TableCell>{ext.name}</TableCell>
+                  <TableCell>{ext.version || "N/A"}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => openEditModal(ext)}
+                        aria-label="Edit extension"
+                        title="Edit extension"
+                      >
+                        <Pencil className="mr-2 h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => deleteExtension(ext.id)}
+                        aria-label="Delete extension"
+                        title="Delete extension"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog
+        open={!!editingExtension}
+        onOpenChange={(open) => {
+          if (!open) setEditingId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Extension</DialogTitle>
+            <DialogDescription>
+              Update the extension name and manage monitoring actions in one place.
+            </DialogDescription>
+          </DialogHeader>
+          {editingExtension ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="extension-name">Extension Name</Label>
+                <Input
+                  id="extension-name"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Store ID</Label>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">
+                  {editingExtension.storeId}
+                </div>
+              </div>
+              <div className="rounded-md border p-4">
+                <div className="mb-4">
+                  <h3 className="text-sm font-medium">Monitoring Controls</h3>
+                  <p className="text-sm text-muted-foreground">
+                    These controls were moved from the table into this modal.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">Monitoring</p>
+                      <p className="text-sm text-muted-foreground">Enable scheduled checks for this extension.</p>
+                    </div>
+                    <Switch
+                      checked={!!editingExtension.isMonitored}
+                      onCheckedChange={(v) => toggleMonitor(editingExtension.id, v)}
+                      disabled={pending}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-medium">Testing Mode</p>
+                      <p className="text-sm text-muted-foreground">Use CDN test packages for monitor checks.</p>
+                    </div>
+                    <Switch
+                      checked={!!editingExtension.testingMode}
+                      onCheckedChange={(v) => toggleTestingMode(editingExtension.id, v)}
+                      disabled={pending}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => runImmediateCheck(editingExtension.storeId, editingExtension.version)}
+                    >
+                      <Play className="mr-2 h-3.5 w-3.5" />
+                      Run Check
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => notifyMaliciousSubscribers(editingExtension)}
+                    >
+                      <Bell className="mr-2 h-3.5 w-3.5" />
+                      Notify Users
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingId(null)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button onClick={saveExtensionName} disabled={pending}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
