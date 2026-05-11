@@ -89,6 +89,13 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                     {item.title}
                   </div>
                 )
+              ) : treeMode ? (
+                <span
+                  className="group flex items-center justify-center rounded-md px-2 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                  title={item.title}
+                >
+                  <Icon className="h-4 w-4" />
+                </span>
               ) : (
                 <div className="space-y-1">
                   {item.items?.map((child) => {
