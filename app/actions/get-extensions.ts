@@ -51,3 +51,18 @@ export async function getExtensions(): Promise<ExtensionWithAnalysis[]> {
     return []
   }
 }
+
+export async function getDashboardMetrics() {
+  try {
+    const completedScanActions = await prisma.scanJob.count({
+      where: {
+        targetType: 'EXTENSION',
+        status: 'COMPLETED',
+      },
+    })
+
+    return { completedScanActions }
+  } catch {
+    return { completedScanActions: 0 }
+  }
+}

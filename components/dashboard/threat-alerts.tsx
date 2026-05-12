@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState, useRef } from "react"
-import { getExtensions } from "@/app/actions/get-extensions"
+import { getDashboardMetrics, getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import Link from "next/link"
@@ -253,6 +253,7 @@ export function ThreatAlerts() {
   const [data, setData] = useState<ThreatAlert[]>([])
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
   const [loading, setLoading] = useState(true)
+  const [completedScanActions, setCompletedScanActions] = useState(0)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -300,7 +301,7 @@ export function ThreatAlerts() {
 
   const overview = useMemo(() => {
     const total = data.length
-    const completedScans = data.filter((row) => isCompletedStatus(row.analysisStatus)).length
+    const completedScans = completedScanActions
     const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
     const findings = data.filter((row) => row.risk !== "SAFE" && row.risk !== "UNKNOWN").length
     const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
@@ -347,7 +348,7 @@ export function ThreatAlerts() {
       safeConfirmed,
       severityData,
     }
-  }, [data])
+  }, [completedScanActions, data])
 
   const processingRows = useMemo(() => {
     const total = Math.max(1, overview.total)
@@ -365,7 +366,10 @@ export function ThreatAlerts() {
 
   const fetchData = async () => {
     try {
-        const extensions = await getExtensions();
+        const [extensions, metrics] = await Promise.all([
+          getExtensions(),
+          getDashboardMetrics(),
+        ]);
         
         const formattedData: ThreatAlert[] = extensions.map(ext => ({
             id: ext.id,
@@ -379,6 +383,7 @@ export function ThreatAlerts() {
         }));
         
         setData(formattedData);
+        setCompletedScanActions(metrics.completedScanActions);
     } catch (error) {
         console.error("Failed to fetch extensions", error);
     } finally {
@@ -631,7 +636,7 @@ export function ThreatAlerts() {
             <Card>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs text-muted-foreground">Extensions Submitted</div>
+                  <div className="text-xs text-muted-foreground">Extension Managed</div>
                   <div className="text-2xl font-semibold">{overview.total}</div>
                 </div>
                 <FolderKanban className="h-4 w-4 text-muted-foreground" />
