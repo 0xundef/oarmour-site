@@ -1,17 +1,17 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import { downloadExtension } from './downloader';
 import { extractExtension } from './extractor';
 import { scanDirectory } from './scanner';
 import { AnalysisResult, AnalyzerOptions } from './types';
+import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
 
 export class ExtensionAnalyzer {
     private options: AnalyzerOptions;
 
     constructor(options: AnalyzerOptions = {}) {
         this.options = {
-            workDir: options.workDir || path.join(os.tmpdir(), 'chrome-extension-analyzer'),
+            workDir: options.workDir || getExtensionAnalyzerRoot(),
             cleanup: options.cleanup ?? true,
         };
     }

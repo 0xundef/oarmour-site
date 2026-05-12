@@ -1,11 +1,8 @@
 import 'server-only'
 import axios from 'axios'
-import os from 'os'
-import path from 'path'
 import { randomUUID } from 'crypto'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { downloadExtension } from '@/lib/extension-analyzer'
 import { enqueueExtensionLookupJob, processExtension } from '@/lib/analysis-service'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
@@ -16,7 +13,7 @@ type DbClient = PrismaClient | Prisma.TransactionClient
 
 export type MonitorExtensionsOnceResult = {
   checked: number
-  updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }>
+  updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }>
   /** Full sweep only: another instance holds the distributed lock. */
   skippedDueToConcurrentInstance?: boolean
 }
@@ -174,10 +171,10 @@ async function monitorExtensionsOnceWithDb(
           console.warn('Monitor: failed to update failed monitor run record.', updateError)
         }
       }
-      return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> }
+      return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> }
     }
   }
-  const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }> = []
+  const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> = []
   for (const ext of list) {
     try {
       if (options?.preferCdnNextVersion || ext.testingMode) {
@@ -200,8 +197,6 @@ async function monitorExtensionsOnceWithDb(
       const latest = await fetchStoreVersion(ext.storeId)
       if (!latest) continue
       if (cmpVersion(latest, ext.version) > 0) {
-        const out = path.join(os.tmpdir(), 'extension-monitor', ext.storeId, 'crx')
-        const crxPath = await downloadExtension(ext.storeId, out)
         try {
           await db.globalExtension.update({
             where: { id: ext.id },
@@ -211,7 +206,7 @@ async function monitorExtensionsOnceWithDb(
         } catch (e) {
           console.error('Failed to update DB for', ext.storeId, e)
         }
-        updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: latest, crxPath })
+        updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: latest })
       }
       succeededCount += 1
     } catch (e) {
@@ -276,7 +271,7 @@ export async function monitorExtensionsOnce(
       if (!rows[0]?.ok) {
         return {
           checked: 0,
-          updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }>,
+          updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }>,
           skippedDueToConcurrentInstance: true,
         }
       }

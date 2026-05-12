@@ -8,6 +8,7 @@ import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
 
 
 const nowIso = () => new Date().toISOString()
@@ -58,7 +59,7 @@ const buildPendingDir = (bucketRoot: string, extensionId: string) => {
 }
 
 const resolveReusableAnalyzerSourceDir = (extensionId: string, version: string | null | undefined) => {
-    const analyzerRoot = path.join(os.tmpdir(), 'chrome-extension-analyzer')
+    const analyzerRoot = getExtensionAnalyzerRoot()
     const extensionRoot = path.join(analyzerRoot, extensionId)
     const preferred = path.join(extensionRoot, toPathSegment(version, 'unknown'))
     if (fs.existsSync(preferred) && !!findManifestPath(preferred)) {
@@ -549,7 +550,7 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
             },
             select: { id: true },
         })
-    const bucketRoot = path.join(os.tmpdir(), 'chrome-extension-lookup');
+    const bucketRoot = getExtensionAnalyzerRoot();
     const pendingDir = buildPendingDir(bucketRoot, extensionId);
     const pendingSourceDir = path.join(pendingDir, 'source');
     try {
@@ -745,7 +746,7 @@ export function scheduleExtensionLookupService(periodMs: number) {
 }
 
 export async function processExtension(extensionId: string, downloadUrl?: string) {
-    const bucketRoot = path.join(os.tmpdir(), 'chrome-extension-analyzer');
+    const bucketRoot = getExtensionAnalyzerRoot();
     const pendingDir = buildPendingDir(bucketRoot, extensionId);
     const pendingSourceDir = path.join(pendingDir, 'source');
     const startedAt = Date.now()
