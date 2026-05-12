@@ -7,7 +7,7 @@ import { ExtensionsTable } from "@/components/admin/extensions-table";
 import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type AdminSection = "users" | "extensions" | "monitoring";
+type AdminSection = "users" | "audit" | "monitoring";
 
 export default async function AdminPage({
   searchParams,
@@ -23,9 +23,9 @@ export default async function AdminPage({
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const rawSection = resolvedSearchParams.section || "";
   const section = (
-    rawSection === "submissions" || rawSection === "monitor"
-      ? rawSection === "monitor" ? "monitoring" : "extensions"
-      : ["users", "extensions", "monitoring"].includes(rawSection)
+    rawSection === "submissions" || rawSection === "extensions" || rawSection === "monitor"
+      ? rawSection === "monitor" ? "monitoring" : "audit"
+      : ["users", "audit", "monitoring"].includes(rawSection)
         ? rawSection
         : "users"
   ) as AdminSection;
@@ -51,7 +51,7 @@ export default async function AdminPage({
     content = <UsersTable users={users} />;
   }
 
-  if (section === "extensions") {
+  if (section === "audit") {
     const submissions = await prisma.submission.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -63,14 +63,14 @@ export default async function AdminPage({
         },
       },
     });
-    title = "Extension Management";
-    description = "Manage extension-related workflow and review submission history.";
+    title = "Audit";
+    description = "Review user-submitted extension analysis operations.";
     content = (
-      <Tabs key="extension-management-tabs" defaultValue="submission-history" className="space-y-4">
+      <Tabs key="audit-tabs" defaultValue="extension-submissions" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="submission-history">Submission History</TabsTrigger>
+          <TabsTrigger value="extension-submissions">Extension Submissions</TabsTrigger>
         </TabsList>
-        <TabsContent value="submission-history" className="space-y-4">
+        <TabsContent value="extension-submissions" className="space-y-4">
           <SubmissionsTable submissions={submissions} />
         </TabsContent>
       </Tabs>

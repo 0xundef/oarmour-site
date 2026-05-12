@@ -68,7 +68,7 @@ export default async function Sidebar() {
       label: "Admin",
       items: [
         { title: "Users", href: "/dashboard/admin?section=users", icon: "user" },
-        { title: "Extensions", href: "/dashboard/admin?section=extensions", icon: "webExtension" },
+        { title: "Audit", href: "/dashboard/admin?section=audit", icon: "post" },
         { title: "Monitoring", href: "/dashboard/admin?section=monitoring", icon: "monitor" },
       ],
     });
