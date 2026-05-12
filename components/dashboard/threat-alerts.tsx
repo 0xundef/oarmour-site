@@ -52,6 +52,11 @@ function getAgeDaysFromCreateTime(createTime: string | null | undefined): number
   return Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000))
 }
 
+const isCompletedStatus = (status: string) => status === "COMPLETED"
+const isInProgressStatus = (status: string) =>
+  status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
+const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
+
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
@@ -136,7 +141,7 @@ function makeColumns(
 ): ColumnDef<ThreatAlert>[] {
   const getRowStage = (row: ThreatAlert) => {
     const liveStage = liveStatusByExtensionId[row.extensionId]?.stage
-    if (liveStage && liveStage.length > 0) return liveStage
+    if (isInProgressStatus(row.analysisStatus) && liveStage && liveStage.length > 0) return liveStage
     return row.analysisStatus
   }
   return [
@@ -293,11 +298,6 @@ export function ThreatAlerts() {
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
   const autoOpenedExtensionIdRef = useRef<string | null>(null)
-
-  const isCompletedStatus = (status: string) => status === "COMPLETED"
-  const isInProgressStatus = (status: string) =>
-    status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
-  const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
 
   const overview = useMemo(() => {
     const total = data.length

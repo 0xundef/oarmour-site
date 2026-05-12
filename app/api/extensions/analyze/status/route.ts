@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     }
 
     const memory = getAnalyzeProgress(extensionId)
-    if (memory) {
+    if (memory?.done) {
       return NextResponse.json({
         extensionId,
         stage: memory.stage,
@@ -32,6 +32,19 @@ export async function GET(req: NextRequest) {
     })
 
     if (!extension) {
+      if (memory) {
+        return NextResponse.json({
+          extensionId,
+          stage: memory.stage,
+          progress: memory.progress,
+          message: memory.message,
+          done: memory.done,
+          success: memory.success,
+          bytesReceived: memory.bytesReceived,
+          totalBytes: memory.totalBytes,
+          source: 'memory',
+        })
+      }
       return NextResponse.json({
         extensionId,
         stage: 'DOWNLOADING',
@@ -98,6 +111,19 @@ export async function GET(req: NextRequest) {
         done: true,
         success: true,
         source: 'fallback',
+      })
+    }
+    if (memory) {
+      return NextResponse.json({
+        extensionId,
+        stage: memory.stage,
+        progress: memory.progress,
+        message: memory.message,
+        done: memory.done,
+        success: memory.success,
+        bytesReceived: memory.bytesReceived,
+        totalBytes: memory.totalBytes,
+        source: 'memory',
       })
     }
 
