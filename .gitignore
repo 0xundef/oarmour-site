@@ -40,3 +40,4 @@ docs/
 .logs/
 .playwright-cli/
 .qoder/
+oarmour.code-workspace
