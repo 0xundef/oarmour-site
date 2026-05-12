@@ -7,6 +7,7 @@ import { getDomain } from 'tldts';
 import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 
 const nowIso = () => new Date().toISOString()
@@ -610,8 +611,10 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     }
 }
 
-export async function enqueueExtensionLookupJob(dbId: string) {
-    const existing = await prisma.scanJob.findFirst({
+type DbClient = PrismaClient | Prisma.TransactionClient
+
+export async function enqueueExtensionLookupJob(dbId: string, db: DbClient = prisma) {
+    const existing = await db.scanJob.findFirst({
         where: {
             targetType: 'EXTENSION',
             targetId: dbId,
@@ -627,7 +630,7 @@ export async function enqueueExtensionLookupJob(dbId: string) {
             queued: false,
         }
     }
-    const hasInFlightAnalysis = await prisma.extensionAnalysisResult.findFirst({
+    const hasInFlightAnalysis = await db.extensionAnalysisResult.findFirst({
         where: {
             extensionId: dbId,
             status: { in: ['PENDING', 'RUNNING'] },
@@ -635,14 +638,14 @@ export async function enqueueExtensionLookupJob(dbId: string) {
         select: { id: true },
     })
     if (!hasInFlightAnalysis) {
-        await prisma.extensionAnalysisResult.create({
+        await db.extensionAnalysisResult.create({
             data: {
                 extensionId: dbId,
                 status: 'PENDING',
             },
         })
     }
-    const job = await prisma.scanJob.create({
+    const job = await db.scanJob.create({
         data: {
             targetType: 'EXTENSION',
             targetId: dbId,

@@ -6,7 +6,7 @@ import { randomUUID } from 'crypto'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { downloadExtension } from '@/lib/extension-analyzer'
-import { processExtension } from '@/lib/analysis-service'
+import { enqueueExtensionLookupJob, processExtension } from '@/lib/analysis-service'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
 const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
@@ -207,6 +207,7 @@ async function monitorExtensionsOnceWithDb(
             where: { id: ext.id },
             data: { version: latest, updatedAt: new Date() },
           })
+          await enqueueExtensionLookupJob(ext.id, db)
         } catch (e) {
           console.error('Failed to update DB for', ext.storeId, e)
         }
