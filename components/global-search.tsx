@@ -95,7 +95,6 @@ export function GlobalSearch() {
     const loadingToast = toast({
       title: "Submitting analysis",
       description: "Request is being sent.",
-      duration: 120000,
     })
 
     try {
