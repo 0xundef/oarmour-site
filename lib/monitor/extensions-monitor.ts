@@ -3,9 +3,43 @@ import axios from 'axios'
 import os from 'os'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { downloadExtension } from '@/lib/extension-analyzer'
 import { processExtension } from '@/lib/analysis-service'
+
+/** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
+const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
+const EXTENSION_MONITOR_ADVISORY_KEY2 = 0x4d6f6e30
+
+type DbClient = PrismaClient | Prisma.TransactionClient
+
+export type MonitorExtensionsOnceResult = {
+  checked: number
+  updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }>
+  /** Full sweep only: another instance holds the distributed lock. */
+  skippedDueToConcurrentInstance?: boolean
+}
+
+function getMonitorRunDelegate(db: DbClient) {
+  return (db as unknown as {
+    monitorRun?: {
+      create: (args: { data: { status: 'RUNNING' }, select: { id: true } }) => Promise<{ id: string }>
+      update: (args: {
+        where: { id: string }
+        data: {
+          status: 'FAILED' | 'COMPLETED'
+          checkedCount?: number
+          succeededCount?: number
+          failedCount?: number
+          updatedCount?: number
+          error?: string
+          endedAt: Date
+        }
+      }) => Promise<unknown>
+    }
+  }).monitorRun
+}
 
 function cmpVersion(a?: string | null, b?: string | null) {
   if (!a && !b) return 0
@@ -51,30 +85,15 @@ async function hasCdnPackage(downloadUrl: string) {
   return res.status === 200 || res.status === 206
 }
 
-export async function monitorExtensionsOnce(
-  targetStoreId?: string,
-  options?: { preferCdnNextVersion?: boolean }
-) {
+async function monitorExtensionsOnceWithDb(
+  db: DbClient,
+  targetStoreId: string | undefined,
+  options: { preferCdnNextVersion?: boolean } | undefined,
+): Promise<MonitorExtensionsOnceResult> {
   let runId: string | null = null
   let failedCount = 0
   let succeededCount = 0
-  const monitorRunDelegate = (prisma as unknown as {
-    monitorRun?: {
-      create: (args: { data: { status: 'RUNNING' }, select: { id: true } }) => Promise<{ id: string }>
-      update: (args: {
-        where: { id: string }
-        data: {
-          status: 'FAILED' | 'COMPLETED'
-          checkedCount?: number
-          succeededCount?: number
-          failedCount?: number
-          updatedCount?: number
-          error?: string
-          endedAt: Date
-        }
-      }) => Promise<unknown>
-    }
-  }).monitorRun
+  const monitorRunDelegate = getMonitorRunDelegate(db)
   try {
     if (monitorRunDelegate) {
       const run = await monitorRunDelegate.create({
@@ -86,7 +105,7 @@ export async function monitorExtensionsOnce(
       runId = run.id
     } else {
       runId = randomUUID()
-      await prisma.$executeRawUnsafe(
+      await db.$executeRawUnsafe(
         `INSERT INTO "MonitorRun" ("id","status","startedAt","createdAt","updatedAt")
          VALUES ($1,'RUNNING',NOW(),NOW(),NOW())`,
         runId,
@@ -98,11 +117,11 @@ export async function monitorExtensionsOnce(
   let list: Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>
   try {
     if (targetStoreId) {
-      list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
+      list = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
         SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
       `
     } else {
-      list = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
+      list = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
         SELECT "id","storeId","version","testingMode"
         FROM "GlobalExtension"
         WHERE "isMonitored" = true
@@ -113,11 +132,11 @@ export async function monitorExtensionsOnce(
     try {
       let legacyList: Array<{ id: string; storeId: string; version: string | null }>
       if (targetStoreId) {
-        legacyList = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
+        legacyList = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
           SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
         `
       } else {
-        legacyList = await prisma.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
+        legacyList = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
           SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "isMonitored" = true
         `
       }
@@ -143,7 +162,7 @@ export async function monitorExtensionsOnce(
               },
             })
           } else {
-            await prisma.$executeRawUnsafe(
+            await db.$executeRawUnsafe(
               `UPDATE "MonitorRun"
                SET "status"='FAILED',"checkedCount"=0,"succeededCount"=0,"failedCount"=0,"updatedCount"=0,"error"=$2,"endedAt"=NOW(),"updatedAt"=NOW()
                WHERE "id"=$1`,
@@ -184,7 +203,7 @@ export async function monitorExtensionsOnce(
         const out = path.join(os.tmpdir(), 'extension-monitor', ext.storeId, 'crx')
         const crxPath = await downloadExtension(ext.storeId, out)
         try {
-          await prisma.globalExtension.update({
+          await db.globalExtension.update({
             where: { id: ext.id },
             data: { version: latest, updatedAt: new Date() },
           })
@@ -214,7 +233,7 @@ export async function monitorExtensionsOnce(
           },
         })
       } else {
-        await prisma.$executeRawUnsafe(
+        await db.$executeRawUnsafe(
           `UPDATE "MonitorRun"
            SET "status"=$2::"JobStatus","checkedCount"=$3,"succeededCount"=$4,"failedCount"=$5,"updatedCount"=$6,"endedAt"=NOW(),"updatedAt"=NOW()
            WHERE "id"=$1`,
@@ -231,6 +250,39 @@ export async function monitorExtensionsOnce(
     }
   }
   return { checked: list.length, updated }
+}
+
+/**
+ * Runs the extension monitor. Full sweeps (no targetStoreId) use a Postgres transaction-scoped
+ * advisory lock so only one instance runs at a time across processes (pool-safe).
+ * Admin-scoped runs (targetStoreId set) skip the distributed lock so they can run in parallel.
+ */
+export async function monitorExtensionsOnce(
+  targetStoreId?: string,
+  options?: { preferCdnNextVersion?: boolean },
+): Promise<MonitorExtensionsOnceResult> {
+  if (targetStoreId) {
+    return monitorExtensionsOnceWithDb(prisma, targetStoreId, options)
+  }
+  return prisma.$transaction(
+    async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ ok: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(
+          ${EXTENSION_MONITOR_ADVISORY_KEY1}::integer,
+          ${EXTENSION_MONITOR_ADVISORY_KEY2}::integer
+        ) AS ok
+      `
+      if (!rows[0]?.ok) {
+        return {
+          checked: 0,
+          updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath: string }>,
+          skippedDueToConcurrentInstance: true,
+        }
+      }
+      return monitorExtensionsOnceWithDb(tx, undefined, options)
+    },
+    { maxWait: 15_000, timeout: 900_000 },
+  )
 }
 
 export function scheduleExtensionMonitor(periodMs: number) {
