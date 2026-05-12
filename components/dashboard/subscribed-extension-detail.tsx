@@ -16,6 +16,11 @@ type AiTestingRecordingStep = {
   image: string
 }
 
+type AiTestingResponse = {
+  records?: AiTestingRecordingStep[]
+  assetBaseUrl?: string
+}
+
 type SubscribedExtensionDetailProps = {
   extensionId: string
   extensionName: string
@@ -67,6 +72,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
   const [aiDetailLoading, setAiDetailLoading] = useState(false)
   const [aiDetailError, setAiDetailError] = useState("")
   const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
+  const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -151,20 +157,22 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
       setAiDetailLoading(true)
       setAiDetailError("")
       try {
-        const url = `/ai_testing/${encodeURIComponent(props.extensionId)}/recordings.json`
+        const url = `/api/ai-testing/${encodeURIComponent(props.extensionId)}/latest`
         const res = await fetch(url, { cache: "no-store" })
         if (!res.ok) {
           setAiDetailRecords([])
+          setAiDetailAssetBaseUrl("")
           setAiDetailError("No AI testing record found for this extension.")
           return
         }
-        const json: unknown = await res.json()
-        if (!Array.isArray(json)) {
+        const json: AiTestingResponse = await res.json()
+        if (!Array.isArray(json.records)) {
           setAiDetailRecords([])
+          setAiDetailAssetBaseUrl("")
           setAiDetailError("AI testing record format is invalid.")
           return
         }
-        const parsed = json.flatMap((item): AiTestingRecordingStep[] => {
+        const parsed = json.records.flatMap((item): AiTestingRecordingStep[] => {
           if (!item || typeof item !== "object") return []
           const obj = item as Record<string, unknown>
           const time = typeof obj.time === "string" ? obj.time : ""
@@ -174,9 +182,11 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
           return [{ time, thinking, image }]
         })
         setAiDetailRecords(parsed)
+        setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
         if (parsed.length === 0) setAiDetailError("AI testing record is empty.")
       } catch {
         setAiDetailRecords([])
+        setAiDetailAssetBaseUrl("")
         setAiDetailError("Failed to load AI testing record.")
       } finally {
         setAiDetailLoading(false)
@@ -329,7 +339,13 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
             <DialogDescription>Step-by-step automated testing record for {props.extensionName}.</DialogDescription>
           </DialogHeader>
           <div className={`${aiDetailFullscreen ? "max-h-[78vh]" : "max-h-[64vh]"} overflow-y-auto pr-1`}>
-            <AiTestingProcedureContent extensionId={props.extensionId} records={aiDetailRecords} loading={aiDetailLoading} error={aiDetailError} />
+            <AiTestingProcedureContent
+              extensionId={props.extensionId}
+              records={aiDetailRecords}
+              loading={aiDetailLoading}
+              error={aiDetailError}
+              assetBaseUrl={aiDetailAssetBaseUrl}
+            />
           </div>
         </DialogContent>
       </Dialog>

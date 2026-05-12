@@ -10,30 +10,38 @@ type AiTestingRecordingStep = {
   image: string
 }
 
+type AiTestingResponse = {
+  records?: AiTestingRecordingStep[]
+  assetBaseUrl?: string
+}
+
 export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [records, setRecords] = useState<AiTestingRecordingStep[]>([])
+  const [assetBaseUrl, setAssetBaseUrl] = useState("")
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError("")
       try {
-        const url = `/ai_testing/${encodeURIComponent(extensionId)}/recordings.json`
+        const url = `/api/ai-testing/${encodeURIComponent(extensionId)}/latest`
         const res = await fetch(url, { cache: "no-store" })
         if (!res.ok) {
           setRecords([])
+          setAssetBaseUrl("")
           setError("No AI testing record found for this extension.")
           return
         }
-        const json: unknown = await res.json()
-        if (!Array.isArray(json)) {
+        const json: AiTestingResponse = await res.json()
+        if (!Array.isArray(json.records)) {
           setRecords([])
+          setAssetBaseUrl("")
           setError("AI testing record format is invalid.")
           return
         }
-        const parsed = json.flatMap((item): AiTestingRecordingStep[] => {
+        const parsed = json.records.flatMap((item): AiTestingRecordingStep[] => {
           if (!item || typeof item !== "object") return []
           const obj = item as Record<string, unknown>
           const time = typeof obj.time === "string" ? obj.time : ""
@@ -43,11 +51,13 @@ export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
           return [{ time, thinking, image }]
         })
         setRecords(parsed)
+        setAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
         if (parsed.length === 0) {
           setError("AI testing record is empty.")
         }
       } catch {
         setRecords([])
+        setAssetBaseUrl("")
         setError("Failed to load AI testing record.")
       } finally {
         setLoading(false)
@@ -69,6 +79,7 @@ export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
             records={records}
             loading={loading}
             error={error}
+            assetBaseUrl={assetBaseUrl}
           />
         </CardContent>
       </Card>

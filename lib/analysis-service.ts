@@ -9,6 +9,7 @@ import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
+import { enqueueAgentBrowserTestTask } from '@/lib/agent-queue';
 
 
 const nowIso = () => new Date().toISOString()
@@ -504,7 +505,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     {
         const ext = await prisma.globalExtension.findUnique({
             where: { id: dbId },
-            select: { name: true, storeId: true },
+            select: { name: true, storeId: true, version: true },
         })
         const riskLevel = hasMaliciousDomain ? 'HIGH' : 'SAFE'
         const maliciousDomainsList = topDomainSignals
@@ -518,6 +519,22 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             summary,
             maliciousDomainsList,
         ).catch((e) => console.error('[analysis] Failed to trigger notifications:', e))
+        try {
+            const queued = enqueueAgentBrowserTestTask({
+                storeId: ext?.storeId || extensionId,
+                name: ext?.name || extensionId,
+                version: ext?.version,
+                reason: isFirstSeenAnalysis ? 'first_submission_completed' : 'new_version_detected',
+            })
+            logInfo('[analysis] agentBrowserTest:enqueue', {
+                extensionId,
+                analysisId,
+                queued: queued.queued,
+                reason: queued.queued ? queued.entry.reason : queued.reason,
+            })
+        } catch (e) {
+            logError('[analysis] agentBrowserTest:enqueueFailed', { extensionId, analysisId, error: e })
+        }
     }
     setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
     logInfo('[analysis] runLookupFromSource:completed', {

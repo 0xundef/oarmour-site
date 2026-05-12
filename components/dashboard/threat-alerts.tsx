@@ -38,6 +38,11 @@ type AiTestingRecordingStep = {
   image: string
 }
 
+type AiTestingResponse = {
+  records?: AiTestingRecordingStep[]
+  assetBaseUrl?: string
+}
+
 function isAbortError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false
   if (!("name" in e)) return false
@@ -294,6 +299,7 @@ export function ThreatAlerts() {
   const [aiDetailLoading, setAiDetailLoading] = useState(false)
   const [aiDetailError, setAiDetailError] = useState("")
   const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
+  const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -548,20 +554,22 @@ export function ThreatAlerts() {
       setAiDetailLoading(true)
       setAiDetailError("")
       try {
-        const url = `/ai_testing/${encodeURIComponent(selected.extensionId)}/recordings.json`
+        const url = `/api/ai-testing/${encodeURIComponent(selected.extensionId)}/latest`
         const res = await fetch(url, { cache: "no-store" })
         if (!res.ok) {
           setAiDetailRecords([])
+          setAiDetailAssetBaseUrl("")
           setAiDetailError("No AI testing record found for this extension.")
           return
         }
-        const json: unknown = await res.json()
-        if (!Array.isArray(json)) {
+        const json: AiTestingResponse = await res.json()
+        if (!Array.isArray(json.records)) {
           setAiDetailRecords([])
+          setAiDetailAssetBaseUrl("")
           setAiDetailError("AI testing record format is invalid.")
           return
         }
-        const parsed = json.flatMap((item): AiTestingRecordingStep[] => {
+        const parsed = json.records.flatMap((item): AiTestingRecordingStep[] => {
           if (!item || typeof item !== "object") return []
           const obj = item as Record<string, unknown>
           const time = typeof obj.time === "string" ? obj.time : ""
@@ -571,11 +579,13 @@ export function ThreatAlerts() {
           return [{ time, thinking, image }]
         })
         setAiDetailRecords(parsed)
+        setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
         if (parsed.length === 0) {
           setAiDetailError("AI testing record is empty.")
         }
       } catch {
         setAiDetailRecords([])
+        setAiDetailAssetBaseUrl("")
         setAiDetailError("Failed to load AI testing record.")
       } finally {
         setAiDetailLoading(false)
@@ -923,6 +933,7 @@ export function ThreatAlerts() {
                 records={aiDetailRecords}
                 loading={aiDetailLoading}
                 error={aiDetailError}
+                assetBaseUrl={aiDetailAssetBaseUrl}
               />
             </div>
           </DialogContent>

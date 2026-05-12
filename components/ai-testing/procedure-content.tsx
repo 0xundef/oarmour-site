@@ -9,8 +9,9 @@ export function AiTestingProcedureContent(props: {
   records: AiTestingRecordingStep[]
   loading: boolean
   error: string
+  assetBaseUrl?: string
 }) {
-  const { extensionId, records, loading, error } = props
+  const { extensionId, records, loading, error, assetBaseUrl } = props
 
   if (loading) {
     return <div className="py-6 text-sm text-muted-foreground">Loading AI testing record...</div>
@@ -23,7 +24,10 @@ export function AiTestingProcedureContent(props: {
   return (
     <div className="space-y-4">
       {records.map((step, idx) => {
-        const imagePath = `/ai_testing/${extensionId}/${step.image.replace(/^\/+/, "")}`
+        const imageName = step.image.replace(/^\/+/, "")
+        const imagePath = assetBaseUrl
+          ? `${assetBaseUrl}/${imageName.split("/").map(encodeURIComponent).join("/")}`
+          : `/ai_testing/${extensionId}/${imageName}`
         return (
           <div key={`${step.time}-${idx}`} className="rounded-md border p-3">
             <div className="mb-2 text-xs font-medium text-muted-foreground">
