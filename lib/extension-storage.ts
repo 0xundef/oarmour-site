@@ -56,3 +56,8 @@ export function getAgentIncomingQueuePath() {
 export function getAgentStatusPath() {
   return path.join(getAgentQueueRoot(), 'status.json')
 }
+
+/** Template with `{{EXTENSION_ROOT}}` / `{{USER_DATA_DIR}}` placeholders; copied to queue root if missing. */
+export function getAgentCliConfigTemplatePath() {
+  return path.join(getAgentQueueRoot(), 'cli_config_template.json')
+}

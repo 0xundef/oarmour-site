@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import {
+  getAgentCliConfigTemplatePath,
   getAgentDefaultPromptPath,
   getAgentIncomingQueuePath,
   getAgentStatusPath,
@@ -53,12 +54,23 @@ function buildRunId(storeId: string, version: string) {
 }
 
 const BUNDLED_DEFAULT_PROMPT_REL = ['lib', 'agent-queue', 'default-extension-test-prompt.md'] as const
+const BUNDLED_CLI_CONFIG_TEMPLATE_REL = ['lib', 'agent-queue', 'cli_config_template.json'] as const
 
 /** Copy repo-bundled generic prompt into `AGENT_QUEUE_ROOT/prompt.md` if missing (browseragent fallback). */
 export function syncAgentQueueDefaultPromptFromBundled(): void {
   const dest = getAgentDefaultPromptPath()
   if (fs.existsSync(dest)) return
   const src = path.join(process.cwd(), ...BUNDLED_DEFAULT_PROMPT_REL)
+  if (!fs.existsSync(src)) return
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.copyFileSync(src, dest)
+}
+
+/** Copy `cli_config_template.json` into `AGENT_QUEUE_ROOT` if missing (editable on disk; variables filled per extension). */
+export function syncAgentQueueCliConfigTemplateFromBundled(): void {
+  const dest = getAgentCliConfigTemplatePath()
+  if (fs.existsSync(dest)) return
+  const src = path.join(process.cwd(), ...BUNDLED_CLI_CONFIG_TEMPLATE_REL)
   if (!fs.existsSync(src)) return
   fs.mkdirSync(path.dirname(dest), { recursive: true })
   fs.copyFileSync(src, dest)
@@ -78,6 +90,7 @@ export function enqueueAgentBrowserTestTask(input: {
   }
 
   syncAgentQueueDefaultPromptFromBundled()
+  syncAgentQueueCliConfigTemplateFromBundled()
   if (!hasResolvableAgentPrompt(input.storeId)) {
     return { queued: false as const, reason: 'missing_prompt' as const }
   }

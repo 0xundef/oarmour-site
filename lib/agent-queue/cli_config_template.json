@@ -1,0 +1,17 @@
+{
+  "browser": {
+    "launchOptions": {
+      "headless": true,
+      "channel": "chromium",
+      "args": [
+        "--load-extension={{EXTENSION_ROOT}}",
+        "--disable-extensions-except={{EXTENSION_ROOT}}",
+        "--no-sandbox",
+        "--disable-setuid-sandbox"
+      ]
+    },
+    "browserName": "chromium",
+    "userDataDir": "{{USER_DATA_DIR}}",
+    "chromiumSandbox": false
+  }
+}

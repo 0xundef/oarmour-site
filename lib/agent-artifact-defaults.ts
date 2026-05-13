@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { syncAgentQueueCliConfigTemplateFromBundled } from '@/lib/agent-queue'
+import { getAgentCliConfigTemplatePath } from '@/lib/extension-storage'
 
 function resolveHeadlessFromEnv(): boolean {
     const raw = process.env.PLAYWRIGHT_CLI_HEADLESS
@@ -7,14 +9,27 @@ function resolveHeadlessFromEnv(): boolean {
     return !/^0|false|no|off$/i.test(String(raw).trim())
 }
 
+/** Escape backslashes for JSON string segments after placeholder substitution. */
+function escapePathForJsonText(p: string): string {
+    return p.replace(/\\/g, '\\\\')
+}
+
 /**
- * Default `cli_config.json` for extension runs — aligned with a known-good MetaMask / Chromium setup:
- * chromium channel, headless by default, persistent `userDataDir`, extension load args, sandbox disabled for CI/Linux.
- *
- * - `PLAYWRIGHT_CLI_USER_DATA_DIR`: optional absolute profile path (default: `<artifact>/.playwright-profile`).
- * - `PLAYWRIGHT_CLI_HEADLESS`: set `0` / `false` / `no` / `off` for headed browser.
+ * Substitute `{{EXTENSION_ROOT}}` and `{{USER_DATA_DIR}}` in the template text, then parse JSON.
+ * `USER_DATA_DIR` defaults to `<EXTENSION_ROOT>/.playwright-profile` unless `PLAYWRIGHT_CLI_USER_DATA_DIR` is set.
  */
-export function buildDefaultCliConfigPayload(extensionRootAbs: string) {
+export function fillCliConfigTemplate(templateRaw: string, extensionRootAbs: string): unknown {
+    const abs = path.resolve(extensionRootAbs)
+    const userDataDir =
+        process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(abs, '.playwright-profile')
+    const filled = templateRaw
+        .replace(/\{\{EXTENSION_ROOT\}\}/g, escapePathForJsonText(abs))
+        .replace(/\{\{USER_DATA_DIR\}\}/g, escapePathForJsonText(userDataDir))
+    return JSON.parse(filled) as unknown
+}
+
+/** Programmatic fallback if no template exists (same shape as bundled template). */
+function buildDefaultCliConfigPayload(extensionRootAbs: string) {
     const abs = path.resolve(extensionRootAbs)
     const userDataDir =
         process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(abs, '.playwright-profile')
@@ -38,15 +53,48 @@ export function buildDefaultCliConfigPayload(extensionRootAbs: string) {
     }
 }
 
+function applyHeadlessOverride(payload: Record<string, unknown>): void {
+    const browser = payload.browser
+    if (!browser || typeof browser !== 'object') return
+    const launch = (browser as Record<string, unknown>).launchOptions
+    if (!launch || typeof launch !== 'object') return
+    ;(launch as Record<string, unknown>).headless = resolveHeadlessFromEnv()
+}
+
 /**
- * If `cli_config.json` is missing under the versioned artifact dir, write a minimal file so
- * browseragent can run `playwright-cli open --config=./cli_config.json`.
+ * If `cli_config.json` is missing under the versioned artifact dir, render it from
+ * `AGENT_QUEUE_ROOT/cli_config_template.json` (seeded from the repo bundled template), substituting:
+ * - `{{EXTENSION_ROOT}}` → absolute unpacked extension directory
+ * - `{{USER_DATA_DIR}}` → `PLAYWRIGHT_CLI_USER_DATA_DIR` or `<EXTENSION_ROOT>/.playwright-profile`
+ *
+ * After render, `launchOptions.headless` is overridden from `PLAYWRIGHT_CLI_HEADLESS` when set (same as before).
+ * If no template is available, falls back to built-in JSON.
  */
 export function ensureDefaultCliConfigIfAbsent(versionDir: string): void {
     const preferred = path.join(versionDir, 'cli_config.json')
     if (fs.existsSync(preferred)) return
 
-    const payload = buildDefaultCliConfigPayload(versionDir)
+    syncAgentQueueCliConfigTemplateFromBundled()
+
+    let payload: Record<string, unknown>
+    const templatePath = getAgentCliConfigTemplatePath()
+    if (fs.existsSync(templatePath)) {
+        const raw = fs.readFileSync(templatePath, 'utf8')
+        try {
+            payload = fillCliConfigTemplate(raw, versionDir) as Record<string, unknown>
+            if (
+                process.env.PLAYWRIGHT_CLI_HEADLESS !== undefined &&
+                String(process.env.PLAYWRIGHT_CLI_HEADLESS).trim() !== ''
+            ) {
+                applyHeadlessOverride(payload)
+            }
+        } catch {
+            payload = buildDefaultCliConfigPayload(versionDir) as Record<string, unknown>
+        }
+    } else {
+        payload = buildDefaultCliConfigPayload(versionDir) as Record<string, unknown>
+    }
+
     const dir = path.dirname(preferred)
     fs.mkdirSync(dir, { recursive: true })
     const tmpPath = path.join(dir, `.cli_config.json.${process.pid}.${Date.now()}.tmp`)
