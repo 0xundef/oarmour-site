@@ -309,7 +309,7 @@ export function ThreatAlerts() {
     const total = data.length
     const completedScans = completedScanActions
     const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
-    const findings = data.filter((row) => row.risk !== "SAFE" && row.risk !== "UNKNOWN").length
+    const findings = highCritical
     const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
     const inProgress = data.filter((row) => isInProgressStatus(row.analysisStatus)).length
     const awaitingConfirmation = data.filter((row) => isHighOrCritical(row.risk) && isCompletedStatus(row.analysisStatus)).length
@@ -642,7 +642,7 @@ export function ThreatAlerts() {
     <Card className="h-full border-none shadow-none">
       <CardContent className="p-0">
         <div className="mb-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
@@ -665,16 +665,7 @@ export function ThreatAlerts() {
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Findings</div>
-                  <div className="text-2xl font-semibold">{overview.findings}</div>
-                </div>
-                <ShieldAlert className="h-4 w-4 text-orange-500" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <div className="text-xs text-muted-foreground">Critical + High</div>
-                  <div className="text-2xl font-semibold text-red-600">{overview.highCritical}</div>
+                  <div className="text-2xl font-semibold text-red-600">{overview.findings}</div>
                 </div>
                 <ShieldAlert className="h-4 w-4 text-red-500" />
               </CardContent>
