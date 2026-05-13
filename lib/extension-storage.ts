@@ -43,9 +43,9 @@ export function parseExtensionUnpackPath(unpackDir: string): { storeId: string; 
   return { storeId, version }
 }
 
-/** Extension-specific override: `chrome-extension-analyzer/<storeId>/prompt.md` */
+/** Extension-specific override: `AGENT_QUEUE_ROOT/extension-data/<storeId>/prompt.md` */
 export function getExtensionScopedPromptPath(storeId: string): string {
-  return path.join(getExtensionAnalyzerRoot(), storeId, 'prompt.md')
+  return path.join(getAgentQueueRoot(), EXTENSION_SIDE_DATA_DIRNAME, storeId, 'prompt.md')
 }
 
 /** Shared default when no extension prompt: `AGENT_QUEUE_ROOT/prompt.md` */
