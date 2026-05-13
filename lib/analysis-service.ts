@@ -10,6 +10,7 @@ import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
     getAgentDefaultPromptPath,
+    getExtensionAnalysisDir,
     getExtensionAnalyzerRoot,
     getExtensionScopedPromptPath,
 } from '@/lib/extension-storage';
@@ -294,6 +295,9 @@ function getPublisher(manifest: Record<string, unknown>): string {
 async function runLookupFromSource(dbId: string, extensionId: string, analysisId: string, sourceDir: string) {
     const startedAt = Date.now()
     ensureDefaultCliConfigIfAbsent(sourceDir)
+    const versionSegment = path.basename(path.resolve(sourceDir))
+    const analysisDir = getExtensionAnalysisDir(extensionId, versionSegment)
+    fs.mkdirSync(analysisDir, { recursive: true })
     setAnalyzeProgressStage(extensionId, 'ANALYZING', 80, 'Scanning extension and enriching domains')
     logInfo('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
@@ -302,8 +306,8 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         .map((d) => String(d).trim())
         .filter((d) => d.length > 0)
         .sort((a, b) => a.localeCompare(b))
-    const rawDomainListPath = path.join(sourceDir, 'raw_domain_list.txt')
-    const apexDomainListPath = path.join(sourceDir, 'apexdomain_list.json')
+    const rawDomainListPath = path.join(analysisDir, 'raw_domain_list.txt')
+    const apexDomainListPath = path.join(analysisDir, 'apexdomain_list.json')
     logInfo('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,

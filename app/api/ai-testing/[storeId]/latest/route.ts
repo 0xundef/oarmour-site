@@ -59,11 +59,12 @@ function findRecordingFromStatus(storeId: string, version?: string, runId?: stri
 }
 
 function findRecordingFromArtifacts(storeId: string, version?: string, runId?: string) {
-  const versionDir = version ? path.dirname(getAiTestingRoot(storeId, version)) : newestDirectory(path.join(getExtensionAnalyzerRoot(), storeId))
-  if (!versionDir) return null
+  const storeRoot = path.join(getExtensionAnalyzerRoot(), storeId)
+  const unpackVersionDir = version ? path.join(storeRoot, version) : newestDirectory(storeRoot)
+  if (!unpackVersionDir || !fs.existsSync(unpackVersionDir)) return null
 
-  const aiTestingRoot = path.join(versionDir, 'ai_testing')
-  const resolvedVersion = version || path.basename(versionDir)
+  const resolvedVersion = version || path.basename(unpackVersionDir)
+  const aiTestingRoot = getAiTestingRoot(storeId, resolvedVersion)
   const runDir = runId ? getAiTestingRunRoot(storeId, resolvedVersion, runId) : newestDirectory(aiTestingRoot)
   if (!runDir) return null
 

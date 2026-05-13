@@ -1,7 +1,11 @@
 import fs from 'fs'
 import path from 'path'
 import { syncAgentQueueCliConfigTemplateFromBundled } from '@/lib/agent-queue'
-import { getAgentCliConfigTemplatePath } from '@/lib/extension-storage'
+import {
+  getAgentCliConfigTemplatePath,
+  getExtensionSidecarRoot,
+  parseExtensionUnpackPath,
+} from '@/lib/extension-storage'
 
 function resolveHeadlessFromEnv(): boolean {
     const raw = process.env.PLAYWRIGHT_CLI_HEADLESS
@@ -16,12 +20,18 @@ function escapePathForJsonText(p: string): string {
 
 /**
  * Substitute `{{EXTENSION_ROOT}}` and `{{USER_DATA_DIR}}` in the template text, then parse JSON.
- * `USER_DATA_DIR` defaults to `<EXTENSION_ROOT>/.playwright-profile` unless `PLAYWRIGHT_CLI_USER_DATA_DIR` is set.
+ * `EXTENSION_ROOT` is the unpacked extension dir; `USER_DATA_DIR` defaults to `<sidecarRoot>/.playwright-profile`
+ * unless `PLAYWRIGHT_CLI_USER_DATA_DIR` is set.
  */
-export function fillCliConfigTemplate(templateRaw: string, extensionRootAbs: string): unknown {
-    const abs = path.resolve(extensionRootAbs)
+export function fillCliConfigTemplate(
+    templateRaw: string,
+    extensionUnpackAbs: string,
+    sidecarRootAbs: string,
+): unknown {
+    const abs = path.resolve(extensionUnpackAbs)
+    const sidecar = path.resolve(sidecarRootAbs)
     const userDataDir =
-        process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(abs, '.playwright-profile')
+        process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(sidecar, '.playwright-profile')
     const filled = templateRaw
         .replace(/\{\{EXTENSION_ROOT\}\}/g, escapePathForJsonText(abs))
         .replace(/\{\{USER_DATA_DIR\}\}/g, escapePathForJsonText(userDataDir))
@@ -29,10 +39,11 @@ export function fillCliConfigTemplate(templateRaw: string, extensionRootAbs: str
 }
 
 /** Programmatic fallback if no template exists (same shape as bundled template). */
-function buildDefaultCliConfigPayload(extensionRootAbs: string) {
-    const abs = path.resolve(extensionRootAbs)
+function buildDefaultCliConfigPayload(extensionUnpackAbs: string, sidecarRootAbs: string) {
+    const abs = path.resolve(extensionUnpackAbs)
+    const sidecar = path.resolve(sidecarRootAbs)
     const userDataDir =
-        process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(abs, '.playwright-profile')
+        process.env.PLAYWRIGHT_CLI_USER_DATA_DIR?.trim() || path.join(sidecar, '.playwright-profile')
 
     return {
         browser: {
@@ -62,16 +73,20 @@ function applyHeadlessOverride(payload: Record<string, unknown>): void {
 }
 
 /**
- * If `cli_config.json` is missing under the versioned artifact dir, render it from
- * `AGENT_QUEUE_ROOT/cli_config_template.json` (seeded from the repo bundled template), substituting:
+ * If `cli_config.json` is missing, write it under the version **sidecar**
+ * (`AGENT_QUEUE_ROOT/extension-data/<storeId>/<version>/`) when `versionDir` is a standard unpack path;
+ * otherwise (legacy) write next to `versionDir`.
+ * Template: `AGENT_QUEUE_ROOT/cli_config_template.json`, substituting:
  * - `{{EXTENSION_ROOT}}` → absolute unpacked extension directory
- * - `{{USER_DATA_DIR}}` → `PLAYWRIGHT_CLI_USER_DATA_DIR` or `<EXTENSION_ROOT>/.playwright-profile`
- *
- * After render, `launchOptions.headless` is overridden from `PLAYWRIGHT_CLI_HEADLESS` when set (same as before).
- * If no template is available, falls back to built-in JSON.
+ * - `{{USER_DATA_DIR}}` → `PLAYWRIGHT_CLI_USER_DATA_DIR` or `<sidecar>/.playwright-profile`
  */
 export function ensureDefaultCliConfigIfAbsent(versionDir: string): void {
-    const preferred = path.join(versionDir, 'cli_config.json')
+    const parsed = parseExtensionUnpackPath(versionDir)
+    const sidecar =
+        parsed !== null
+            ? getExtensionSidecarRoot(parsed.storeId, parsed.version)
+            : versionDir
+    const preferred = path.join(sidecar, 'cli_config.json')
     if (fs.existsSync(preferred)) return
 
     syncAgentQueueCliConfigTemplateFromBundled()
@@ -81,7 +96,7 @@ export function ensureDefaultCliConfigIfAbsent(versionDir: string): void {
     if (fs.existsSync(templatePath)) {
         const raw = fs.readFileSync(templatePath, 'utf8')
         try {
-            payload = fillCliConfigTemplate(raw, versionDir) as Record<string, unknown>
+            payload = fillCliConfigTemplate(raw, versionDir, sidecar) as Record<string, unknown>
             if (
                 process.env.PLAYWRIGHT_CLI_HEADLESS !== undefined &&
                 String(process.env.PLAYWRIGHT_CLI_HEADLESS).trim() !== ''
@@ -89,10 +104,10 @@ export function ensureDefaultCliConfigIfAbsent(versionDir: string): void {
                 applyHeadlessOverride(payload)
             }
         } catch {
-            payload = buildDefaultCliConfigPayload(versionDir) as Record<string, unknown>
+            payload = buildDefaultCliConfigPayload(versionDir, sidecar) as Record<string, unknown>
         }
     } else {
-        payload = buildDefaultCliConfigPayload(versionDir) as Record<string, unknown>
+        payload = buildDefaultCliConfigPayload(versionDir, sidecar) as Record<string, unknown>
     }
 
     const dir = path.dirname(preferred)
