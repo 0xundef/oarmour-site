@@ -13,6 +13,7 @@ import {
     getExtensionAnalyzerRoot,
     getExtensionScopedPromptPath,
 } from '@/lib/extension-storage';
+import { ensureDefaultCliConfigIfAbsent } from '@/lib/agent-artifact-defaults';
 import { enqueueAgentBrowserTestTask } from '@/lib/agent-queue';
 
 
@@ -292,6 +293,7 @@ function getPublisher(manifest: Record<string, unknown>): string {
 
 async function runLookupFromSource(dbId: string, extensionId: string, analysisId: string, sourceDir: string) {
     const startedAt = Date.now()
+    ensureDefaultCliConfigIfAbsent(sourceDir)
     setAnalyzeProgressStage(extensionId, 'ANALYZING', 80, 'Scanning extension and enriching domains')
     logInfo('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');

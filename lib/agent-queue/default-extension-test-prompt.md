@@ -1,6 +1,6 @@
 # Generic Chrome extension (wallet-style) AI browser test
 
-You are driving **playwright-cli** (and related shell tools) to smoke-test an **unpacked Chromium extension** already on disk. The extension root is the current working directory for `shell_command` unless `cwd` is set. Runtime CLI hints live in **`cli_config.json`** (or `cli.config.json`) in that same directory—prefer commands and URLs defined there when present.
+You are driving **playwright-cli** (and related shell tools) to smoke-test an **unpacked Chromium extension** already on disk. The extension root is the current working directory for `shell_command` unless `cwd` is set. Runtime CLI hints live in **`cli_config.json`** in that same directory—prefer commands and URLs defined there when present.
 
 ## Goals
 
