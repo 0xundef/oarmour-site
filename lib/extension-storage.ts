@@ -1,3 +1,4 @@
+import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
@@ -15,6 +16,24 @@ export function getExtensionAnalyzerRoot() {
 
 export function getExtensionArtifactRoot(storeId: string, version: string) {
   return path.join(getExtensionAnalyzerRoot(), storeId, version)
+}
+
+/** Extension-specific override: `chrome-extension-analyzer/<storeId>/prompt.md` */
+export function getExtensionScopedPromptPath(storeId: string): string {
+  return path.join(getExtensionAnalyzerRoot(), storeId, 'prompt.md')
+}
+
+/** Shared default when no extension prompt: `AGENT_QUEUE_ROOT/prompt.md` */
+export function getAgentDefaultPromptPath(): string {
+  return path.join(getAgentQueueRoot(), 'prompt.md')
+}
+
+/** True if either extension-level or (after sync) queue-level default prompt exists. */
+export function hasResolvableAgentPrompt(storeId: string): boolean {
+  return (
+    fs.existsSync(getExtensionScopedPromptPath(storeId)) ||
+    fs.existsSync(getAgentDefaultPromptPath())
+  )
 }
 
 export function getAiTestingRoot(storeId: string, version: string) {

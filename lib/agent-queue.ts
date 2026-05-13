@@ -1,9 +1,11 @@
 import fs from 'fs'
 import path from 'path'
 import {
+  getAgentDefaultPromptPath,
   getAgentIncomingQueuePath,
   getAgentStatusPath,
   getExtensionArtifactRoot,
+  hasResolvableAgentPrompt,
 } from '@/lib/extension-storage'
 
 export type AgentQueueEntry = {
@@ -50,6 +52,18 @@ function buildRunId(storeId: string, version: string) {
   return `${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${storeId.slice(0, 8)}-${safeVersion}`
 }
 
+const BUNDLED_DEFAULT_PROMPT_REL = ['lib', 'agent-queue', 'default-extension-test-prompt.md'] as const
+
+/** Copy repo-bundled generic prompt into `AGENT_QUEUE_ROOT/prompt.md` if missing (browseragent fallback). */
+export function syncAgentQueueDefaultPromptFromBundled(): void {
+  const dest = getAgentDefaultPromptPath()
+  if (fs.existsSync(dest)) return
+  const src = path.join(process.cwd(), ...BUNDLED_DEFAULT_PROMPT_REL)
+  if (!fs.existsSync(src)) return
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.copyFileSync(src, dest)
+}
+
 export function enqueueAgentBrowserTestTask(input: {
   storeId: string
   name?: string | null
@@ -61,6 +75,11 @@ export function enqueueAgentBrowserTestTask(input: {
   }
   if (!input.version) {
     return { queued: false as const, reason: 'missing_version' as const }
+  }
+
+  syncAgentQueueDefaultPromptFromBundled()
+  if (!hasResolvableAgentPrompt(input.storeId)) {
+    return { queued: false as const, reason: 'missing_prompt' as const }
   }
 
   const queuePath = getAgentIncomingQueuePath()

@@ -8,7 +8,11 @@ import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
+import {
+    getAgentDefaultPromptPath,
+    getExtensionAnalyzerRoot,
+    getExtensionScopedPromptPath,
+} from '@/lib/extension-storage';
 import { enqueueAgentBrowserTestTask } from '@/lib/agent-queue';
 
 
@@ -531,6 +535,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                 analysisId,
                 queued: queued.queued,
                 reason: queued.queued ? queued.entry.reason : queued.reason,
+                ...(!queued.queued && queued.reason === 'missing_prompt'
+                    ? {
+                          extensionPromptPath: getExtensionScopedPromptPath(ext?.storeId || extensionId),
+                          defaultPromptPath: getAgentDefaultPromptPath(),
+                      }
+                    : {}),
             })
         } catch (e) {
             logError('[analysis] agentBrowserTest:enqueueFailed', { extensionId, analysisId, error: e })
