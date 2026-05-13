@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell, Download, Maximize2, Minimize2, Link2, ShieldCheck, ShieldAlert, ScanSearch, FolderKanban } from "lucide-react"
+import { Copy, Bell, Download, Maximize2, Minimize2, Link2, ShieldCheck, ShieldAlert, ScanSearch, FolderKanban, Sparkles } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -310,6 +310,7 @@ export function ThreatAlerts() {
     const completedScans = completedScanActions
     const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
     const findings = highCritical
+    const aiTesting = data.filter((row) => row.testingMode).length
     const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
     const inProgress = data.filter((row) => isInProgressStatus(row.analysisStatus)).length
     const awaitingConfirmation = data.filter((row) => isHighOrCritical(row.risk) && isCompletedStatus(row.analysisStatus)).length
@@ -346,6 +347,7 @@ export function ThreatAlerts() {
       completedScans,
       findings,
       highCritical,
+      aiTesting,
       remediated,
       inProgress,
       awaitingConfirmation,
@@ -642,7 +644,7 @@ export function ThreatAlerts() {
     <Card className="h-full border-none shadow-none">
       <CardContent className="p-0">
         <div className="mb-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Card>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
@@ -659,6 +661,15 @@ export function ThreatAlerts() {
                   <div className="text-2xl font-semibold">{overview.completedScans}</div>
                 </div>
                 <ScanSearch className="h-4 w-4 text-muted-foreground" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs text-muted-foreground">AI Testing</div>
+                  <div className="text-2xl font-semibold text-purple-600">{overview.aiTesting}</div>
+                </div>
+                <Sparkles className="h-4 w-4 text-green-400 animate-sparkle" />
               </CardContent>
             </Card>
             <Card>

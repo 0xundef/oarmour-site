@@ -88,3 +88,20 @@
     height: 100dvh;
   }
 }
+
+@keyframes sparkle-shine {
+  0%, 100% { opacity: 0.4; transform: scale(0.9) rotate(0deg); }
+  25% { opacity: 1; transform: scale(1.15) rotate(15deg); }
+  50% { opacity: 0.7; transform: scale(1) rotate(-10deg); }
+  75% { opacity: 1; transform: scale(1.1) rotate(5deg); }
+}
+
+@keyframes sparkle-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(74, 222, 128, 0.3)); }
+  50% { filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.8)); }
+}
+
+.animate-sparkle {
+  animation: sparkle-shine 1.8s ease-in-out infinite, sparkle-glow 1.8s ease-in-out infinite;
+  transform-origin: center;
+}
