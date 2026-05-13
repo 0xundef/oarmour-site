@@ -86,3 +86,53 @@ export function getAgentStatusPath() {
 export function getAgentCliConfigTemplatePath() {
   return path.join(getAgentQueueRoot(), 'cli_config_template.json')
 }
+
+const AGENT_QUEUE_WHITELIST_BASENAME = 'whitelist'
+
+const AGENT_QUEUE_WHITELIST_DEFAULT = `# AI browser test — Chrome Web Store extension ids (one per line).
+# Lines starting with # are ignored. Only listed ids are enqueued to browseragent.
+nkbihfbeogaeaoehlefnkodbefgpgknn
+`
+
+/**
+ * Ensures `AGENT_QUEUE_ROOT/whitelist` exists (creates parent dirs and a default template with MetaMask if missing).
+ * Call from app startup (e.g. instrumentation).
+ */
+export function ensureAgentQueueWhitelistFile(): void {
+  const p = getAgentQueueWhitelistPath()
+  const dir = path.dirname(p)
+  fs.mkdirSync(dir, { recursive: true })
+  if (!fs.existsSync(p)) {
+    fs.writeFileSync(p, AGENT_QUEUE_WHITELIST_DEFAULT, 'utf8')
+  }
+}
+
+/**
+ * Text file: one Chrome Web Store extension id per line; `#` starts a comment; blank lines ignored.
+ * Default: `AGENT_QUEUE_ROOT/whitelist`.
+ * Override with `WHITELIST_FILE` (absolute path, or relative to `process.cwd()`).
+ */
+export function getAgentQueueWhitelistPath(): string {
+  const fromEnv = process.env.WHITELIST_FILE?.trim()
+  if (fromEnv) {
+    return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(process.cwd(), fromEnv)
+  }
+  return path.join(getAgentQueueRoot(), AGENT_QUEUE_WHITELIST_BASENAME)
+}
+
+/**
+ * Allowed store ids from the whitelist file. Missing file → empty set (nothing enqueued until
+ * `ensureAgentQueueWhitelistFile` has run or the file is created).
+ */
+export function loadAgentQueueWhitelistForEnqueue(): Set<string> {
+  const p = getAgentQueueWhitelistPath()
+  if (!fs.existsSync(p)) return new Set()
+  const raw = fs.readFileSync(p, 'utf8')
+  const ids = new Set<string>()
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim()
+    if (!t || t.startsWith('#')) continue
+    ids.add(t)
+  }
+  return ids
+}

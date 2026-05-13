@@ -10,6 +10,7 @@ import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
     getAgentDefaultPromptPath,
+    getAgentQueueWhitelistPath,
     getExtensionAnalysisDir,
     getExtensionAnalyzerRoot,
     getExtensionScopedPromptPath,
@@ -546,6 +547,9 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
                           extensionPromptPath: getExtensionScopedPromptPath(ext?.storeId || extensionId),
                           defaultPromptPath: getAgentDefaultPromptPath(),
                       }
+                    : {}),
+                ...(!queued.queued && queued.reason === 'not_whitelisted'
+                    ? { whitelistPath: getAgentQueueWhitelistPath() }
                     : {}),
             })
         } catch (e) {
