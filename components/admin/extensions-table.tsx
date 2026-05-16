@@ -233,6 +233,44 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   <TableCell>{ext.version || "N/A"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          checked={!!ext.isMonitored}
+                          onCheckedChange={(v) => toggleMonitor(ext.id, v)}
+                          disabled={pending}
+                          aria-label="Toggle monitoring"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          checked={!!ext.testingMode}
+                          onCheckedChange={(v) => toggleTestingMode(ext.id, v)}
+                          disabled={pending}
+                          aria-label="Toggle testing mode"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => runImmediateCheck(ext.storeId, ext.version)}
+                        aria-label="Run immediate check"
+                        title="Run immediate check"
+                      >
+                        <Play className="mr-1.5 h-3.5 w-3.5" />
+                        Check
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => notifyMaliciousSubscribers(ext)}
+                        aria-label="Notify malicious users"
+                        title="Notify subscribed users"
+                      >
+                        <Bell className="mr-1.5 h-3.5 w-3.5" />
+                        Notify
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -241,7 +279,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         aria-label="Edit extension"
                         title="Edit extension"
                       >
-                        <Pencil className="mr-2 h-3.5 w-3.5" />
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit
                       </Button>
                       <Button
@@ -273,7 +311,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           <DialogHeader>
             <DialogTitle>Edit Extension</DialogTitle>
             <DialogDescription>
-              Update the extension name and manage monitoring actions in one place.
+              Update the extension name.
             </DialogDescription>
           </DialogHeader>
           {editingExtension ? (
@@ -291,58 +329,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                 <Label>Store ID</Label>
                 <div className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">
                   {editingExtension.storeId}
-                </div>
-              </div>
-              <div className="rounded-md border p-4">
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium">Monitoring Controls</h3>
-                  <p className="text-sm text-muted-foreground">
-                    These controls were moved from the table into this modal.
-                  </p>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">Monitoring</p>
-                      <p className="text-sm text-muted-foreground">Enable scheduled checks for this extension.</p>
-                    </div>
-                    <Switch
-                      checked={!!editingExtension.isMonitored}
-                      onCheckedChange={(v) => toggleMonitor(editingExtension.id, v)}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">Testing Mode</p>
-                      <p className="text-sm text-muted-foreground">Use CDN test packages for monitor checks.</p>
-                    </div>
-                    <Switch
-                      checked={!!editingExtension.testingMode}
-                      onCheckedChange={(v) => toggleTestingMode(editingExtension.id, v)}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => runImmediateCheck(editingExtension.storeId, editingExtension.version)}
-                    >
-                      <Play className="mr-2 h-3.5 w-3.5" />
-                      Run Check
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pending}
-                      onClick={() => notifyMaliciousSubscribers(editingExtension)}
-                    >
-                      <Bell className="mr-2 h-3.5 w-3.5" />
-                      Notify Users
-                    </Button>
-                  </div>
                 </div>
               </div>
             </div>

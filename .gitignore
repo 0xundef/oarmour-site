@@ -41,3 +41,4 @@ docs/
 .playwright-cli/
 .qoder/
 oarmour.code-workspace
+components/admin/pi-agent-browser.code-workspace
