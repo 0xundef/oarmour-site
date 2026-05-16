@@ -62,14 +62,22 @@ const isInProgressStatus = (status: string) =>
   status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
 const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
 
+type AiTestingStatus = 'pending' | 'running' | 'complete' | 'error'
+
+const AI_TESTING_ACTIVE_STATUSES = new Set<AiTestingStatus>(['pending', 'running'])
+
 const AiTestingButton = ({
   extensionId,
   extensionName,
   version,
+  isActive,
+  onTriggered,
 }: {
   extensionId: string
   extensionName: string
   version: string
+  isActive: boolean
+  onTriggered: (storeId: string) => void
 }) => {
   const { toast } = useToast()
   const [pending, setPending] = useState(false)
@@ -86,6 +94,7 @@ const AiTestingButton = ({
       })
       const data = await res.json().catch(() => ({}))
       if (data?.queued) {
+        onTriggered(extensionId)
         toast({ description: data.message ?? 'AI testing enqueued.' })
         return
       }
@@ -100,16 +109,18 @@ const AiTestingButton = ({
     }
   }
 
+  const animated = isActive || pending
+
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={handleClick}
       disabled={pending || disabled}
-      title={disabled ? 'Version unavailable' : 'Run AI testing'}
+      title={disabled ? 'Version unavailable' : animated ? 'AI testing in progress' : 'Run AI testing'}
       aria-label="Run AI testing"
     >
-      <Sparkles className="h-4 w-4 text-green-400 animate-sparkle" />
+      <Sparkles className={`h-4 w-4 text-green-400 ${animated ? 'animate-sparkle' : ''}`} />
     </Button>
   )
 }
@@ -195,6 +206,8 @@ function buildDownloadUrl(extensionId: string, version: string, testingMode: boo
 function makeColumns(
   onOpen: (row: ThreatAlert) => void,
   liveStatusByExtensionId: Record<string, LiveAnalyzeStatus>,
+  aiTestingStatusByStoreId: Record<string, AiTestingStatus>,
+  onAiTestingTriggered: (storeId: string) => void,
 ): ColumnDef<ThreatAlert>[] {
   const getRowStage = (row: ThreatAlert) => {
     const liveStage = liveStatusByExtensionId[row.extensionId]?.stage
@@ -305,6 +318,10 @@ function makeColumns(
               extensionId={row.original.extensionId}
               extensionName={row.original.extensionName}
               version={row.original.version}
+              isActive={AI_TESTING_ACTIVE_STATUSES.has(
+                aiTestingStatusByStoreId[row.original.extensionId] as AiTestingStatus,
+              )}
+              onTriggered={onAiTestingTriggered}
             />
             <OperationCell extensionId={row.original.extensionId} />
           </div>
@@ -319,6 +336,7 @@ export function ThreatAlerts() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<ThreatAlert[]>([])
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
+  const [aiTestingStatusByStoreId, setAiTestingStatusByStoreId] = useState<Record<string, AiTestingStatus>>({})
   const [loading, setLoading] = useState(true)
   const [completedScanActions, setCompletedScanActions] = useState(0)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
@@ -456,9 +474,50 @@ export function ThreatAlerts() {
     }
   }
 
+  const fetchAiTestingStatuses = async () => {
+    try {
+      const res = await fetch('/api/ai-testing/statuses', { cache: 'no-store' })
+      if (!res.ok) return
+      const payload = await res.json().catch(() => null) as
+        | { statuses?: Record<string, { status?: string }> }
+        | null
+      const statuses = payload?.statuses
+      if (!statuses) return
+      const next: Record<string, AiTestingStatus> = {}
+      for (const [storeId, entry] of Object.entries(statuses)) {
+        const s = entry?.status
+        if (s === 'pending' || s === 'running' || s === 'complete' || s === 'error') {
+          next[storeId] = s
+        }
+      }
+      setAiTestingStatusByStoreId((prev) => {
+        // Preserve optimistic 'pending' entries that the server hasn't seen yet.
+        const merged: Record<string, AiTestingStatus> = { ...next }
+        for (const [storeId, s] of Object.entries(prev)) {
+          if (s === 'pending' && !next[storeId]) {
+            merged[storeId] = 'pending'
+          }
+        }
+        return merged
+      })
+    } catch {
+      // ignore — animation just won't update this tick
+    }
+  }
+
+  const handleAiTestingTriggered = (storeId: string) => {
+    setAiTestingStatusByStoreId((prev) => ({ ...prev, [storeId]: 'pending' }))
+  }
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    fetchAiTestingStatuses();
+    const interval = setInterval(fetchAiTestingStatuses, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -840,7 +899,7 @@ export function ThreatAlerts() {
             setDetails(null)
             setSelected(row)
             setOpen(true)
-          }, liveStatusByExtensionId)}
+          }, liveStatusByExtensionId, aiTestingStatusByStoreId, handleAiTestingTriggered)}
           searchKey="extensionName"
         />
         <Sheet open={open} onOpenChange={setOpen}>
