@@ -62,6 +62,58 @@ const isInProgressStatus = (status: string) =>
   status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
 const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
 
+const AiTestingButton = ({
+  extensionId,
+  extensionName,
+  version,
+}: {
+  extensionId: string
+  extensionName: string
+  version: string
+}) => {
+  const { toast } = useToast()
+  const [pending, setPending] = useState(false)
+  const disabled = !version || version === 'N/A'
+
+  const handleClick = async () => {
+    if (pending || disabled) return
+    setPending(true)
+    try {
+      const res = await fetch('/api/ai-testing/enqueue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: extensionId, name: extensionName, version }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data?.queued) {
+        toast({ description: data.message ?? 'AI testing enqueued.' })
+        return
+      }
+      toast({
+        description: data?.message ?? data?.error ?? 'Failed to enqueue AI test',
+        variant: 'destructive',
+      })
+    } catch {
+      toast({ description: 'Failed to enqueue AI test', variant: 'destructive' })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={handleClick}
+      disabled={pending || disabled}
+      title={disabled ? 'Version unavailable' : 'Run AI testing'}
+      aria-label="Run AI testing"
+    >
+      <Sparkles className="h-4 w-4 text-green-400 animate-sparkle" />
+    </Button>
+  )
+}
+
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
@@ -249,6 +301,11 @@ function makeColumns(
                 <Download className="h-4 w-4" />
               </a>
             </Button>
+            <AiTestingButton
+              extensionId={row.original.extensionId}
+              extensionName={row.original.extensionName}
+              version={row.original.version}
+            />
             <OperationCell extensionId={row.original.extensionId} />
           </div>
         )
