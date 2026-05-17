@@ -7,7 +7,6 @@ import {
   getAgentStatusPath,
   getExtensionArtifactRoot,
   hasResolvableAgentPrompt,
-  loadAgentQueueWhitelistForEnqueue,
 } from '@/lib/extension-storage'
 
 export type AgentQueueEntry = {
@@ -88,11 +87,6 @@ export function enqueueAgentBrowserTestTask(input: {
   }
   if (!input.version) {
     return { queued: false as const, reason: 'missing_version' as const }
-  }
-
-  const whitelist = loadAgentQueueWhitelistForEnqueue()
-  if (!whitelist.has(input.storeId)) {
-    return { queued: false as const, reason: 'not_whitelisted' as const }
   }
 
   syncAgentQueueDefaultPromptFromBundled()

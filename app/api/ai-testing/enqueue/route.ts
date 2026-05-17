@@ -41,7 +41,6 @@ export async function POST(req: Request) {
   const reasonMessages: Record<string, string> = {
     disabled: 'AI testing is disabled on this server.',
     missing_version: 'Extension version is missing.',
-    not_whitelisted: 'This extension is not whitelisted for AI testing.',
     missing_prompt: 'AI testing prompt template is missing.',
     already_queued: 'AI testing is already queued or running for this version.',
   }

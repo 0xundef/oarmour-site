@@ -2,12 +2,6 @@ import 'server-only'
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
-  try {
-    const { ensureAgentQueueWhitelistFile } = await import('@/lib/extension-storage')
-    ensureAgentQueueWhitelistFile()
-  } catch (e) {
-    console.warn('Failed to ensure agent-queue whitelist file at startup.', e)
-  }
   const g = globalThis as typeof globalThis & {
     __extMonitorHandle?: ReturnType<typeof setInterval>
     __extLookupHandle?: ReturnType<typeof setInterval>
