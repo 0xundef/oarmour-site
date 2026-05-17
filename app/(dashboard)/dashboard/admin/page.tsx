@@ -78,10 +78,10 @@ export default async function AdminPage({
   }
 
   if (section === "monitoring") {
-    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; testingMode: boolean; checkFrequencyMinutes: number | null }> = []
+    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; testingMode: boolean; aiTestingEnabled: boolean; checkFrequencyMinutes: number | null; promptMarkdown: string | null }> = []
     try {
       rawExtensions = await prisma.$queryRaw`
-        SELECT "id","name","storeId","version","isMonitored","testingMode","checkFrequencyMinutes"
+        SELECT "id","name","storeId","version","isMonitored","testingMode","aiTestingEnabled","checkFrequencyMinutes","promptMarkdown"
         FROM "GlobalExtension"
         ORDER BY "updatedAt" DESC
       `;
@@ -94,6 +94,8 @@ export default async function AdminPage({
       rawExtensions = legacyExtensions.map((e) => ({
         ...e,
         testingMode: false,
+        aiTestingEnabled: false,
+        promptMarkdown: null,
       }))
     }
     const extensions = rawExtensions.map((e) => ({
@@ -103,7 +105,9 @@ export default async function AdminPage({
       version: e.version,
       isMonitored: e.isMonitored,
       testingMode: e.testingMode,
+      aiTestingEnabled: e.aiTestingEnabled,
       checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
+      promptMarkdown: e.promptMarkdown ?? undefined,
     }));
     title = "Monitoring";
     description = "Manage extension monitoring and monitor service health in one place.";

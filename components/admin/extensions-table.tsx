@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bell, Pencil, Play, Trash2 } from "lucide-react";
+import { Bell, Pencil, Play, Sparkles, Trash2 } from "lucide-react";
 
 type ExtRow = {
   id: string;
@@ -25,7 +25,9 @@ type ExtRow = {
   version: string | null;
   isMonitored?: boolean;
   testingMode?: boolean;
+  aiTestingEnabled?: boolean;
   checkFrequencyMinutes?: number;
+  promptMarkdown?: string | null;
 };
 
 function getNextVersion(version?: string | null) {
@@ -80,6 +82,24 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         router.refresh();
       } catch {
         toast({ variant: "destructive", description: "Failed to update testing mode" });
+      }
+    });
+  };
+
+  const toggleAiTesting = (id: string, enabled: boolean) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/admin/extensions/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, aiTestingEnabled: enabled }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        toast({ description: enabled ? "AI testing enabled" : "AI testing disabled" });
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, aiTestingEnabled: enabled } : r)));
+        router.refresh();
+      } catch {
+        toast({ variant: "destructive", description: "Failed to update AI testing setting" });
       }
     });
   };
@@ -139,16 +159,20 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
-  const runImmediateCheck = (storeId: string, currentVersion?: string | null) => {
+  const runImmediateCheck = (ext: ExtRow) => {
+    if (!ext.aiTestingEnabled) {
+      toast({ variant: "destructive", description: "AI testing is not enabled for this extension. Enable it first." });
+      return;
+    }
     startTransition(async () => {
       try {
-        const nextVersion = getNextVersion(currentVersion) ?? "{next-version}";
-        const downloadUri = `https://cdn.oarmour.com/${storeId}/${nextVersion}.zip`;
+        const nextVersion = getNextVersion(ext.version) ?? "{next-version}";
+        const downloadUri = `https://cdn.oarmour.com/${ext.storeId}/${nextVersion}.zip`;
         console.info("[monitor-check] next download uri:", downloadUri);
         const res = await fetch("/api/monitor/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storeId }),
+          body: JSON.stringify({ storeId: ext.storeId }),
         });
         if (!res.ok) {
           const payload = await res.json().catch(() => null);
@@ -249,11 +273,20 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                           aria-label="Toggle testing mode"
                         />
                       </div>
+                      <div className="flex items-center gap-1">
+                        <Switch
+                          checked={!!ext.aiTestingEnabled}
+                          onCheckedChange={(v) => toggleAiTesting(ext.id, v)}
+                          disabled={pending}
+                          aria-label="Toggle AI testing"
+                        />
+                        <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={pending}
-                        onClick={() => runImmediateCheck(ext.storeId, ext.version)}
+                        onClick={() => runImmediateCheck(ext)}
                         aria-label="Run immediate check"
                         title="Run immediate check"
                       >

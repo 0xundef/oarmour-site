@@ -8,43 +8,48 @@ function getErrorMessage(error: unknown) {
   return String(error ?? '')
 }
 
+function buildUpdateQuery(data: Record<string, boolean>, whereId: string) {
+  const sets: string[] = []
+  const values: any[] = []
+  let paramIdx = 1
+  for (const [col, val] of Object.entries(data)) {
+    sets.push(`"${col}" = $${paramIdx}`)
+    values.push(val)
+    paramIdx++
+  }
+  values.push(whereId)
+  return {
+    sql: `UPDATE "GlobalExtension" SET ${sets.join(', ')} WHERE "id" = $${paramIdx}`,
+    values,
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { id, storeId, isMonitored, testingMode } = await req.json()
+    const { id, storeId, isMonitored, testingMode, aiTestingEnabled } = await req.json()
     const hasIsMonitored = typeof isMonitored === 'boolean'
     const hasTestingMode = typeof testingMode === 'boolean'
-    if (!hasIsMonitored && !hasTestingMode) {
+    const hasAiTestingEnabled = typeof aiTestingEnabled === 'boolean'
+    if (!hasIsMonitored && !hasTestingMode && !hasAiTestingEnabled) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
+
+    const updates: Record<string, boolean> = {}
+    if (hasIsMonitored) updates.isMonitored = isMonitored
+    if (hasTestingMode) updates.testingMode = testingMode
+    if (hasAiTestingEnabled) updates.aiTestingEnabled = aiTestingEnabled
+
     if (id) {
       try {
-        if (hasIsMonitored && hasTestingMode) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "isMonitored" = $1, "testingMode" = $2 WHERE "id" = $3`,
-            isMonitored,
-            testingMode,
-            id
-          )
-        } else if (hasIsMonitored) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "isMonitored" = $1 WHERE "id" = $2`,
-            isMonitored,
-            id
-          )
-        } else if (hasTestingMode) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "testingMode" = $1 WHERE "id" = $2`,
-            testingMode,
-            id
-          )
-        }
+        const { sql, values } = buildUpdateQuery(updates, id)
+        await prisma.$executeRawUnsafe(sql, ...values)
         return NextResponse.json({ ok: true })
       } catch (e: unknown) {
         const msg = getErrorMessage(e)
         if (msg.includes('Record to update not found')) {
           return NextResponse.json({ error: 'Extension not found' }, { status: 404 })
         }
-        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode'))) {
+        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode') || msg.includes('aiTestingEnabled'))) {
           return NextResponse.json({ error: 'Monitoring columns not available. Run DB migration.' }, { status: 400 })
         }
         return NextResponse.json({ error: 'Update failed' }, { status: 500 })
@@ -66,30 +71,12 @@ export async function POST(req: NextRequest) {
           })
           ext = created
         }
-        if (hasIsMonitored && hasTestingMode) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "isMonitored" = $1, "testingMode" = $2 WHERE "id" = $3`,
-            isMonitored,
-            testingMode,
-            ext.id
-          )
-        } else if (hasIsMonitored) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "isMonitored" = $1 WHERE "id" = $2`,
-            isMonitored,
-            ext.id
-          )
-        } else if (hasTestingMode) {
-          await prisma.$executeRawUnsafe(
-            `UPDATE "GlobalExtension" SET "testingMode" = $1 WHERE "id" = $2`,
-            testingMode,
-            ext.id
-          )
-        }
+        const { sql, values } = buildUpdateQuery(updates, ext.id)
+        await prisma.$executeRawUnsafe(sql, ...values)
         return NextResponse.json({ ok: true, id: ext.id })
       } catch (e: unknown) {
         const msg = getErrorMessage(e)
-        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode'))) {
+        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode') || msg.includes('aiTestingEnabled'))) {
           return NextResponse.json({ error: 'Monitoring columns not available. Run DB migration.' }, { status: 400 })
         }
         return NextResponse.json({ error: 'Upsert failed', message: msg }, { status: 500 })
