@@ -1,0 +1,1 @@
+ALTER TABLE "GlobalExtension" DROP COLUMN IF EXISTS "aiTestingEnabled";

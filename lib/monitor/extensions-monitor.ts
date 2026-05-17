@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { enqueueExtensionLookupJob, processExtension } from '@/lib/analysis-service'
+import { enqueueAgentBrowserTestTask } from '@/lib/agent-queue'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
 const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
@@ -190,6 +191,15 @@ async function monitorExtensionsOnceWithDb(
           continue
         }
         await processExtension(ext.storeId, downloadUrl)
+        try {
+          enqueueAgentBrowserTestTask({
+            storeId: ext.storeId,
+            version: nextVersion,
+            reason: 'monitor_new_version',
+          })
+        } catch (e) {
+          console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+        }
         updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: nextVersion, crxPath: downloadUrl })
         succeededCount += 1
         continue
@@ -203,6 +213,15 @@ async function monitorExtensionsOnceWithDb(
             data: { version: latest, updatedAt: new Date() },
           })
           await enqueueExtensionLookupJob(ext.id, db)
+          try {
+            enqueueAgentBrowserTestTask({
+              storeId: ext.storeId,
+              version: latest,
+              reason: 'monitor_new_version',
+            })
+          } catch (e) {
+            console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+          }
         } catch (e) {
           console.error('Failed to update DB for', ext.storeId, e)
         }
