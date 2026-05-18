@@ -27,7 +27,7 @@ export function getExtensionArtifactRoot(storeId: string, version: string) {
  */
 export function getExtensionSidecarRoot(storeId: string, version: string) {
   return path.join(getAgentQueueRoot(), EXTENSION_SIDE_DATA_DIRNAME, storeId, version)
-}
+} 
 
 export function getExtensionAnalysisDir(storeId: string, version: string) {
   return path.join(getExtensionSidecarRoot(storeId, version), 'analysis')

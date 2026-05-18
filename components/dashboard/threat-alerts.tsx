@@ -9,7 +9,6 @@ import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState, useRef } from "react"
-import { getDashboardMetrics, getExtensions } from "@/app/actions/get-extensions"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import Link from "next/link"
@@ -449,12 +448,27 @@ export function ThreatAlerts() {
 
   const fetchData = async () => {
     try {
-        const [extensions, metrics] = await Promise.all([
-          getExtensions(),
-          getDashboardMetrics(),
-        ]);
-        
-        const formattedData: ThreatAlert[] = extensions.map(ext => ({
+        const res = await fetch('/api/extensions', { cache: 'no-store' })
+        if (!res.ok) {
+          console.error('Failed to fetch extensions', res.status, await res.text().catch(() => ''))
+          return
+        }
+        const payload = await res.json() as {
+          extensions?: Array<{
+            id: string
+            storeId: string
+            name: string
+            version: string | null
+            testingMode: boolean
+            updatedAt: string
+            riskLevel: string
+            analysisStatus: string
+          }>
+          metrics?: { completedScanActions?: number }
+        }
+        const extensions = payload.extensions ?? []
+
+        const formattedData: ThreatAlert[] = extensions.map((ext) => ({
             id: ext.id,
             extensionName: ext.name,
             extensionId: ext.storeId,
@@ -462,11 +476,11 @@ export function ThreatAlerts() {
             testingMode: ext.testingMode,
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
-            analysisStatus: ext.analysisStatus
-        }));
-        
-        setData(formattedData);
-        setCompletedScanActions(metrics.completedScanActions);
+            analysisStatus: ext.analysisStatus,
+        }))
+
+        setData(formattedData)
+        setCompletedScanActions(payload.metrics?.completedScanActions ?? 0)
     } catch (error) {
         console.error("Failed to fetch extensions", error);
     } finally {
