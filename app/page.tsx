@@ -82,7 +82,7 @@ export default function LandingPage() {
         <div className="container text-center max-w-5xl">
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
-            Secure the Web3 Entrance
+            Secure your crypto wallet
           </h1>
           <p className="text-lg text-muted-foreground mb-10 max-w-3xl mx-auto">
             We efficiently detect and block threats, such as web wallet compromise in real-time.
