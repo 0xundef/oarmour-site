@@ -44,11 +44,12 @@ export async function GET(req: NextRequest) {
       WHERE "status" IN ('COMPLETED', 'FAILED')
     `;
     const range = req.nextUrl.searchParams.get("range")
+    const dayMs = 24 * 60 * 60 * 1000
     const rangeMsMap: Record<string, number> = {
-      "12h": 12 * 60 * 60 * 1000,
-      "24h": 24 * 60 * 60 * 1000,
+      "1d": dayMs,
+      "2d": 2 * dayMs,
     }
-    const selectedRange = range && rangeMsMap[range] ? range : "12h"
+    const selectedRange = range && rangeMsMap[range] ? range : "1d"
     const serverNow = new Date()
     const since = new Date(serverNow.getTime() - rangeMsMap[selectedRange])
     const history = await prisma.$queryRaw<HistoryRow[]>`

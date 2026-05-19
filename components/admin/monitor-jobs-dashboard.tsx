@@ -31,11 +31,13 @@ type MonitorStats = {
   }>
 };
 
-type TimeRange = "12h" | "24h"
+type TimeRange = "1d" | "2d"
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 const RANGE_MS: Record<TimeRange, number> = {
-  "12h": 12 * 60 * 60 * 1000,
-  "24h": 24 * 60 * 60 * 1000,
+  "1d": DAY_MS,
+  "2d": 2 * DAY_MS,
 }
 
 type TrendDatum = {
@@ -50,16 +52,13 @@ type TrendDatum = {
   timeLabel: string
 }
 
-function formatAxisTick(ms: number, timeRange: TimeRange) {
-  if (timeRange === "24h") {
-    return new Date(ms).toLocaleString([], {
-      month: "numeric",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
-  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+function formatAxisTick(ms: number) {
+  return new Date(ms).toLocaleString([], {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 function formatRangeBound(iso: string) {
@@ -73,13 +72,11 @@ function formatRangeBound(iso: string) {
 
 function MonitorOutcomeChart({
   chartData,
-  timeRange,
   windowStartMs,
   windowEndMs,
   onSelectRun,
 }: {
   chartData: TrendDatum[]
-  timeRange: TimeRange
   windowStartMs: number
   windowEndMs: number
   onSelectRun: (run: TrendDatum) => void
@@ -110,13 +107,13 @@ function MonitorOutcomeChart({
               scale="time"
               domain={[windowStartMs, windowEndMs]}
               tick={{ fontSize: 11 }}
-              tickFormatter={(ms) => formatAxisTick(ms, timeRange)}
+              tickFormatter={(ms) => formatAxisTick(ms)}
               minTickGap={28}
             />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ borderRadius: 10, borderColor: "#e2e8f0" }}
-              labelFormatter={(ms) => formatAxisTick(Number(ms), timeRange)}
+              labelFormatter={(ms) => formatAxisTick(Number(ms))}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar
@@ -155,7 +152,7 @@ function MonitorOutcomeChart({
 export function MonitorJobsDashboard() {
   const [stats, setStats] = useState<MonitorStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<TimeRange>("12h");
+  const [timeRange, setTimeRange] = useState<TimeRange>("1d");
   const [selectedRun, setSelectedRun] = useState<TrendDatum | null>(null);
 
   useEffect(() => {
@@ -207,15 +204,15 @@ export function MonitorJobsDashboard() {
       return {
         ...point,
         startedAtMs,
-        timeLabel: formatAxisTick(startedAtMs, timeRange),
+        timeLabel: formatAxisTick(startedAtMs),
       }
     })
-  }, [stats?.history, timeRange])
+  }, [stats?.history])
 
   const completedChartData = chartData.filter((point) => point.status === "COMPLETED")
   const selectedRunInRange = completedChartData.find((item) => item.id === selectedRun?.id) || null
   const activeRun = selectedRunInRange || completedChartData[completedChartData.length - 1] || null
-  const rangeLabel = timeRange === "12h" ? "past 12 hours" : "past 24 hours"
+  const rangeLabel = timeRange === "1d" ? "past 1 day" : "past 2 days"
 
   return (
     <div className="space-y-3">
@@ -282,20 +279,20 @@ export function MonitorJobsDashboard() {
               <Button
                 type="button"
                 size="sm"
-                variant={timeRange === "12h" ? "secondary" : "ghost"}
+                variant={timeRange === "1d" ? "secondary" : "ghost"}
                 className="h-7 px-2"
-                onClick={() => setTimeRange("12h")}
+                onClick={() => setTimeRange("1d")}
               >
-                12h
+                1d
               </Button>
               <Button
                 type="button"
                 size="sm"
-                variant={timeRange === "24h" ? "secondary" : "ghost"}
+                variant={timeRange === "2d" ? "secondary" : "ghost"}
                 className="h-7 px-2"
-                onClick={() => setTimeRange("24h")}
+                onClick={() => setTimeRange("2d")}
               >
-                24h
+                2d
               </Button>
             </div>
           </div>
@@ -310,7 +307,6 @@ export function MonitorJobsDashboard() {
               </p>
               <MonitorOutcomeChart
                 chartData={chartData}
-                timeRange={timeRange}
                 windowStartMs={windowStartMs}
                 windowEndMs={windowEndMs}
                 onSelectRun={setSelectedRun}
