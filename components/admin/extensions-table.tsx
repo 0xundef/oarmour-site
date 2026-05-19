@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Bell, Pencil, Play, Trash2 } from "lucide-react";
+import { Pencil, Play, Trash2 } from "lucide-react";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
 
 type ExtRow = {
@@ -195,43 +195,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
-  const notifyMaliciousSubscribers = (ext: ExtRow) => {
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/admin/extensions/notify-malicious", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: ext.id, storeId: ext.storeId }),
-        });
-        const payload = await res.json().catch(() => null);
-        if (!res.ok) {
-          const message =
-            typeof payload?.error === "string" ? payload.error : "Failed to send malicious alert emails";
-          throw new Error(message);
-        }
-        const reason = typeof payload?.result?.reason === "string" ? payload.result.reason : "";
-        const sent = typeof payload?.result?.sent === "number" ? payload.result.sent : 0;
-        const attempted = typeof payload?.result?.attempted === "number" ? payload.result.attempted : 0;
-        if (reason === "degraded") {
-          toast({
-            variant: "destructive",
-            description: "Notification subscription is unavailable in this environment (degraded mode).",
-          });
-          return;
-        }
-        toast({
-          description:
-            attempted > 0
-              ? `Malicious alert email sent to ${sent}/${attempted} subscribed user(s).`
-              : "No subscribed users found for this extension.",
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to send malicious alert emails";
-        toast({ variant: "destructive", description: message });
-      }
-    });
-  };
-
   return (
     <>
       <div className="rounded-md border">
@@ -257,29 +220,29 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   <TableCell>{ext.version || "N/A"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
+                      <span title="Turn version monitoring on or off for this extension">
                         <Switch
                           checked={!!ext.isMonitored}
                           onCheckedChange={(v) => toggleMonitor(ext.id, v)}
                           disabled={pending}
                           aria-label="Toggle monitoring"
                         />
-                      </div>
-                      <div className="flex items-center gap-1">
+                      </span>
+                      <span title="Turn AI browser testing on or off for this extension">
                         <Switch
                           checked={!!ext.testingMode}
                           onCheckedChange={(v) => toggleTestingMode(ext.id, v)}
                           disabled={pending}
                           aria-label="Toggle testing mode"
                         />
-                      </div>
+                      </span>
                       <Button
                         variant="outline"
                         size="sm"
                         disabled={pending}
                         onClick={() => runImmediateCheck(ext)}
                         aria-label="Run immediate check"
-                        title="Run immediate check"
+                        title="Run an immediate version check now"
                       >
                         <Play className="mr-1.5 h-3.5 w-3.5" />
                         Check
@@ -288,20 +251,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         variant="outline"
                         size="sm"
                         disabled={pending}
-                        onClick={() => notifyMaliciousSubscribers(ext)}
-                        aria-label="Notify malicious users"
-                        title="Notify subscribed users"
-                      >
-                        <Bell className="mr-1.5 h-3.5 w-3.5" />
-                        Notify
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={pending}
                         onClick={() => openEditModal(ext)}
                         aria-label="Edit extension"
-                        title="Edit extension"
+                        title="Edit name and AI test prompt"
                       >
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit
@@ -312,7 +264,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         disabled={pending}
                         onClick={() => deleteExtension(ext.id)}
                         aria-label="Delete extension"
-                        title="Delete extension"
+                        title="Remove this extension from monitoring"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
