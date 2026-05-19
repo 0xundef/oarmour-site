@@ -200,15 +200,15 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
       <div className="rounded-md border">
         <Table className="table-fixed">
           <colgroup>
-            <col className="w-[38%]" />
-            <col className="w-28" />
             <col />
+            <col className="w-28" />
+            <col className="w-[26rem]" />
           </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead className="px-4">Name</TableHead>
               <TableHead className="w-28 px-4">Version</TableHead>
-              <TableHead className="px-4">Operation</TableHead>
+              <TableHead className="w-[26rem] whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -223,8 +223,8 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                 <TableRow key={ext.id}>
                   <TableCell className="truncate px-4">{ext.name}</TableCell>
                   <TableCell className="w-28 whitespace-nowrap px-4">{ext.version || "N/A"}</TableCell>
-                  <TableCell className="px-4">
-                    <div className="flex flex-wrap items-center justify-start gap-2">
+                  <TableCell className="w-[26rem] whitespace-nowrap px-4">
+                    <div className="flex flex-nowrap items-center justify-start gap-2">
                       <span title="Turn version monitoring on or off for this extension">
                         <Switch
                           checked={!!ext.isMonitored}
