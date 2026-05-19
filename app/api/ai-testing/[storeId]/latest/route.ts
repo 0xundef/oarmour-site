@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { readAgentStatuses, type AgentStatusEntry } from '@/lib/agent-queue'
 import { getAiTestingRunRoot, getAiTestingRoot, getExtensionAnalyzerRoot } from '@/lib/extension-storage'
+import { parseNetworkLogFile, type AiTestingNetworkLog } from '@/lib/ai-testing-network'
 
 export const runtime = 'nodejs'
 
@@ -48,10 +49,12 @@ function findRecordingFromStatus(storeId: string, version?: string, runId?: stri
   for (const status of statuses) {
     const resolvedRunId = status.runId ?? (status.index !== undefined ? String(status.index) : '')
     if (!resolvedRunId) continue
-    const recordingsPath = status.recordingsPath || path.join(getAiTestingRunRoot(status.id, status.version, resolvedRunId), 'recordings.json')
+    const runRoot = getAiTestingRunRoot(status.id, status.version, resolvedRunId)
+    const recordingsPath = status.recordingsPath || path.join(runRoot, 'recordings.json')
     const records = parseRecordingSteps(recordingsPath)
     if (records) {
-      return { status, records, version: status.version, runId: resolvedRunId }
+      const network = parseNetworkLogFile(path.join(runRoot, 'network.json'))
+      return { status, records, version: status.version, runId: resolvedRunId, network }
     }
   }
 
@@ -71,7 +74,8 @@ function findRecordingFromArtifacts(storeId: string, version?: string, runId?: s
   const resolvedRunId = runId || path.basename(runDir)
   const records = parseRecordingSteps(path.join(runDir, 'recordings.json'))
   if (!records) return null
-  return { status: null as AgentStatusEntry | null, records, version: resolvedVersion, runId: resolvedRunId }
+  const network = parseNetworkLogFile(path.join(runDir, 'network.json'))
+  return { status: null as AgentStatusEntry | null, records, version: resolvedVersion, runId: resolvedRunId, network }
 }
 
 export async function GET(
@@ -103,6 +107,7 @@ export async function GET(
 
   return NextResponse.json({
     records: found.records,
+    network: found.network ?? null,
     status: found.status?.status ?? null,
     statusTime: found.status?.status_time ?? null,
     version: found.version,

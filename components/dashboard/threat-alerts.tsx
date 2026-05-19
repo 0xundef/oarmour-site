@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useEffect, useMemo, useState, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
+import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
@@ -40,6 +41,7 @@ type AiTestingRecordingStep = {
 type AiTestingResponse = {
   records?: AiTestingRecordingStep[]
   assetBaseUrl?: string
+  network?: AiTestingNetworkLog | null
 }
 
 function isAbortError(e: unknown): boolean {
@@ -374,6 +376,7 @@ export function ThreatAlerts() {
   const [aiDetailError, setAiDetailError] = useState("")
   const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
   const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
+  const [aiDetailNetwork, setAiDetailNetwork] = useState<AiTestingNetworkLog | null>(null)
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -691,6 +694,7 @@ export function ThreatAlerts() {
         if (!res.ok) {
           setAiDetailRecords([])
           setAiDetailAssetBaseUrl("")
+          setAiDetailNetwork(null)
           setAiDetailError("No AI testing record found for this extension.")
           return
         }
@@ -712,12 +716,14 @@ export function ThreatAlerts() {
         })
         setAiDetailRecords(parsed)
         setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
+        setAiDetailNetwork(json.network ?? null)
         if (parsed.length === 0) {
           setAiDetailError("AI testing record is empty.")
         }
       } catch {
         setAiDetailRecords([])
         setAiDetailAssetBaseUrl("")
+        setAiDetailNetwork(null)
         setAiDetailError("Failed to load AI testing record.")
       } finally {
         setAiDetailLoading(false)
@@ -1066,6 +1072,7 @@ export function ThreatAlerts() {
                 loading={aiDetailLoading}
                 error={aiDetailError}
                 assetBaseUrl={aiDetailAssetBaseUrl}
+                network={aiDetailNetwork}
               />
             </div>
           </DialogContent>

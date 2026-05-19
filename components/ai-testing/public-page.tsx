@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
+import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 
 type AiTestingRecordingStep = {
   time: string
@@ -13,6 +14,7 @@ type AiTestingRecordingStep = {
 type AiTestingResponse = {
   records?: AiTestingRecordingStep[]
   assetBaseUrl?: string
+  network?: AiTestingNetworkLog | null
 }
 
 export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
@@ -20,6 +22,7 @@ export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
   const [error, setError] = useState("")
   const [records, setRecords] = useState<AiTestingRecordingStep[]>([])
   const [assetBaseUrl, setAssetBaseUrl] = useState("")
+  const [network, setNetwork] = useState<AiTestingNetworkLog | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -52,6 +55,7 @@ export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
         })
         setRecords(parsed)
         setAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
+        setNetwork(json.network ?? null)
         if (parsed.length === 0) {
           setError("AI testing record is empty.")
         }
@@ -80,6 +84,7 @@ export function AiTestingPublicPage({ extensionId }: { extensionId: string }) {
             loading={loading}
             error={error}
             assetBaseUrl={assetBaseUrl}
+            network={network}
           />
         </CardContent>
       </Card>
