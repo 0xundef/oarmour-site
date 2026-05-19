@@ -15,7 +15,9 @@ export type WhoisInfoResult = {
 
 export async function whoisInfo(domain: string): Promise<WhoisInfoResult> {
   const tld = domain.split('.').pop()?.toLowerCase()
-  if (tld === 'com') return whoisInfoComImpl(domain)
+  if (tld === 'dev') {
+    return { createdDate: null, updatedDate: null, expiresDate: null, registrar: null, nameservers: [] }
+  }
   if (tld === 'hk') return whoisInfoHkImpl(domain)
-  return { createdDate: null, updatedDate: null, expiresDate: null, registrar: null, nameservers: [] }
+  return whoisInfoComImpl(domain)
 }

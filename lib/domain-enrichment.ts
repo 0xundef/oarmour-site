@@ -68,9 +68,10 @@ export async function enrichApexDomains(domains: string[]): Promise<DomainEnrich
     } catch {
       // RDAP optional
     }
-    const insufficient =
-      !registrar && !createdDate && !expiresDate && nameservers.length === 0
-    if (insufficient) {
+    const tld = d.split('.').pop()?.toLowerCase()
+    const hasCreatedDate =
+      createdDate instanceof Date && !Number.isNaN(createdDate.getTime())
+    if (tld !== 'dev' && !hasCreatedDate) {
       try {
         const w = await whoisInfo(d)
         registrar = registrar ?? w.registrar

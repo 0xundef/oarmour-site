@@ -30,7 +30,7 @@ export async function whoisInfo(domain: string): Promise<{
       const nl = needle.toLowerCase()
       return exact ? kl === nl : kl.includes(nl)
     })
-  const createdKey = findKey('creation date')
+  const createdKey = findKey('creation date') || findKey('created date')
   const updatedKey = findKey('updated date')
   const expiryKey = findKey('registry expiry date') || findKey('expiry date') || findKey('expiration date')
   const registrarKey = keys.find((k) => k.toLowerCase() === 'registrar')
