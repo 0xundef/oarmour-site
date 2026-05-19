@@ -805,7 +805,7 @@ export function ThreatAlerts() {
                   <div className="text-xs text-muted-foreground">AI Testing</div>
                   <div className="text-2xl font-semibold text-purple-600">{overview.aiTesting}</div>
                 </div>
-                <Sparkles className="h-4 w-4 text-green-400 animate-sparkle" />
+                <Sparkles className="h-4 w-4 text-green-400" />
               </CardContent>
             </Card>
             <Card>
