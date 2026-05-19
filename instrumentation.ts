@@ -5,6 +5,7 @@ export async function register() {
   const g = globalThis as typeof globalThis & {
     __extMonitorHandle?: ReturnType<typeof setInterval>
     __extLookupHandle?: ReturnType<typeof setInterval>
+    __aiAnalysisHandle?: ReturnType<typeof setInterval>
   }
   try {
     const { prisma } = await import('@/lib/prisma')
@@ -25,5 +26,12 @@ export async function register() {
     const { scheduleExtensionLookupService } = await import('@/lib/analysis-service')
     const handle = scheduleExtensionLookupService(seconds * 1000)
     g.__extLookupHandle = handle
+  }
+  if (process.env.AI_ANALYSIS_ENABLED !== '0' && !g.__aiAnalysisHandle) {
+    const seconds = Number(process.env.AI_ANALYSIS_POLL_SECONDS ?? '15')
+    const pollMs = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 15_000
+    const { scheduleAiAnalysisService } = await import('@/lib/ai-analysis-service')
+    const handle = scheduleAiAnalysisService(pollMs)
+    if (handle) g.__aiAnalysisHandle = handle
   }
 }

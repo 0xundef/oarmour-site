@@ -117,7 +117,7 @@ export async function GET(
 
   const ext = await prisma.globalExtension.findUnique({
     where: { storeId },
-    select: { version: true },
+    select: { id: true, version: true },
   })
   const preferredVersion = version || ext?.version || undefined
 
@@ -135,9 +135,43 @@ export async function GET(
     return NextResponse.json({ error: 'No AI testing record found' }, { status: 404 })
   }
 
+  const aiAnalysis =
+    ext?.id && found.runId
+      ? await prisma.aiExtensionAnalysisResult.findUnique({
+          where: {
+            extensionId_runId: { extensionId: ext.id, runId: found.runId },
+          },
+          select: {
+            id: true,
+            status: true,
+            staticAnalysisId: true,
+            runtimeDomains: true,
+            novelDomains: true,
+            riskLevel: true,
+            networkRequestCount: true,
+            networkCapturedAt: true,
+            createdAt: true,
+            updatedAt: true,
+            domainEnrichments: {
+              select: {
+                domain: true,
+                registrar: true,
+                status: true,
+                nameservers: true,
+                createdDate: true,
+                expiresDate: true,
+                isMalicious: true,
+              },
+              orderBy: { domain: 'asc' },
+            },
+          },
+        })
+      : null
+
   return NextResponse.json({
     records: found.records,
     network: found.network ?? null,
+    aiAnalysis,
     status: found.status?.status ?? null,
     statusTime: found.status?.status_time ?? null,
     version: found.version,

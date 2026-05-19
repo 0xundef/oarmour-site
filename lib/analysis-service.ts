@@ -4,8 +4,15 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { getDomain } from 'tldts';
-import { rdapDomain, whoisInfo, vtGetDomain } from '@/lib/threat-intel';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
+import { normalizeApexDomain, normalizeStoredDomainList } from '@/lib/domain-normalize';
+import {
+    applyVtToStaticDomains,
+    enrichApexDomains,
+    persistStaticDomainEnrichments,
+    riskLevelFromVtSignals,
+    vtSignalsForYoungestDomains,
+} from '@/lib/domain-enrichment';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
@@ -42,13 +49,6 @@ const isDatabaseUnavailableError = (error: unknown) => {
 }
 
 let lastDbUnavailableLookupLogAt = 0
-
-const readPositiveIntEnv = (name: string, fallback: number) => {
-    const raw = Number(process.env[name] ?? '')
-    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback
-}
-
-const ANALYSIS_DOMAIN_ENRICH_CONCURRENCY = readPositiveIntEnv('ANALYSIS_DOMAIN_ENRICH_CONCURRENCY', 6)
 
 const toPathSegment = (value: string | null | undefined, fallback: string) => {
     const trimmed = String(value ?? '').trim()
@@ -109,25 +109,6 @@ const promoteToVersionedLayout = (params: {
     return { versionDir, crxPath: finalCrxPath, sourceDir: finalSourceDir, versionSegment }
 }
 
-const mapWithConcurrency = async <T, R>(
-    items: T[],
-    limit: number,
-    mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> => {
-    const safeLimit = Math.max(1, Math.floor(limit))
-    const results = new Array<R>(items.length)
-    let cursor = 0
-    const workers = Array.from({ length: Math.min(safeLimit, items.length) }, async () => {
-        while (true) {
-            const current = cursor++
-            if (current >= items.length) return
-            results[current] = await mapper(items[current], current)
-        }
-    })
-    await Promise.all(workers)
-    return results
-}
-
 const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { default_locale?: string }): string => {
     if (typeof value !== 'string') return String(value ?? '');
     const match = value.match(/^__MSG_(.+)__$/);
@@ -149,47 +130,9 @@ const resolveLocalizedString = (value: unknown, baseDir: string, manifestObj: { 
     return value;
 }
 
-function isDomainMalicious(vt: unknown): boolean {
-    if (!vt || typeof vt !== 'object') return false
-    const data = (vt as { data?: unknown }).data
-    if (!data || typeof data !== 'object') return false
-    const attributes = (data as { attributes?: unknown }).attributes
-    if (!attributes || typeof attributes !== 'object') return false
-    const stats = (attributes as { last_analysis_stats?: unknown }).last_analysis_stats
-    if (!stats || typeof stats !== 'object') return false
-    const malicious = (stats as { malicious?: unknown }).malicious
-    return typeof malicious === 'number' && malicious > 0
-}
-
 function toStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return []
     return value.filter((item): item is string => typeof item === 'string')
-}
-
-function normalizeApexDomain(value: string): string {
-    return value.trim().toLowerCase().replace(/\.+$/, '')
-}
-
-function normalizeStoredDomainList(values: string[]): string[] {
-    return Array.from(
-        new Set(
-            values
-                .flatMap((raw) => {
-                    if (typeof raw !== 'string') return []
-                    const text = raw.trim()
-                    if (!text) return []
-                    try {
-                        const parsed: unknown = JSON.parse(text)
-                        if (parsed && typeof parsed === 'object') {
-                            const domain = (parsed as Record<string, unknown>).domain
-                            if (typeof domain === 'string' && domain.trim()) return [normalizeApexDomain(domain)]
-                        }
-                    } catch {}
-                    return [normalizeApexDomain(text)]
-                })
-                .filter((d) => d.length > 0),
-        ),
-    )
 }
 
 function extractManifestPermissions(manifest: Record<string, unknown>) {
@@ -348,66 +291,16 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         whoisApexDomainCount: apexDomainsForEnrichment.length,
         mode: isFirstSeenAnalysis ? 'first_seen_full' : 'upgrade_incremental',
     })
-    const totalEnrichmentRequests = apexDomainsForEnrichment.length
-    let completedEnrichmentRequests = 0
-    let whoisFallbackCount = 0
-    const enrichmentProgressTicker = setInterval(() => {
-        logInfo('[analysis] runLookupFromSource:enrichmentProgress', {
-            extensionId,
-            analysisId,
-            completed: completedEnrichmentRequests,
-            total: totalEnrichmentRequests,
-            progress: `${completedEnrichmentRequests}/${totalEnrichmentRequests}`,
-            whoisFallbackCount,
-        })
-    }, 10000)
-    const enrichments = await mapWithConcurrency(apexDomainsForEnrichment, ANALYSIS_DOMAIN_ENRICH_CONCURRENCY, async (d) => {
-        try {
-            let registrar: string | null = null
-            let status: string | null = null
-            let nameservers: string[] = []
-            let createdDate: Date | null = null
-            let expiresDate: Date | null = null
-            try {
-                const info = await rdapDomain(d)
-                registrar = info.registrar ?? null
-                status = info.status ?? null
-                nameservers = Array.isArray(info.nameservers) ? info.nameservers : []
-                createdDate = info.createdDate ?? null
-                expiresDate = info.expiresDate ?? null
-            } catch {}
-            const insufficient = (!registrar && !createdDate && !expiresDate && nameservers.length === 0)
-            if (insufficient) {
-                whoisFallbackCount += 1
-                const w = await whoisInfo(d)
-                registrar = registrar ?? w.registrar
-                nameservers = nameservers.length ? nameservers : w.nameservers
-                createdDate = createdDate ?? w.createdDate
-                expiresDate = expiresDate ?? w.expiresDate
-            }
-            return {
-                analysisId,
-                domain: d,
-                registrar,
-                status,
-                nameservers,
-                createdDate,
-                expiresDate,
-            }
-        } finally {
-            completedEnrichmentRequests += 1
-        }
-    }).finally(() => {
-        clearInterval(enrichmentProgressTicker)
-    })
-    logInfo('[analysis] runLookupFromSource:enrichmentProgress', {
+    logInfo('[analysis] runLookupFromSource:enrichingDomains', {
         extensionId,
         analysisId,
-        completed: completedEnrichmentRequests,
-        total: totalEnrichmentRequests,
-        progress: `${completedEnrichmentRequests}/${totalEnrichmentRequests}`,
-        whoisFallbackCount,
+        count: apexDomainsForEnrichment.length,
     })
+    const enrichmentRows = await enrichApexDomains(apexDomainsForEnrichment)
+    const enrichments = enrichmentRows.map((row) => ({
+        analysisId,
+        ...row,
+    }))
     const domainEnrichment = prisma.domainEnrichment
     const inheritedEnrichments =
         previousCompletedAnalysis && inheritedApexDomains.length > 0
@@ -438,9 +331,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         ...enrichments,
     ]
     if (allEnrichmentRows.length > 0) {
-        await domainEnrichment.createMany({
-            data: allEnrichmentRows
-        });
+        await persistStaticDomainEnrichments(analysisId, allEnrichmentRows)
     }
     const enrichmentByDomain = new Map(allEnrichmentRows.map((item) => [item.domain, item]))
     const apexDomainList = allUniqueApexDomains.map((apexDomain) => {
@@ -456,42 +347,18 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     })
     fs.writeFileSync(rawDomainListPath, `${normalizedDomains.join('\n')}\n`, 'utf-8')
     fs.writeFileSync(apexDomainListPath, JSON.stringify(apexDomainList, null, 2), 'utf-8')
-    const topYoungDomains = apexDomainsForEnrichment
-        .map((domain) => {
-            const enrichment = enrichmentByDomain.get(domain) || null
-            return {
-                domain,
-                createdDate: enrichment?.createdDate ?? null,
-            }
-        })
-        .filter((item): item is { domain: string; createdDate: Date } => !!item.createdDate && !isNaN(item.createdDate.getTime()))
-        .sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime())
-        .slice(0, 3)
-    const topDomainSignals: Array<{
-        topDomainSignalId: string
-        domain: string
-        createTime: string | null
-        isMalicious: boolean
-    }> = await Promise.all(
-        topYoungDomains.map(async (item) => {
-            let isMalicious = false
-            try {
-                const vt = await vtGetDomain(item.domain)
-                isMalicious = isDomainMalicious(vt)
-            } catch {}
-            await domainEnrichment.updateMany({
-                where: { analysisId, domain: item.domain },
-                data: { isMalicious },
-            })
-            return {
-                topDomainSignalId: `${analysisId}:${item.domain}`,
-                domain: item.domain,
-                createTime: item.createdDate ? item.createdDate.toISOString() : null,
-                isMalicious,
-            }
-        }),
+    const enrichmentByDomainForVt = new Map(
+        enrichments.map((row) => [row.domain, row]),
     )
-    const hasMaliciousDomain = topDomainSignals.some((d) => d.isMalicious)
+    const topDomainSignals = (
+        await vtSignalsForYoungestDomains(apexDomainsForEnrichment, enrichmentByDomainForVt)
+    ).map((signal) => ({
+        ...signal,
+        topDomainSignalId: `${analysisId}:${signal.domain}`,
+    }))
+    await applyVtToStaticDomains(analysisId, topDomainSignals)
+    const riskLevel = riskLevelFromVtSignals(topDomainSignals)
+    const hasMaliciousDomain = riskLevel === 'HIGH'
     await prisma.extensionAnalysisResult.update({
         where: { id: analysisId },
         data: {
@@ -506,7 +373,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     await prisma.globalExtension.update({
         where: { id: dbId },
         data: {
-            riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+            riskLevel,
         },
     });
     {
@@ -514,7 +381,6 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             where: { id: dbId },
             select: { name: true, storeId: true, version: true },
         })
-        const riskLevel = hasMaliciousDomain ? 'HIGH' : 'SAFE'
         const maliciousDomainsList = topDomainSignals
             .filter((d) => d.isMalicious)
             .map((d) => d.domain)
@@ -533,7 +399,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         analysisId,
         filesScanned: results.fileCount,
         elapsedMs: Date.now() - startedAt,
-        riskLevel: hasMaliciousDomain ? 'HIGH' : 'SAFE',
+        riskLevel,
         rawDomainListPath,
         apexDomainListPath,
     })

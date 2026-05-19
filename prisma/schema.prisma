@@ -163,6 +163,7 @@ model GlobalExtension {
   // Relations
   subscriptions AssetSubscription[]
   analysisResults ExtensionAnalysisResult[]
+  aiAnalysisResults AiExtensionAnalysisResult[]
   notificationSubscriptions NotificationSubscription[]
 }
 
@@ -185,6 +186,54 @@ model ExtensionAnalysisResult {
   
   extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
   domainEnrichments DomainEnrichment[]
+  aiAnalysisResults AiExtensionAnalysisResult[]
+}
+
+// Runtime network analysis after AI browser testing (diff vs same-batch static domains)
+model AiExtensionAnalysisResult {
+  id               String    @id @default(uuid())
+  extensionId      String
+  staticAnalysisId String
+  storeId          String
+  version          String
+  runId            String
+
+  status           JobStatus @default(PENDING)
+
+  runtimeDomains   String[]
+  novelDomains     String[]
+
+  networkRequestCount Int?
+  networkCapturedAt   DateTime?
+  riskLevel           RiskLevel?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  extension        GlobalExtension         @relation(fields: [extensionId], references: [id], onDelete: Cascade)
+  staticAnalysis   ExtensionAnalysisResult @relation(fields: [staticAnalysisId], references: [id], onDelete: Cascade)
+  domainEnrichments AiDomainEnrichment[]
+
+  @@unique([extensionId, runId])
+  @@index([staticAnalysisId])
+  @@index([storeId, version])
+}
+
+model AiDomainEnrichment {
+  id          String   @id @default(uuid())
+  analysisId  String
+  domain      String
+  isMalicious Boolean?
+  registrar   String?
+  status      String?
+  nameservers String[]
+  createdDate DateTime?
+  expiresDate DateTime?
+  fetchedAt   DateTime @default(now())
+
+  analysis AiExtensionAnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@unique([analysisId, domain])
 }
 
 // B. The Library of Web Portals (e.g., Uniswap App, OpenSea)
