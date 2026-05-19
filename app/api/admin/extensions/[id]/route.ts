@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { syncExtensionPromptFile } from "@/lib/extension-prompt";
 
 export const runtime = "nodejs";
 
@@ -25,12 +26,21 @@ export async function PATCH(
     if (!name) {
       return NextResponse.json({ error: "Extension name is required" }, { status: 400 });
     }
+    const hasPrompt = typeof body?.promptMarkdown === "string";
+    const promptMarkdown = hasPrompt ? body.promptMarkdown : undefined;
 
     const extension = await prisma.globalExtension.update({
       where: { id },
-      data: { name },
-      select: { id: true, name: true },
+      data: {
+        name,
+        ...(hasPrompt ? { promptMarkdown } : {}),
+      },
+      select: { id: true, name: true, storeId: true, promptMarkdown: true },
     });
+
+    if (hasPrompt) {
+      syncExtensionPromptFile(extension.storeId, promptMarkdown ?? "");
+    }
 
     return NextResponse.json({ ok: true, extension });
   } catch (e: any) {

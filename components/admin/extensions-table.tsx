@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Bell, Pencil, Play, Trash2 } from "lucide-react";
+import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
 
 type ExtRow = {
   id: string;
@@ -43,6 +44,8 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [rows, setRows] = useState<ExtRow[]>(extensions);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftPrompt, setDraftPrompt] = useState("");
+  const [promptLoading, setPromptLoading] = useState(false);
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   useEffect(() => {
@@ -88,9 +91,21 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const openEditModal = (ext: ExtRow) => {
     setEditingId(ext.id);
     setDraftName(ext.name);
+    setDraftPrompt(ext.promptMarkdown ?? "");
+    setPromptLoading(true);
+    void fetch(`/api/admin/extensions/${ext.id}/prompt`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = (await res.json()) as { promptMarkdown?: string };
+        if (typeof json.promptMarkdown === "string") {
+          setDraftPrompt(json.promptMarkdown);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPromptLoading(false));
   };
 
-  const saveExtensionName = () => {
+  const saveExtension = () => {
     if (!editingExtension) return;
     const name = draftName.trim();
     if (!name) {
@@ -103,15 +118,19 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         const res = await fetch(`/api/admin/extensions/${editingExtension.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, promptMarkdown: draftPrompt }),
         });
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
           const message = typeof payload?.error === "string" ? payload.error : "Failed to update extension";
           throw new Error(message);
         }
-        setRows((prev) => prev.map((r) => (r.id === editingExtension.id ? { ...r, name } : r)));
-        toast({ description: "Extension updated" });
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === editingExtension.id ? { ...r, name, promptMarkdown: draftPrompt } : r,
+          ),
+        );
+        toast({ description: "Extension and prompt saved" });
         setEditingId(null);
         router.refresh();
       } catch (error) {
@@ -312,11 +331,11 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           if (!open) setEditingId(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Extension</DialogTitle>
             <DialogDescription>
-              Update the extension name.
+              Update the display name and the AI browser-test prompt for this extension.
             </DialogDescription>
           </DialogHeader>
           {editingExtension ? (
@@ -327,22 +346,22 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   id="extension-name"
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
-                  disabled={pending}
+                  disabled={pending || promptLoading}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Store ID</Label>
-                <div className="rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">
-                  {editingExtension.storeId}
-                </div>
-              </div>
+              <ExtensionPromptEditor
+                value={draftPrompt}
+                onChange={setDraftPrompt}
+                disabled={pending}
+                loading={promptLoading}
+              />
             </div>
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingId(null)} disabled={pending}>
               Cancel
             </Button>
-            <Button onClick={saveExtensionName} disabled={pending}>
+            <Button onClick={saveExtension} disabled={pending || promptLoading}>
               Save
             </Button>
           </DialogFooter>
