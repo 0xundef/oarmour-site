@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -16,6 +16,9 @@ type MonitorStats = {
   totalUpdated: number
   nextRunAt: string | null
   updatedAt: string
+  range?: string
+  rangeSince?: string
+  serverNow?: string
   history: Array<{
     id: string
     status: string
@@ -30,6 +33,11 @@ type MonitorStats = {
 
 type TimeRange = "12h" | "24h"
 
+const RANGE_MS: Record<TimeRange, number> = {
+  "12h": 12 * 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+}
+
 type TrendDatum = {
   id: string
   status: string
@@ -38,19 +46,47 @@ type TrendDatum = {
   failedCount: number
   updatedCount: number
   startedAt: string
+  startedAtMs: number
   timeLabel: string
+}
+
+function formatAxisTick(ms: number, timeRange: TimeRange) {
+  if (timeRange === "24h") {
+    return new Date(ms).toLocaleString([], {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+  return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+}
+
+function formatRangeBound(iso: string) {
+  return new Date(iso).toLocaleString([], {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 function MonitorOutcomeChart({
   chartData,
+  timeRange,
+  windowStartMs,
+  windowEndMs,
   onSelectRun,
 }: {
   chartData: TrendDatum[]
+  timeRange: TimeRange
+  windowStartMs: number
+  windowEndMs: number
   onSelectRun: (run: TrendDatum) => void
 }) {
   const completedHistory = chartData.filter((point) => point.status === "COMPLETED")
   if (completedHistory.length === 0) {
-    return <div className="text-sm text-muted-foreground">No outcome data yet</div>
+    return <div className="text-sm text-muted-foreground">No outcome data in this time window</div>
   }
 
   const latest = completedHistory.map((point) => ({
@@ -68,9 +104,20 @@ function MonitorOutcomeChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={latest} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="timeLabel" tick={{ fontSize: 11 }} minTickGap={18} />
+            <XAxis
+              dataKey="startedAtMs"
+              type="number"
+              scale="time"
+              domain={[windowStartMs, windowEndMs]}
+              tick={{ fontSize: 11 }}
+              tickFormatter={(ms) => formatAxisTick(ms, timeRange)}
+              minTickGap={28}
+            />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-            <Tooltip contentStyle={{ borderRadius: 10, borderColor: "#e2e8f0" }} />
+            <Tooltip
+              contentStyle={{ borderRadius: 10, borderColor: "#e2e8f0" }}
+              labelFormatter={(ms) => formatAxisTick(Number(ms), timeRange)}
+            />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar
               dataKey="succeededCount"
@@ -113,11 +160,13 @@ export function MonitorJobsDashboard() {
 
   useEffect(() => {
     let mounted = true;
+    setLoading(true);
+    setSelectedRun(null);
     const fetchStats = async () => {
       try {
         const res = await fetch(`/api/admin/monitor/jobs?range=${timeRange}`, { cache: "no-store" });
         if (!res.ok) return;
-        const json = await res.json();
+        const json = (await res.json()) as MonitorStats;
         if (mounted) setStats(json);
       } finally {
         if (mounted) setLoading(false);
@@ -131,30 +180,42 @@ export function MonitorJobsDashboard() {
     };
   }, [timeRange]);
 
+  const { windowStartMs, windowEndMs, rangeSinceIso, rangeEndIso } = useMemo(() => {
+    const endMs = stats?.serverNow ? new Date(stats.serverNow).getTime() : Date.now()
+    const sinceMs = stats?.rangeSince
+      ? new Date(stats.rangeSince).getTime()
+      : endMs - RANGE_MS[timeRange]
+    const safeEnd = Number.isFinite(endMs) ? endMs : Date.now()
+    const safeStart = Number.isFinite(sinceMs) ? sinceMs : safeEnd - RANGE_MS[timeRange]
+    return {
+      windowStartMs: safeStart,
+      windowEndMs: safeEnd,
+      rangeSinceIso: stats?.rangeSince ?? new Date(safeStart).toISOString(),
+      rangeEndIso: stats?.serverNow ?? new Date(safeEnd).toISOString(),
+    }
+  }, [stats?.rangeSince, stats?.serverNow, timeRange])
+
   const value = (v: number | undefined) => (loading ? "..." : String(v ?? 0));
   const toLocal = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "N/A")
-  const orderedHistory = [...(stats?.history || [])].sort(
-    (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
-  )
-  const rangeMsMap: Record<TimeRange, number> = {
-    "12h": 12 * 60 * 60 * 1000,
-    "24h": 24 * 60 * 60 * 1000,
-  }
-  const now = Date.now()
-  const filteredHistory = orderedHistory.filter((item) => {
-    const started = new Date(item.startedAt).getTime()
-    return Number.isFinite(started) && started >= now - rangeMsMap[timeRange]
-  })
-  const chartData: TrendDatum[] = filteredHistory.map((point) => ({
-    ...point,
-    timeLabel:
-      timeRange === "24h"
-        ? new Date(point.startedAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
-        : new Date(point.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-  }))
+
+  const chartData: TrendDatum[] = useMemo(() => {
+    const ordered = [...(stats?.history ?? [])].sort(
+      (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime(),
+    )
+    return ordered.map((point) => {
+      const startedAtMs = new Date(point.startedAt).getTime()
+      return {
+        ...point,
+        startedAtMs,
+        timeLabel: formatAxisTick(startedAtMs, timeRange),
+      }
+    })
+  }, [stats?.history, timeRange])
+
   const completedChartData = chartData.filter((point) => point.status === "COMPLETED")
   const selectedRunInRange = completedChartData.find((item) => item.id === selectedRun?.id) || null
   const activeRun = selectedRunInRange || completedChartData[completedChartData.length - 1] || null
+  const rangeLabel = timeRange === "12h" ? "past 12 hours" : "past 24 hours"
 
   return (
     <div className="space-y-3">
@@ -244,7 +305,16 @@ export function MonitorJobsDashboard() {
             <div className="text-sm text-muted-foreground">Loading trend...</div>
           ) : (
             <div className="space-y-4">
-              <MonitorOutcomeChart chartData={chartData} onSelectRun={setSelectedRun} />
+              <p className="text-xs text-muted-foreground">
+                {`${completedChartData.length} run(s) in the ${rangeLabel} · ${formatRangeBound(rangeSinceIso)} – ${formatRangeBound(rangeEndIso)}`}
+              </p>
+              <MonitorOutcomeChart
+                chartData={chartData}
+                timeRange={timeRange}
+                windowStartMs={windowStartMs}
+                windowEndMs={windowEndMs}
+                onSelectRun={setSelectedRun}
+              />
               {activeRun ? (
                 <div className="rounded-md border bg-muted/30 p-3 text-xs">
                   <div className="font-medium">Selected Run</div>

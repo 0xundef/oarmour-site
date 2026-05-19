@@ -49,7 +49,8 @@ export async function GET(req: NextRequest) {
       "24h": 24 * 60 * 60 * 1000,
     }
     const selectedRange = range && rangeMsMap[range] ? range : "12h"
-    const since = new Date(Date.now() - rangeMsMap[selectedRange])
+    const serverNow = new Date()
+    const since = new Date(serverNow.getTime() - rangeMsMap[selectedRange])
     const history = await prisma.$queryRaw<HistoryRow[]>`
       SELECT
         "id",
@@ -93,6 +94,8 @@ export async function GET(req: NextRequest) {
       totalUpdated: Number(aggregate?.totalUpdated ?? 0),
       monitoredExtensions: Number(aggregate?.monitoredExtensions ?? 0),
       range: selectedRange,
+      rangeSince: since.toISOString(),
+      serverNow: serverNow.toISOString(),
       nextRunAt,
       history: history.map((r) => ({
         id: r.id,
