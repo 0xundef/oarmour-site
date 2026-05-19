@@ -198,12 +198,17 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   return (
     <>
       <div className="rounded-md border">
-        <Table>
+        <Table className="table-fixed">
+          <colgroup>
+            <col className="w-[38%]" />
+            <col className="w-28" />
+            <col />
+          </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Operation</TableHead>
+              <TableHead className="w-28">Version</TableHead>
+              <TableHead className="text-right">Operation</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -216,10 +221,10 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             ) : (
               rows.map((ext) => (
                 <TableRow key={ext.id}>
-                  <TableCell>{ext.name}</TableCell>
-                  <TableCell>{ext.version || "N/A"}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+                  <TableCell className="truncate">{ext.name}</TableCell>
+                  <TableCell className="w-28 whitespace-nowrap">{ext.version || "N/A"}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       <span title="Turn version monitoring on or off for this extension">
                         <Switch
                           checked={!!ext.isMonitored}
