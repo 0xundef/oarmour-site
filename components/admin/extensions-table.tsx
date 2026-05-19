@@ -206,9 +206,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           </colgroup>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead className="w-28">Version</TableHead>
-              <TableHead className="text-right">Operation</TableHead>
+              <TableHead className="px-4">Name</TableHead>
+              <TableHead className="w-28 px-4">Version</TableHead>
+              <TableHead className="px-4">Operation</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -221,10 +221,10 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             ) : (
               rows.map((ext) => (
                 <TableRow key={ext.id}>
-                  <TableCell className="truncate">{ext.name}</TableCell>
-                  <TableCell className="w-28 whitespace-nowrap">{ext.version || "N/A"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                  <TableCell className="truncate px-4">{ext.name}</TableCell>
+                  <TableCell className="w-28 whitespace-nowrap px-4">{ext.version || "N/A"}</TableCell>
+                  <TableCell className="px-4">
+                    <div className="flex flex-wrap items-center justify-start gap-2">
                       <span title="Turn version monitoring on or off for this extension">
                         <Switch
                           checked={!!ext.isMonitored}
