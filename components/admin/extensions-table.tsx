@@ -24,11 +24,19 @@ type ExtRow = {
   name: string;
   storeId: string;
   version: string | null;
+  updatedAt?: string | null;
   isMonitored?: boolean;
   testingMode?: boolean;
   checkFrequencyMinutes?: number;
   promptMarkdown?: string | null;
 };
+
+function formatLastUpdate(iso?: string | null) {
+  if (!iso) return "N/A";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "N/A";
+  return date.toLocaleString();
+}
 
 function getNextVersion(version?: string | null) {
   if (!version || !/^\d+(\.\d+)*$/.test(version)) return null;
@@ -202,19 +210,21 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           <colgroup>
             <col />
             <col className="w-28" />
+            <col className="w-48" />
             <col className="w-[26rem]" />
           </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead className="px-4">Name</TableHead>
               <TableHead className="w-28 px-4">Version</TableHead>
+              <TableHead className="w-48 whitespace-nowrap px-4">Last Update</TableHead>
               <TableHead className="w-[26rem] whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3} className="text-center">
+                <TableCell colSpan={4} className="text-center">
                   No extensions found.
                 </TableCell>
               </TableRow>
@@ -223,6 +233,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                 <TableRow key={ext.id}>
                   <TableCell className="truncate px-4">{ext.name}</TableCell>
                   <TableCell className="w-28 whitespace-nowrap px-4">{ext.version || "N/A"}</TableCell>
+                  <TableCell className="w-48 whitespace-nowrap px-4 text-muted-foreground">
+                    {formatLastUpdate(ext.updatedAt)}
+                  </TableCell>
                   <TableCell className="w-[26rem] whitespace-nowrap px-4">
                     <div className="flex flex-nowrap items-center justify-start gap-2">
                       <span title="Turn version monitoring on or off for this extension">

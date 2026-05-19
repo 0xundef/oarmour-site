@@ -78,16 +78,16 @@ export default async function AdminPage({
   }
 
   if (section === "monitoring") {
-    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; testingMode: boolean; checkFrequencyMinutes: number | null; promptMarkdown: string | null }> = []
+    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; testingMode: boolean; checkFrequencyMinutes: number | null; promptMarkdown: string | null; updatedAt: Date }> = []
     try {
       rawExtensions = await prisma.$queryRaw`
-        SELECT "id","name","storeId","version","isMonitored","testingMode","checkFrequencyMinutes","promptMarkdown"
+        SELECT "id","name","storeId","version","isMonitored","testingMode","checkFrequencyMinutes","promptMarkdown","updatedAt"
         FROM "GlobalExtension"
         ORDER BY "updatedAt" DESC
       `;
     } catch {
-      const legacyExtensions = await prisma.$queryRaw<Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null }>>`
-        SELECT "id","name","storeId","version","isMonitored","checkFrequencyMinutes"
+      const legacyExtensions = await prisma.$queryRaw<Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null; updatedAt: Date }>>`
+        SELECT "id","name","storeId","version","isMonitored","checkFrequencyMinutes","updatedAt"
         FROM "GlobalExtension"
         ORDER BY "updatedAt" DESC
       `;
@@ -106,6 +106,7 @@ export default async function AdminPage({
       testingMode: e.testingMode,
       checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
       promptMarkdown: e.promptMarkdown ?? undefined,
+      updatedAt: e.updatedAt ? new Date(e.updatedAt).toISOString() : null,
     }));
     title = "Monitoring";
     description = "Manage extension monitoring and monitor service health in one place.";
