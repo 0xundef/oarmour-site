@@ -69,6 +69,46 @@ export function getAiTestingRunRoot(storeId: string, version: string, runId: str
   return path.join(getAiTestingRoot(storeId, version), runId)
 }
 
+/** Lists runs under `extension-data/<storeId>/<version>/ai_testing/` that have `recordings.json`. */
+export function listAiTestingRunsWithRecordings(
+  storeId: string,
+  version?: string,
+): Array<{ version: string; runId: string; runRoot: string; mtimeMs: number }> {
+  const storeDir = path.join(getAgentQueueRoot(), EXTENSION_SIDE_DATA_DIRNAME, storeId)
+  if (!fs.existsSync(storeDir)) return []
+
+  const versionDirs = version
+    ? [path.join(storeDir, version)]
+    : fs
+        .readdirSync(storeDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(storeDir, entry.name))
+
+  const runs: Array<{ version: string; runId: string; runRoot: string; mtimeMs: number }> = []
+
+  for (const versionDir of versionDirs) {
+    if (!fs.existsSync(versionDir)) continue
+    const resolvedVersion = path.basename(versionDir)
+    const aiTestingRoot = path.join(versionDir, 'ai_testing')
+    if (!fs.existsSync(aiTestingRoot)) continue
+
+    for (const entry of fs.readdirSync(aiTestingRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const runRoot = path.join(aiTestingRoot, entry.name)
+      const recordingsPath = path.join(runRoot, 'recordings.json')
+      if (!fs.existsSync(recordingsPath)) continue
+      runs.push({
+        version: resolvedVersion,
+        runId: entry.name,
+        runRoot,
+        mtimeMs: fs.statSync(runRoot).mtimeMs,
+      })
+    }
+  }
+
+  return runs.sort((a, b) => b.mtimeMs - a.mtimeMs)
+}
+
 export function getAgentQueueRoot() {
   const configured = process.env.AGENT_QUEUE_ROOT?.trim()
   return configured ? path.resolve(configured) : path.join(getExtensionStorageBaseDir(), AGENT_QUEUE_DIR)

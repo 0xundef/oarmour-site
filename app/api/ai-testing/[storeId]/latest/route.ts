@@ -3,7 +3,10 @@ import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { readAgentStatuses, type AgentStatusEntry } from '@/lib/agent-queue'
-import { getAiTestingRunRoot, getAiTestingRoot, getExtensionAnalyzerRoot } from '@/lib/extension-storage'
+import {
+  getAiTestingRunRoot,
+  listAiTestingRunsWithRecordings,
+} from '@/lib/extension-storage'
 import { parseNetworkLogFile, type AiTestingNetworkLog } from '@/lib/ai-testing-network'
 
 export const runtime = 'nodejs'
@@ -29,14 +32,53 @@ function parseRecordingSteps(filePath: string): RecordingStep[] | null {
   })
 }
 
-function newestDirectory(parent: string) {
-  if (!fs.existsSync(parent)) return null
-  const dirs = fs
-    .readdirSync(parent, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(parent, entry.name))
-    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)
-  return dirs[0] ?? null
+function matchStatus(
+  storeId: string,
+  version: string,
+  runId: string,
+): AgentStatusEntry | null {
+  return (
+    readAgentStatuses().find(
+      (item) =>
+        item.id === storeId &&
+        item.version === version &&
+        (item.runId === runId ||
+          (item.index !== undefined && String(item.index) === runId)),
+    ) ?? null
+  )
+}
+
+function loadRunPayload(
+  storeId: string,
+  version: string,
+  runId: string,
+  runRoot?: string,
+) {
+  const root = runRoot ?? getAiTestingRunRoot(storeId, version, runId)
+  const records = parseRecordingSteps(path.join(root, 'recordings.json'))
+  if (!records) return null
+  const network = parseNetworkLogFile(path.join(root, 'network.json'))
+  return {
+    status: matchStatus(storeId, version, runId),
+    records,
+    version,
+    runId,
+    network,
+  }
+}
+
+/** Prefer newest run on disk under extension-data (recordings + network from same folder). */
+function findLatestFromExtensionData(
+  storeId: string,
+  version?: string,
+  runId?: string,
+) {
+  const runs = listAiTestingRunsWithRecordings(storeId, version)
+  if (!runs.length) return null
+
+  const pick = runId ? runs.find((r) => r.runId === runId) : runs[0]
+  if (!pick) return null
+  return loadRunPayload(storeId, pick.version, pick.runId, pick.runRoot)
 }
 
 function findRecordingFromStatus(storeId: string, version?: string, runId?: string) {
@@ -49,33 +91,16 @@ function findRecordingFromStatus(storeId: string, version?: string, runId?: stri
   for (const status of statuses) {
     const resolvedRunId = status.runId ?? (status.index !== undefined ? String(status.index) : '')
     if (!resolvedRunId) continue
-    const runRoot = getAiTestingRunRoot(status.id, status.version, resolvedRunId)
-    const recordingsPath = status.recordingsPath || path.join(runRoot, 'recordings.json')
-    const records = parseRecordingSteps(recordingsPath)
-    if (records) {
-      const network = parseNetworkLogFile(path.join(runRoot, 'network.json'))
-      return { status, records, version: status.version, runId: resolvedRunId, network }
+    const runRoot = status.recordingsPath
+      ? path.dirname(status.recordingsPath)
+      : getAiTestingRunRoot(status.id, status.version, resolvedRunId)
+    const loaded = loadRunPayload(status.id, status.version, resolvedRunId, runRoot)
+    if (loaded) {
+      return { ...loaded, status }
     }
   }
 
   return null
-}
-
-function findRecordingFromArtifacts(storeId: string, version?: string, runId?: string) {
-  const storeRoot = path.join(getExtensionAnalyzerRoot(), storeId)
-  const unpackVersionDir = version ? path.join(storeRoot, version) : newestDirectory(storeRoot)
-  if (!unpackVersionDir || !fs.existsSync(unpackVersionDir)) return null
-
-  const resolvedVersion = version || path.basename(unpackVersionDir)
-  const aiTestingRoot = getAiTestingRoot(storeId, resolvedVersion)
-  const runDir = runId ? getAiTestingRunRoot(storeId, resolvedVersion, runId) : newestDirectory(aiTestingRoot)
-  if (!runDir) return null
-
-  const resolvedRunId = runId || path.basename(runDir)
-  const records = parseRecordingSteps(path.join(runDir, 'recordings.json'))
-  if (!records) return null
-  const network = parseNetworkLogFile(path.join(runDir, 'network.json'))
-  return { status: null as AgentStatusEntry | null, records, version: resolvedVersion, runId: resolvedRunId, network }
 }
 
 export async function GET(
@@ -95,11 +120,16 @@ export async function GET(
     select: { version: true },
   })
   const preferredVersion = version || ext?.version || undefined
+
   const found =
+    (runId
+      ? findLatestFromExtensionData(storeId, preferredVersion, runId) ||
+        findLatestFromExtensionData(storeId, undefined, runId)
+      : null) ||
+    findLatestFromExtensionData(storeId, preferredVersion, runId) ||
+    findLatestFromExtensionData(storeId, undefined, runId) ||
     findRecordingFromStatus(storeId, preferredVersion, runId) ||
-    findRecordingFromArtifacts(storeId, preferredVersion, runId) ||
-    findRecordingFromStatus(storeId, undefined, runId) ||
-    findRecordingFromArtifacts(storeId, undefined, runId)
+    findRecordingFromStatus(storeId, undefined, runId)
 
   if (!found) {
     return NextResponse.json({ error: 'No AI testing record found' }, { status: 404 })
