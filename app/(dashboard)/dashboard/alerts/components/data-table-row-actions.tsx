@@ -1,7 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { DotsHorizontalIcon } from "@radix-ui/react-icons"
 import { Row } from "@tanstack/react-table"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 
 import { Button } from "@/registry/new-york/ui/button"
 import {
@@ -29,8 +31,10 @@ export function DataTableRowActions<TData>({
   row,
 }: DataTableRowActionsProps<TData>) {
   const task = taskSchema.parse(row.original)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -59,11 +63,19 @@ export function DataTableRowActions<TData>({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setDeleteOpen(true)}>
           Delete
           <DropdownMenuShortcut>⌘⌫</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <ConfirmDeleteDialog
+      open={deleteOpen}
+      onOpenChange={setDeleteOpen}
+      title="Delete task?"
+      description={`Delete "${task.title}"? This action cannot be undone.`}
+      onConfirm={() => setDeleteOpen(false)}
+    />
+    </>
   )
 }

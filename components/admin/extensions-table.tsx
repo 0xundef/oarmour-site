@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Pencil, Play, Trash2 } from "lucide-react";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
 type ExtRow = {
   id: string;
@@ -54,6 +55,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [draftName, setDraftName] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ExtRow | null>(null);
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   useEffect(() => {
@@ -148,7 +150,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
   
-  const deleteExtension = (id: string) => {
+  const confirmDeleteExtension = () => {
+    if (!deleteTarget) return;
+    const { id, name } = deleteTarget;
     startTransition(async () => {
       try {
         const res = await fetch(`/api/admin/extensions/${id}`, {
@@ -160,9 +164,10 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         }
         toast({ description: "Extension deleted" });
         setRows((prev) => prev.filter((r) => r.id !== id));
+        setDeleteTarget(null);
         router.refresh();
       } catch {
-        toast({ variant: "destructive", description: "Failed to delete extension" });
+        toast({ variant: "destructive", description: `Failed to delete ${name}` });
       }
     });
   };
@@ -280,7 +285,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         variant="destructive"
                         size="sm"
                         disabled={pending}
-                        onClick={() => deleteExtension(ext.id)}
+                        onClick={() => setDeleteTarget(ext)}
                         aria-label="Delete extension"
                         title="Remove this extension from monitoring"
                       >
@@ -294,6 +299,21 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           </TableBody>
         </Table>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !pending) setDeleteTarget(null);
+        }}
+        title="Delete extension?"
+        description={
+          deleteTarget
+            ? `Remove "${deleteTarget.name}" from monitoring? This cannot be undone.`
+            : "This action cannot be undone."
+        }
+        loading={pending}
+        onConfirm={confirmDeleteExtension}
+      />
 
       <Dialog
         open={!!editingExtension}
