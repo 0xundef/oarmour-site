@@ -28,7 +28,7 @@ type MonitorStats = {
   }>
 };
 
-type TimeRange = "24h" | "7d"
+type TimeRange = "12h" | "24h"
 
 type TrendDatum = {
   id: string
@@ -108,7 +108,7 @@ function MonitorOutcomeChart({
 export function MonitorJobsDashboard() {
   const [stats, setStats] = useState<MonitorStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [timeRange, setTimeRange] = useState<TimeRange>("12h");
   const [selectedRun, setSelectedRun] = useState<TrendDatum | null>(null);
 
   useEffect(() => {
@@ -137,8 +137,8 @@ export function MonitorJobsDashboard() {
     (a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
   )
   const rangeMsMap: Record<TimeRange, number> = {
+    "12h": 12 * 60 * 60 * 1000,
     "24h": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
   }
   const now = Date.now()
   const filteredHistory = orderedHistory.filter((item) => {
@@ -148,7 +148,7 @@ export function MonitorJobsDashboard() {
   const chartData: TrendDatum[] = filteredHistory.map((point) => ({
     ...point,
     timeLabel:
-      timeRange === "7d"
+      timeRange === "24h"
         ? new Date(point.startedAt).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
         : new Date(point.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
   }))
@@ -221,20 +221,20 @@ export function MonitorJobsDashboard() {
               <Button
                 type="button"
                 size="sm"
+                variant={timeRange === "12h" ? "secondary" : "ghost"}
+                className="h-7 px-2"
+                onClick={() => setTimeRange("12h")}
+              >
+                12h
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant={timeRange === "24h" ? "secondary" : "ghost"}
                 className="h-7 px-2"
                 onClick={() => setTimeRange("24h")}
               >
                 24h
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={timeRange === "7d" ? "secondary" : "ghost"}
-                className="h-7 px-2"
-                onClick={() => setTimeRange("7d")}
-              >
-                7d
               </Button>
             </div>
           </div>

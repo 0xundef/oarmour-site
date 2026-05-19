@@ -45,11 +45,10 @@ export async function GET(req: NextRequest) {
     `;
     const range = req.nextUrl.searchParams.get("range")
     const rangeMsMap: Record<string, number> = {
-      "1h": 60 * 60 * 1000,
+      "12h": 12 * 60 * 60 * 1000,
       "24h": 24 * 60 * 60 * 1000,
-      "7d": 7 * 24 * 60 * 60 * 1000,
     }
-    const selectedRange = range && rangeMsMap[range] ? range : "24h"
+    const selectedRange = range && rangeMsMap[range] ? range : "12h"
     const since = new Date(Date.now() - rangeMsMap[selectedRange])
     const history = await prisma.$queryRaw<HistoryRow[]>`
       SELECT
