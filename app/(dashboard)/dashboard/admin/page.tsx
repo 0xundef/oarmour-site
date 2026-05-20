@@ -45,6 +45,9 @@ export default async function AdminPage({
             status: true,
           },
         },
+        _count: {
+          select: { notificationSubscriptions: true },
+        },
       },
     });
     title = "Users";
