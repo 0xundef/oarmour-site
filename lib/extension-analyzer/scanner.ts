@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import { getDomain } from 'tldts';
+import {
+    createProvenanceStore,
+    recordUrlOrHostObservation,
+    type ProvenanceStore,
+} from '@/lib/domain-provenance';
 
 const URL_REGEX = /(https?:\/\/[^\s/$.?#].[^\s"'`]*)/gi;
 
@@ -9,6 +13,7 @@ export interface ScanResult {
     ips: Set<string>;
     domains: Set<string>;
     fileCount: number;
+    domainProvenance: ProvenanceStore;
 }
 
 export function scanDirectory(dir: string): ScanResult {
@@ -16,41 +21,42 @@ export function scanDirectory(dir: string): ScanResult {
         urls: new Set<string>(),
         ips: new Set<string>(),
         domains: new Set<string>(),
-        fileCount: 0
+        fileCount: 0,
+        domainProvenance: createProvenanceStore(),
     };
 
     function traverse(currentDir: string) {
         if (!fs.existsSync(currentDir)) return;
-        
+
         const files = fs.readdirSync(currentDir);
 
         for (const file of files) {
             const filePath = path.join(currentDir, file);
-            
+
             try {
                 const stat = fs.statSync(filePath);
 
                 if (stat.isDirectory()) {
                     traverse(filePath);
                 } else {
-                    // Only scan text-like files to avoid binaries
                     if (/\.(js|json)$/i.test(file)) {
                         results.fileCount++;
-                        // Read file with limit to avoid OOM on huge minified files, but usually extensions are manageable.
-                        // For safety, let's read as utf-8.
+                        const relativePath = path.relative(dir, filePath).replace(/\\/g, '/');
                         const content = fs.readFileSync(filePath, 'utf-8');
-                        
+
                         const urls = content.match(URL_REGEX);
                         if (urls) {
-                            urls.forEach(u => {
+                            urls.forEach((u) => {
                                 results.urls.add(u);
-                                const apex = getDomain(u);
-                                if (apex) {
-                                    results.domains.add(apex);
-                                }
+                                recordUrlOrHostObservation({
+                                    store: results.domainProvenance,
+                                    input: u,
+                                    sourceKind: 'extension_file',
+                                    sourcePath: relativePath,
+                                    requestUrl: u,
+                                });
                             });
                         }
-
                     }
                 }
             } catch (e) {
@@ -60,5 +66,7 @@ export function scanDirectory(dir: string): ScanResult {
     }
 
     traverse(dir);
+
+    results.domains = new Set(results.domainProvenance.keys());
     return results;
 }

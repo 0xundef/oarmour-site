@@ -3,7 +3,7 @@ import path from 'path'
 import { prisma } from '@/lib/prisma'
 import type { JobStatus, RiskLevel } from '@prisma/client'
 import { readAgentStatuses } from '@/lib/agent-queue'
-import { extractRuntimeApexDomainsFromNetwork } from '@/lib/ai-testing-domains'
+import { extractRuntimeApexDomainsWithProvenance } from '@/lib/ai-testing-domains'
 import { parseNetworkLogFile } from '@/lib/ai-testing-network'
 import { diffNovelApexDomains, normalizeStoredDomainList } from '@/lib/domain-normalize'
 import {
@@ -77,7 +77,8 @@ export async function runAiAnalysisFromNetwork(params: {
     throw new Error(`network.json missing or invalid for run ${params.runId}`)
   }
 
-  const runtimeDomains = extractRuntimeApexDomainsFromNetwork(network)
+  const { domains: runtimeDomains, provenance: runtimeProvenance } =
+    extractRuntimeApexDomainsWithProvenance(network)
   const novelDomains = diffNovelApexDomains(runtimeDomains, params.staticDomains)
 
   const existing = await prisma.aiExtensionAnalysisResult.findUnique({
@@ -132,7 +133,16 @@ export async function runAiAnalysisFromNetwork(params: {
   fs.mkdirSync(analysisDir, { recursive: true })
   fs.writeFileSync(
     path.join(analysisDir, `ai_runtime_domains_${params.runId}.json`),
-    `${JSON.stringify({ runtimeDomains, novelDomains, staticAnalysisId: params.staticAnalysisId }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        runtimeDomains,
+        novelDomains,
+        staticAnalysisId: params.staticAnalysisId,
+        domainProvenance: runtimeProvenance,
+      },
+      null,
+      2,
+    )}\n`,
     'utf8',
   )
 

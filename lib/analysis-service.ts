@@ -3,9 +3,14 @@ import { downloadExtension, extractExtension } from '@/lib/extension-analyzer';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { getDomain } from 'tldts';
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
-import { normalizeApexDomain, normalizeStoredDomainList } from '@/lib/domain-normalize';
+import { normalizeApexDomainList, normalizeStoredDomainList } from '@/lib/domain-normalize';
+import {
+    buildApexDomainProvenanceList,
+    provenanceMapFromList,
+    recordManifestHostPermissionPatterns,
+    type ApexDomainProvenance,
+} from '@/lib/domain-provenance';
 import {
     applyVtToStaticDomains,
     enrichApexDomains,
@@ -242,12 +247,34 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     logInfo('[analysis] runLookupFromSource:start', { extensionId, dbId, analysisId, sourceDir })
     const { scanDirectory } = await import('@/lib/extension-analyzer/scanner');
     const results = scanDirectory(sourceDir);
+    const manifestPath = findManifestPath(sourceDir)
+    if (manifestPath) {
+        try {
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>
+            const manifestPermissions = extractManifestPermissions(manifest)
+            const manifestRel = path.relative(sourceDir, manifestPath).replace(/\\/g, '/')
+            recordManifestHostPermissionPatterns({
+                store: results.domainProvenance,
+                patterns: [
+                    ...manifestPermissions.hostPermissions,
+                    ...manifestPermissions.optionalHostPermissions,
+                ],
+                manifestPath: manifestRel,
+            })
+            results.domains = new Set(results.domainProvenance.keys())
+        } catch {
+            // manifest parse errors should not block domain scan
+        }
+    }
+    const domainProvenanceList = buildApexDomainProvenanceList(results.domainProvenance)
+    const provenanceByApex = provenanceMapFromList(domainProvenanceList)
     const normalizedDomains = Array.from(results.domains)
         .map((d) => String(d).trim())
         .filter((d) => d.length > 0)
         .sort((a, b) => a.localeCompare(b))
     const rawDomainListPath = path.join(analysisDir, 'raw_domain_list.txt')
     const apexDomainListPath = path.join(analysisDir, 'apexdomain_list.json')
+    const domainProvenancePath = path.join(analysisDir, 'domain_provenance.json')
     logInfo('[analysis] runLookupFromSource:scanCompleted', {
         extensionId,
         analysisId,
@@ -257,16 +284,9 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         urlCount: results.urls.size,
         rawDomainListPath,
         apexDomainListPath,
+        domainProvenancePath,
     })
-    const allUniqueApexDomains = Array.from(
-        new Set(
-            normalizedDomains
-                .map((d) => getDomain(d) || null)
-                .filter((d): d is string => !!d)
-                .map((d) => d.trim().toLowerCase().replace(/\.+$/, ''))
-                .filter((d) => d.length > 0)
-        )
-    )
+    const allUniqueApexDomains = normalizeApexDomainList(results.domains)
     const previousCompletedAnalysis = await prisma.extensionAnalysisResult.findFirst({
         where: {
             extensionId: dbId,
@@ -336,8 +356,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
     const enrichmentByDomain = new Map(allEnrichmentRows.map((item) => [item.domain, item]))
     const apexDomainList = allUniqueApexDomains.map((apexDomain) => {
         const enrichment = enrichmentByDomain.get(apexDomain) || null
+        const provenance: ApexDomainProvenance | undefined = provenanceByApex.get(apexDomain)
         return {
             apexDomain,
+            observedHosts: provenance?.observedHosts ?? [],
+            sourceFiles: provenance?.sourceFiles ?? [],
+            sources: provenance?.sources ?? [],
             createdDate: enrichment?.createdDate ? enrichment.createdDate.toISOString() : null,
             expiresDate: enrichment?.expiresDate ? enrichment.expiresDate.toISOString() : null,
             registrar: enrichment?.registrar ?? null,
@@ -346,6 +370,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         }
     })
     fs.writeFileSync(rawDomainListPath, `${normalizedDomains.join('\n')}\n`, 'utf-8')
+    fs.writeFileSync(domainProvenancePath, JSON.stringify(domainProvenanceList, null, 2), 'utf-8')
     fs.writeFileSync(apexDomainListPath, JSON.stringify(apexDomainList, null, 2), 'utf-8')
     const enrichmentByDomainForVt = new Map(
         enrichments.map((row) => [row.domain, row]),
@@ -402,6 +427,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         riskLevel,
         rawDomainListPath,
         apexDomainListPath,
+        domainProvenancePath,
     })
 }
 

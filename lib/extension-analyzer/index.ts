@@ -3,6 +3,7 @@ import fs from 'fs';
 import { downloadExtension } from './downloader';
 import { extractExtension } from './extractor';
 import { scanDirectory } from './scanner';
+import { buildApexDomainProvenanceList } from '@/lib/domain-provenance';
 import { AnalysisResult, AnalyzerOptions } from './types';
 import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
 
@@ -44,7 +45,8 @@ export class ExtensionAnalyzer {
                 domains: Array.from(scanResults.domains),
                 ips: Array.from(scanResults.ips),
                 urls: Array.from(scanResults.urls),
-                filesScanned: scanResults.fileCount
+                filesScanned: scanResults.fileCount,
+                domainProvenance: buildApexDomainProvenanceList(scanResults.domainProvenance),
             };
 
             return result;
