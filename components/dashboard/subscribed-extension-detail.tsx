@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
+import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSummary } from "@/lib/ai-testing-display"
+import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import { Link2, Maximize2, Minimize2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -19,6 +21,11 @@ type AiTestingRecordingStep = {
 type AiTestingResponse = {
   records?: AiTestingRecordingStep[]
   assetBaseUrl?: string
+  network?: AiTestingNetworkLog | null
+  aiAnalysis?: AiTestingLatestPayload['aiAnalysis']
+  status?: string | null
+  runId?: string
+  version?: string
 }
 
 type SubscribedExtensionDetailProps = {
@@ -67,6 +74,8 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
     }
   } | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
+  const [aiTestingSummary, setAiTestingSummary] = useState<AiTestingSummary | null>(null)
+  const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(true)
   const [aiDetailOpen, setAiDetailOpen] = useState(false)
   const [aiDetailFullscreen, setAiDetailFullscreen] = useState(false)
   const [aiDetailLoading, setAiDetailLoading] = useState(false)
@@ -100,6 +109,28 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
       }
     }
     loadDetails()
+  }, [props.extensionId])
+
+  useEffect(() => {
+    const loadAiTestingSummary = async () => {
+      setAiTestingSummaryLoading(true)
+      try {
+        const res = await fetch(`/api/ai-testing/${encodeURIComponent(props.extensionId)}/latest`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) {
+          setAiTestingSummary(buildAiTestingSummary(null))
+          return
+        }
+        const json = (await res.json()) as AiTestingLatestPayload
+        setAiTestingSummary(buildAiTestingSummary(json))
+      } catch {
+        setAiTestingSummary(buildAiTestingSummary(null))
+      } finally {
+        setAiTestingSummaryLoading(false)
+      }
+    }
+    loadAiTestingSummary()
   }, [props.extensionId])
 
   useEffect(() => {
@@ -204,13 +235,8 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
     return [{ domain, signal, displayAgeDays }]
   })
 
-  const maliciousSignalCount = details?.topDomainSignals?.filter((signal) => signal.isMalicious === true).length ?? 0
-  const aiVerdict =
-    props.risk === "HIGH" || props.risk === "CRITICAL"
-      ? "Potentially malicious behavior detected"
-      : props.risk === "CAUTION"
-        ? "Suspicious indicators found"
-        : "No high-risk indicators detected"
+  const maliciousSignalCount = aiTestingSummary?.maliciousSignalCount ?? 0
+  const aiVerdict = aiTestingSummary?.verdict ?? 'No AI testing run yet'
 
   const handleCopyAiShareLink = async () => {
     try {
@@ -252,6 +278,8 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
                   <>
                     <div>Total: {details.totalDomains}</div>
                     <div>New since last analysis: {(details.addedDomains || []).length}</div>
+                    <div>Files scanned (static): {details.filesScanned}</div>
+                    <div>URLs detected (static): {(details.urls || []).length}</div>
                   </>
                 )}
               </div>
@@ -281,13 +309,16 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
                 </Button>
               </div>
               <div className="text-2xl text-muted-foreground">
-                {details === null ? (
+                {aiTestingSummaryLoading ? (
                   <div>Loading...</div>
                 ) : (
                   <>
-                    <div>Files scanned: {details.filesScanned}</div>
-                    <div>URLs detected: {(details.urls || []).length}</div>
-                    <div>Malicious domain signals: {maliciousSignalCount}</div>
+                    <div>Run: {aiTestingSummary?.hasRun ? aiTestingSummary.runId : '—'}</div>
+                    <div>Recording steps: {aiTestingSummary?.recordingSteps ?? 0}</div>
+                    <div>Network requests: {aiTestingSummary?.networkRequestCount ?? 0}</div>
+                    <div>Runtime domains: {aiTestingSummary?.runtimeDomainCount ?? 0}</div>
+                    <div>Novel vs static: {aiTestingSummary?.novelDomainCount ?? 0}</div>
+                    <div>Malicious runtime domains: {maliciousSignalCount}</div>
                     <div>Verdict: {aiVerdict}</div>
                   </>
                 )}

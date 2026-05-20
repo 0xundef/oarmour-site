@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
+import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSummary } from "@/lib/ai-testing-display"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
@@ -407,6 +408,9 @@ export function ThreatAlerts() {
       existingIconPaths: string[]
     }
   } | null>(null)
+  const [aiTestingSummary, setAiTestingSummary] = useState<AiTestingSummary | null>(null)
+  const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(false)
+  const aiTestingSummaryAbortRef = useRef<AbortController | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
   const [aiDetailOpen, setAiDetailOpen] = useState(false)
   const [aiDetailFullscreen, setAiDetailFullscreen] = useState(false)
@@ -670,6 +674,46 @@ export function ThreatAlerts() {
   }, [selected, open])
 
   useEffect(() => {
+    const loadAiTestingSummary = async () => {
+      if (!selected || !open) {
+        setAiTestingSummary(null)
+        setAiTestingSummaryLoading(false)
+        return
+      }
+      if (aiTestingSummaryAbortRef.current) {
+        aiTestingSummaryAbortRef.current.abort()
+      }
+      const controller = new AbortController()
+      aiTestingSummaryAbortRef.current = controller
+      setAiTestingSummaryLoading(true)
+      try {
+        const extId = selected.extensionId
+        const res = await fetch(`/api/ai-testing/${encodeURIComponent(extId)}/latest`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+        if (aiTestingSummaryAbortRef.current !== controller || selected.extensionId !== extId) return
+        if (!res.ok) {
+          setAiTestingSummary(buildAiTestingSummary(null))
+          return
+        }
+        const json = (await res.json()) as AiTestingLatestPayload
+        setAiTestingSummary(buildAiTestingSummary(json))
+      } catch (e) {
+        if (isAbortError(e)) return
+        if (aiTestingSummaryAbortRef.current === controller) {
+          setAiTestingSummary(buildAiTestingSummary(null))
+        }
+      } finally {
+        if (aiTestingSummaryAbortRef.current === controller) {
+          setAiTestingSummaryLoading(false)
+        }
+      }
+    }
+    loadAiTestingSummary()
+  }, [selected, open])
+
+  useEffect(() => {
     if (!open || !details) return
     const prioritizedDomains = Array.from(
       new Set([
@@ -816,15 +860,6 @@ export function ThreatAlerts() {
     }
   }
 
-  const maliciousSignalCount =
-    details?.topDomainSignals?.filter((signal) => signal.isMalicious === true).length ?? 0
-  const aiVerdict =
-    selected?.risk === "HIGH" || selected?.risk === "CRITICAL"
-      ? "Potentially malicious behavior detected"
-      : selected?.risk === "CAUTION"
-        ? "Suspicious indicators found"
-        : "No high-risk indicators detected"
-
   if (loading && data.length === 0) {
       return <div className="p-4 text-center text-muted-foreground">Loading extensions...</div>
   }
@@ -970,6 +1005,7 @@ export function ThreatAlerts() {
           data={data}
           columns={makeColumns((row) => {
             setDetails(null)
+            setAiTestingSummary(null)
             setSelected(row)
             setOpen(true)
           }, liveStatusByExtensionId, aiTestingStatusByStoreId, handleAiTestingTriggered)}
@@ -1013,6 +1049,8 @@ export function ThreatAlerts() {
                     <>
                       <div className="mb-1">Total: {details.totalDomains}</div>
                       <div className="mb-1">New since last analysis: {(details.addedDomains || []).length}</div>
+                      <div className="mb-1">Files scanned (static): {details.filesScanned}</div>
+                      <div className="mb-1">URLs detected (static): {(details.urls || []).length}</div>
                     </>
                   )}
                   {filteredAddedDomains.map(({ domain, signal, displayAgeDays }) => {
@@ -1047,14 +1085,21 @@ export function ThreatAlerts() {
                   </Button>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {details === null ? (
+                  {aiTestingSummaryLoading ? (
                     <div className="text-muted-foreground">Loading...</div>
                   ) : (
                     <>
-                      <div className="mb-1">Files scanned: {details.filesScanned}</div>
-                      <div className="mb-1">URLs detected: {(details.urls || []).length}</div>
-                      <div className="mb-1">Malicious domain signals: {maliciousSignalCount}</div>
-                      <div className="mb-1">Verdict: {aiVerdict}</div>
+                      <div className="mb-1">
+                        Run: {aiTestingSummary?.hasRun ? aiTestingSummary.runId : '—'}
+                      </div>
+                      <div className="mb-1">Recording steps: {aiTestingSummary?.recordingSteps ?? 0}</div>
+                      <div className="mb-1">Network requests: {aiTestingSummary?.networkRequestCount ?? 0}</div>
+                      <div className="mb-1">Runtime domains: {aiTestingSummary?.runtimeDomainCount ?? 0}</div>
+                      <div className="mb-1">Novel vs static: {aiTestingSummary?.novelDomainCount ?? 0}</div>
+                      <div className="mb-1">
+                        Malicious runtime domains: {aiTestingSummary?.maliciousSignalCount ?? 0}
+                      </div>
+                      <div className="mb-1">Verdict: {aiTestingSummary?.verdict ?? 'No AI testing run yet'}</div>
                     </>
                   )}
                 </div>
