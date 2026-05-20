@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, type UIMessage } from "ai"
+import { DefaultChatTransport } from "ai"
 import { ArrowUpIcon, SparklesIcon, SquareIcon } from "lucide-react"
 import {
   Conversation,
@@ -22,6 +22,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input"
+import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { toIssueChatContext } from "@/lib/issue-chat-context"
@@ -33,13 +34,6 @@ const SUGGESTIONS = [
   "What is the blast radius if this finding is real?",
   "Summarize the evidence we have for this issue.",
 ] as const
-
-function getMessageText(message: UIMessage): string {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("")
-}
 
 export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
   const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
@@ -88,23 +82,19 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
               />
               <div className="grid w-full gap-3 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
-                  <button
+                  <Suggestion
                     key={suggestion}
-                    type="button"
+                    suggestion={suggestion}
                     disabled={isBusy}
-                    onClick={() => sendPrompt(suggestion)}
-                    className="rounded-xl border bg-background p-4 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                  >
-                    {suggestion}
-                  </button>
+                    onClick={sendPrompt}
+                    variant="outline"
+                    className="h-auto min-h-[4.5rem] w-full justify-start rounded-xl px-4 py-3 text-left text-sm font-normal whitespace-normal"
+                  />
                 ))}
               </div>
             </div>
           ) : (
             messages.map((message, index) => {
-              const text = getMessageText(message)
-              if (!text && message.role === "assistant") return null
-
               const isLast = index === messages.length - 1
               const isStreaming =
                 isBusy && isLast && message.role === "assistant"
@@ -112,11 +102,23 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
               return (
                 <Message key={message.id} from={message.role}>
                   <MessageContent>
-                    {message.role === "assistant" ? (
-                      <MessageResponse isAnimating={isStreaming}>{text}</MessageResponse>
-                    ) : (
-                      text
-                    )}
+                    {message.parts.map((part, partIndex) => {
+                      if (part.type !== "text" || !part.text) return null
+                      const hasLaterText = message.parts
+                        .slice(partIndex + 1)
+                        .some((p) => p.type === "text" && p.text)
+
+                      return message.role === "assistant" ? (
+                        <MessageResponse
+                          key={`${message.id}-${partIndex}`}
+                          isAnimating={isStreaming && !hasLaterText}
+                        >
+                          {part.text}
+                        </MessageResponse>
+                      ) : (
+                        <span key={`${message.id}-${partIndex}`}>{part.text}</span>
+                      )
+                    })}
                   </MessageContent>
                 </Message>
               )
