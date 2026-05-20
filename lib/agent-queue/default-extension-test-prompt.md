@@ -10,14 +10,18 @@ You are driving **playwright-cli** (and related shell tools) to smoke-test an **
    - Open the extension popup or full-page UI if the manifest exposes one.
    - If a test dApp URL or “connect” flow is documented in `cli_config.json` or this prompt’s context, navigate there and attempt **connect account** / **personal_sign** or equivalent only if the UI clearly offers it; otherwise stop after a successful popup/UI load and report what is reachable.
 4. After meaningful steps, capture the UI state with screenshots and record steps using the **`record_step`** tool (`time` ISO 8601, `thinking`, `image` filename under `ai_testing/<runId>/`).
+5. **Network traffic (Fetch/XHR + WebSocket only):**
+   - Right after the first successful `playwright-cli open`, call **`start_network_capture`** (clears the playwright-cli network log).
+   - Before **`validate_recordings`**, call **`capture_network_traffic`** (runs `playwright-cli network --request-headers --filter="https?://"` and saves **`ai_testing/<runId>/network.json`**).
+   - **Always call `capture_network_traffic` even if you saw no API traffic** — zero requests is OK; the file must still exist with `"requests": []`.
 
 ## Rules
 
 - Prefer **non-destructive** actions (read-only sites, no real mainnet transactions, no sending funds).
 - If a step fails twice with the same error, summarize and stop rather than looping.
-- Use **`validate_recordings`** before finishing to ensure `recordings.json` is valid JSON and schema-compliant.
+- Use **`capture_network_traffic`** then **`validate_recordings`** before finishing.
 - Do not hard-code MetaMask-specific copy unless you are testing MetaMask; use generic wording (“Connect”, “Approve”, extension icon in toolbar, etc.).
 
 ## Done when
 
-You have a short summary of what was reachable, at least one screenshot-backed step in `recordings.json`, and validation passes—or a clear explanation of a blocking error (missing UI, blocked host permission, etc.).
+You have a short summary of what was reachable, at least one screenshot-backed step in `recordings.json`, **`network.json` present under `ai_testing/<runId>/`** (empty `requests` array is valid), and validation passes—or a clear explanation of a blocking error (missing UI, blocked host permission, etc.).

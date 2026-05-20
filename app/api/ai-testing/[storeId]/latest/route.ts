@@ -144,6 +144,7 @@ export async function GET(
           select: {
             id: true,
             status: true,
+            error: true,
             staticAnalysisId: true,
             runtimeDomains: true,
             novelDomains: true,

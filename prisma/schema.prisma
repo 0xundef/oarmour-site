@@ -199,6 +199,7 @@ model AiExtensionAnalysisResult {
   runId            String
 
   status           JobStatus @default(PENDING)
+  error            String?
 
   runtimeDomains   String[]
   novelDomains     String[]

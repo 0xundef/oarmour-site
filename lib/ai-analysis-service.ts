@@ -16,6 +16,8 @@ import {
 } from '@/lib/domain-enrichment'
 import { getAiTestingRunRoot, getExtensionAnalysisDir } from '@/lib/extension-storage'
 
+const NETWORK_MISSING_ERROR = 'network.json missing or invalid'
+
 const nowIso = () => new Date().toISOString()
 
 const logInfo = (message: string, payload?: unknown) => {
@@ -60,6 +62,51 @@ export async function resolveStaticAnalysisForBatch(params: {
   })
 }
 
+async function persistAiAnalysisNetworkFailure(params: {
+  extensionDbId: string
+  staticAnalysisId: string
+  storeId: string
+  version: string
+  runId: string
+  error: string
+}) {
+  logInfo('[ai-analysis] network capture missing; marked FAILED', {
+    storeId: params.storeId,
+    version: params.version,
+    runId: params.runId,
+    error: params.error,
+  })
+
+  await prisma.aiExtensionAnalysisResult.upsert({
+    where: {
+      extensionId_runId: {
+        extensionId: params.extensionDbId,
+        runId: params.runId,
+      },
+    },
+    create: {
+      extensionId: params.extensionDbId,
+      staticAnalysisId: params.staticAnalysisId,
+      storeId: params.storeId,
+      version: params.version,
+      runId: params.runId,
+      status: 'FAILED',
+      error: params.error,
+      runtimeDomains: [],
+      novelDomains: [],
+      networkRequestCount: null,
+      networkCapturedAt: null,
+      riskLevel: null,
+    },
+    update: {
+      status: 'FAILED',
+      error: params.error,
+      staticAnalysisId: params.staticAnalysisId,
+      updatedAt: new Date(),
+    },
+  })
+}
+
 export async function runAiAnalysisFromNetwork(params: {
   extensionDbId: string
   storeId: string
@@ -74,7 +121,7 @@ export async function runAiAnalysisFromNetwork(params: {
   )
   const network = parseNetworkLogFile(networkPath)
   if (!network) {
-    throw new Error(`network.json missing or invalid for run ${params.runId}`)
+    throw new Error(`${NETWORK_MISSING_ERROR} for run ${params.runId}`)
   }
 
   const { domains: runtimeDomains, provenance: runtimeProvenance } =
@@ -105,6 +152,7 @@ export async function runAiAnalysisFromNetwork(params: {
         version: params.version,
         runId: params.runId,
         status: novelDomains.length > 0 ? 'RUNNING' : 'COMPLETED',
+        error: null,
         runtimeDomains,
         novelDomains,
         networkRequestCount: network.requestCount,
@@ -119,6 +167,7 @@ export async function runAiAnalysisFromNetwork(params: {
       where: { id: analysis.id },
       data: {
         status: novelDomains.length > 0 ? 'RUNNING' : 'COMPLETED',
+        error: null,
         runtimeDomains,
         novelDomains,
         networkRequestCount: network.requestCount,
@@ -176,6 +225,7 @@ export async function runAiAnalysisFromNetwork(params: {
     where: { id: analysis.id },
     data: {
       status: 'COMPLETED',
+      error: null,
       riskLevel,
       updatedAt: new Date(),
     },
@@ -223,11 +273,11 @@ export async function processCompletedAiTestingRuns() {
       })
       if (!extension) continue
 
-      const already = await prisma.aiExtensionAnalysisResult.findUnique({
+      const existingAnalysis = await prisma.aiExtensionAnalysisResult.findUnique({
         where: { extensionId_runId: { extensionId: extension.id, runId } },
         select: { status: true },
       })
-      if (already?.status === 'COMPLETED') {
+      if (existingAnalysis?.status === 'COMPLETED' || existingAnalysis?.status === 'FAILED') {
         continue
       }
 
@@ -243,6 +293,20 @@ export async function processCompletedAiTestingRuns() {
 
       const recordingsPath = path.join(getAiTestingRunRoot(storeId, version, runId), 'recordings.json')
       if (!fs.existsSync(recordingsPath)) {
+        continue
+      }
+
+      const networkPath = path.join(getAiTestingRunRoot(storeId, version, runId), 'network.json')
+      const network = parseNetworkLogFile(networkPath)
+      if (!network) {
+        await persistAiAnalysisNetworkFailure({
+          extensionDbId: extension.id,
+          staticAnalysisId: staticAnalysis.id,
+          storeId,
+          version,
+          runId,
+          error: NETWORK_MISSING_ERROR,
+        })
         continue
       }
 
