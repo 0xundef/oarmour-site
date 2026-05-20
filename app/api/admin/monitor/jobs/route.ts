@@ -97,6 +97,7 @@ export async function GET(req: NextRequest) {
       range: selectedRange,
       rangeSince: since.toISOString(),
       serverNow: serverNow.toISOString(),
+      monitorIntervalMinutes: periodMinutes,
       nextRunAt,
       history: history.map((r) => ({
         id: r.id,

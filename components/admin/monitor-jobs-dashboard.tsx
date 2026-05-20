@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  buildMonitorOutcomeBuckets,
+  getMonitorIntervalMs,
+  type MonitorHistoryPoint,
+  type MonitorOutcomeBucket,
+} from "@/lib/monitor-outcome-buckets";
 
 type MonitorStats = {
   serviceHealth: string
@@ -19,6 +25,7 @@ type MonitorStats = {
   range?: string
   rangeSince?: string
   serverNow?: string
+  monitorIntervalMinutes?: number
   history: Array<{
     id: string
     status: string
@@ -40,26 +47,7 @@ const RANGE_MS: Record<TimeRange, number> = {
   "2d": 2 * DAY_MS,
 }
 
-type TrendDatum = {
-  id: string
-  status: string
-  checkedCount: number
-  succeededCount: number
-  failedCount: number
-  updatedCount: number
-  startedAt: string
-  startedAtMs: number
-  timeLabel: string
-}
-
-function formatAxisTick(ms: number) {
-  return new Date(ms).toLocaleString([], {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+type TrendDatum = MonitorHistoryPoint
 
 function formatRangeBound(iso: string) {
   return new Date(iso).toLocaleString([], {
@@ -71,49 +59,49 @@ function formatRangeBound(iso: string) {
 }
 
 function MonitorOutcomeChart({
-  chartData,
-  windowStartMs,
-  windowEndMs,
-  onSelectRun,
+  buckets,
+  intervalMinutes,
+  onSelectBucket,
 }: {
-  chartData: TrendDatum[]
-  windowStartMs: number
-  windowEndMs: number
-  onSelectRun: (run: TrendDatum) => void
+  buckets: MonitorOutcomeBucket[]
+  intervalMinutes: number
+  onSelectBucket: (run: TrendDatum | null) => void
 }) {
-  const completedHistory = chartData.filter((point) => point.status === "COMPLETED")
-  if (completedHistory.length === 0) {
-    return <div className="text-sm text-muted-foreground">No outcome data in this time window</div>
+  if (buckets.length === 0) {
+    return <div className="text-sm text-muted-foreground">No time slots in range</div>
   }
 
-  const latest = completedHistory.map((point) => ({
-    ...point,
-    outcomeTotal: point.succeededCount + point.failedCount,
-  }))
-  const hasAnyOutcome = latest.some((item) => item.outcomeTotal > 0)
-  if (!hasAnyOutcome) {
-    return <div className="text-sm text-muted-foreground">No completed run has success/failure results yet</div>
-  }
+  const tickInterval = Math.max(0, Math.floor(buckets.length / 12) - 1)
 
   return (
     <div className="space-y-3">
       <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={latest} margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
+          <BarChart
+            data={buckets}
+            margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
+            barCategoryGap="12%"
+            barGap={2}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis
-              dataKey="startedAtMs"
-              type="number"
-              scale="time"
-              domain={[windowStartMs, windowEndMs]}
-              tick={{ fontSize: 11 }}
-              tickFormatter={(ms) => formatAxisTick(ms)}
-              minTickGap={28}
+              dataKey="slotLabel"
+              tick={{ fontSize: 10 }}
+              interval={tickInterval}
+              angle={-35}
+              textAnchor="end"
+              height={56}
             />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ borderRadius: 10, borderColor: "#e2e8f0" }}
-              labelFormatter={(ms) => formatAxisTick(Number(ms))}
+              formatter={(value, name) => [value ?? 0, name]}
+              labelFormatter={(_label, payload) => {
+                const row = payload?.[0]?.payload as MonitorOutcomeBucket | undefined
+                if (!row) return ""
+                const end = new Date(row.bucketStartMs + intervalMinutes * 60 * 1000)
+                return `${row.slotLabel} – ${formatRangeBound(end.toISOString())} · ${row.runCount} run(s)`
+              }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar
@@ -121,18 +109,24 @@ function MonitorOutcomeChart({
               stackId="outcome"
               fill="#16a34a"
               name="Succeeded"
-              maxBarSize={12}
+              barSize={10}
               radius={[4, 4, 0, 0]}
-              onClick={(entry) => onSelectRun(entry as TrendDatum)}
+              onClick={(entry) => {
+                const row = entry as MonitorOutcomeBucket
+                onSelectBucket(row.representativeRun)
+              }}
             />
             <Bar
               dataKey="failedCount"
               stackId="outcome"
               fill="#dc2626"
               name="Failed"
-              maxBarSize={12}
+              barSize={10}
               radius={[4, 4, 0, 0]}
-              onClick={(entry) => onSelectRun(entry as TrendDatum)}
+              onClick={(entry) => {
+                const row = entry as MonitorOutcomeBucket
+                onSelectBucket(row.representativeRun)
+              }}
             />
           </BarChart>
         </ResponsiveContainer>
@@ -179,20 +173,26 @@ export function MonitorJobsDashboard() {
     };
   }, [timeRange]);
 
-  const { windowStartMs, windowEndMs, rangeSinceIso, rangeEndIso } = useMemo(() => {
-    const endMs = stats?.serverNow ? new Date(stats.serverNow).getTime() : Date.now()
-    const sinceMs = stats?.rangeSince
-      ? new Date(stats.rangeSince).getTime()
-      : endMs - RANGE_MS[timeRange]
-    const safeEnd = Number.isFinite(endMs) ? endMs : Date.now()
-    const safeStart = Number.isFinite(sinceMs) ? sinceMs : safeEnd - RANGE_MS[timeRange]
-    return {
-      windowStartMs: safeStart,
-      windowEndMs: safeEnd,
-      rangeSinceIso: stats?.rangeSince ?? new Date(safeStart).toISOString(),
-      rangeEndIso: stats?.serverNow ?? new Date(safeEnd).toISOString(),
-    }
-  }, [stats?.rangeSince, stats?.serverNow, timeRange])
+  const { windowStartMs, windowEndMs, rangeSinceIso, rangeEndIso, intervalMs, intervalMinutes } =
+    useMemo(() => {
+      const endMs = stats?.serverNow ? new Date(stats.serverNow).getTime() : Date.now()
+      const sinceMs = stats?.rangeSince
+        ? new Date(stats.rangeSince).getTime()
+        : endMs - RANGE_MS[timeRange]
+      const safeEnd = Number.isFinite(endMs) ? endMs : Date.now()
+      const safeStart = Number.isFinite(sinceMs) ? sinceMs : safeEnd - RANGE_MS[timeRange]
+      const minutes = stats?.monitorIntervalMinutes
+      const ms = getMonitorIntervalMs(minutes)
+      return {
+        windowStartMs: safeStart,
+        windowEndMs: safeEnd,
+        rangeSinceIso: stats?.rangeSince ?? new Date(safeStart).toISOString(),
+        rangeEndIso: stats?.serverNow ?? new Date(safeEnd).toISOString(),
+        intervalMs: ms,
+        intervalMinutes:
+          typeof minutes === "number" && Number.isFinite(minutes) && minutes > 0 ? minutes : 30,
+      }
+    }, [stats?.rangeSince, stats?.serverNow, stats?.monitorIntervalMinutes, timeRange])
 
   const value = (v: number | undefined) => (loading ? "..." : String(v ?? 0));
   const toLocal = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "N/A")
@@ -203,17 +203,26 @@ export function MonitorJobsDashboard() {
     )
     return ordered.map((point) => {
       const startedAtMs = new Date(point.startedAt).getTime()
-      return {
-        ...point,
-        startedAtMs,
-        timeLabel: formatAxisTick(startedAtMs),
-      }
+      return { ...point, startedAtMs }
     })
   }, [stats?.history])
 
-  const completedChartData = chartData.filter((point) => point.status === "COMPLETED")
-  const selectedRunInRange = completedChartData.find((item) => item.id === selectedRun?.id) || null
-  const activeRun = selectedRunInRange || completedChartData[completedChartData.length - 1] || null
+  const outcomeBuckets = useMemo(
+    () =>
+      buildMonitorOutcomeBuckets({
+        history: chartData,
+        windowStartMs,
+        windowEndMs,
+        intervalMs,
+      }),
+    [chartData, windowStartMs, windowEndMs, intervalMs],
+  )
+
+  const runCountInRange = chartData.length
+  const slotsWithRuns = outcomeBuckets.filter((b) => b.runCount > 0).length
+  const selectedRunInRange =
+    selectedRun && chartData.some((item) => item.id === selectedRun.id) ? selectedRun : null
+  const activeRun = selectedRunInRange || chartData[chartData.length - 1] || null
   const rangeLabel = timeRange === "1d" ? "past 1 day" : "past 2 days"
 
   return (
@@ -305,13 +314,12 @@ export function MonitorJobsDashboard() {
           ) : (
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                {`${completedChartData.length} run(s) in the ${rangeLabel} · ${formatRangeBound(rangeSinceIso)} – ${formatRangeBound(rangeEndIso)}`}
+                {`${runCountInRange} run(s) in ${slotsWithRuns}/${outcomeBuckets.length} slot(s) (${intervalMinutes}m interval) · ${rangeLabel} · ${formatRangeBound(rangeSinceIso)} – ${formatRangeBound(rangeEndIso)}`}
               </p>
               <MonitorOutcomeChart
-                chartData={chartData}
-                windowStartMs={windowStartMs}
-                windowEndMs={windowEndMs}
-                onSelectRun={setSelectedRun}
+                buckets={outcomeBuckets}
+                intervalMinutes={intervalMinutes}
+                onSelectBucket={setSelectedRun}
               />
               {activeRun ? (
                 <div className="rounded-md border bg-muted/30 p-3 text-xs">
@@ -320,7 +328,9 @@ export function MonitorJobsDashboard() {
                   <div className="mt-1">{`status ${activeRun.status}, checked ${activeRun.checkedCount}, succeeded ${activeRun.succeededCount}, failed ${activeRun.failedCount}, updated ${activeRun.updatedCount}`}</div>
                 </div>
               ) : (
-                <div className="text-xs text-muted-foreground">Click a green/red bar to view run details</div>
+                <div className="text-xs text-muted-foreground">
+                  Click a slot with runs to view details (empty slots = no monitor run in that interval)
+                </div>
               )}
             </div>
           )}
