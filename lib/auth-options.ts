@@ -3,7 +3,10 @@ import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { clientIpFromHeaders } from "@/lib/request-ip";
+import { recordLoginActivity, resolveUserIdForLoginLog } from "@/lib/record-login-activity";
 import bcrypt from "bcryptjs";
 
 const enableAdapter =
@@ -66,8 +69,18 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      // console.log(`User: ${JSON.stringify(user)}, Account: ${JSON.stringify(account)}, Profile: ${JSON.stringify(profile)}`);
+    async signIn({ user, account }) {
+      try {
+        const userId = await resolveUserIdForLoginLog(user);
+        if (userId) {
+          const h = await headers();
+          const ipAddress = clientIpFromHeaders(h);
+          const provider = account?.provider ?? (account ? null : "credentials");
+          await recordLoginActivity({ userId, ipAddress, provider });
+        }
+      } catch (e) {
+        console.error("[auth] Failed to record login activity:", e);
+      }
       return true;
     },
     async redirect({ url, baseUrl }) {

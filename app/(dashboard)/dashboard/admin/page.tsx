@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { SubmissionsTable } from "@/components/admin/submissions-table";
+import { LoginActivitiesTable } from "@/components/admin/login-activities-table";
 import { UsersTable } from "@/components/admin/users-table";
 import { ExtensionsTable } from "@/components/admin/extensions-table";
 import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
@@ -52,26 +53,44 @@ export default async function AdminPage({
   }
 
   if (section === "audit") {
-    const submissions = await prisma.submission.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true,
+    const [submissions, loginActivities] = await Promise.all([
+      prisma.submission.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.loginActivity.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 500,
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
     title = "Audit";
-    description = "Review user-submitted extension analysis operations.";
+    description = "Review user login activity and extension analysis submissions.";
     content = (
       <Tabs key="audit-tabs" defaultValue="extension-submissions" className="space-y-4">
         <TabsList>
           <TabsTrigger value="extension-submissions">Extension Submissions</TabsTrigger>
+          <TabsTrigger value="login-activity">Login Activity</TabsTrigger>
         </TabsList>
         <TabsContent value="extension-submissions" className="space-y-4">
           <SubmissionsTable submissions={submissions} />
+        </TabsContent>
+        <TabsContent value="login-activity" className="space-y-4">
+          <LoginActivitiesTable activities={loginActivities} />
         </TabsContent>
       </Tabs>
     );

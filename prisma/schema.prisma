@@ -40,6 +40,7 @@ model User {
   apiKeys       ApiKey[]
   subscriptions AssetSubscription[]
   submissions   Submission[]
+  loginActivities LoginActivity[]
   notificationSubscriptions NotificationSubscription[]
 
   // Stripe Subscription
@@ -65,6 +66,19 @@ enum SubmissionStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+model LoginActivity {
+  id        String   @id @default(uuid())
+  userId    String
+  ipAddress String?
+  provider  String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
 
 model Account {
