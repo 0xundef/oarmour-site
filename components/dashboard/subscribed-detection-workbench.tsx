@@ -25,6 +25,10 @@ function sourceBadgeClass(source: WorkbenchCheckItem["source"]) {
   return source === "static" ? "bg-slate-700 text-white" : "bg-purple-600 text-white"
 }
 
+function categoryBadgeClass() {
+  return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
+}
+
 export function SubscribedDetectionWorkbench({
   storeId,
   extensionName,
@@ -174,14 +178,21 @@ export function SubscribedDetectionWorkbench({
                         active && item.id === active.id ? "border-primary bg-accent" : "bg-background",
                       )}
                     >
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground truncate">{item.id}</span>
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                        <Badge className={cn("h-5 px-1.5 text-[10px] leading-none", severityClass(item.severity))}>
+                          {item.severity}
+                        </Badge>
                         <Badge className={cn("h-5 shrink-0 px-1.5 text-[10px] leading-none", sourceBadgeClass(item.source))}>
                           {item.source}
                         </Badge>
+                        <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px] font-normal leading-none", categoryBadgeClass())}>
+                          {item.category}
+                        </Badge>
                       </div>
-                      <div className="mb-1 line-clamp-2 text-sm font-medium">{item.title}</div>
-                      <div className="text-xs text-muted-foreground">{item.file}</div>
+                      <div className="mb-1 line-clamp-2 text-sm font-medium leading-snug">{item.title}</div>
+                      <div className="truncate text-xs text-muted-foreground" title={item.file}>
+                        {item.file}
+                      </div>
                     </button>
                   ))
                 )}
@@ -201,10 +212,12 @@ export function SubscribedDetectionWorkbench({
                 <IssueAiChatBox key={active.id} issue={active} />
               ) : (
                 <>
-                  <div className="mb-3 flex flex-wrap items-center gap-3">
-                    <span className="text-lg font-semibold font-mono break-all">{active.id}</span>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Badge className={severityClass(active.severity)}>{active.severity}</Badge>
                     <Badge className={cn("h-6 px-2 text-[11px]", sourceBadgeClass(active.source))}>{active.source}</Badge>
+                    <Badge variant="outline" className={cn("h-6 px-2 text-[11px] font-normal", categoryBadgeClass())}>
+                      {active.category}
+                    </Badge>
                   </div>
                   <h2 className="mb-4 text-2xl font-bold leading-snug md:text-3xl">{active.title}</h2>
 

@@ -5,6 +5,7 @@ export type WorkbenchCheckSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type WorkbenchCheckItem = {
   id: string
   source: 'static' | 'ai'
+  category: string
   severity: WorkbenchCheckSeverity
   title: string
   file: string
@@ -75,6 +76,7 @@ export function buildWorkbenchCheckItems(params: {
       items.push({
         id: 'static:broad-host-permissions',
         source: 'static',
+        category: 'Broad permissions',
         severity: 'HIGH',
         title: 'Broad host permissions in manifest',
         file: 'manifest.json',
@@ -96,6 +98,7 @@ export function buildWorkbenchCheckItems(params: {
       items.push({
         id: `static:malicious-domain:${signal.domain}`,
         source: 'static',
+        category: 'Malicious domain',
         severity: 'CRITICAL',
         title: `Malicious indicator: apex domain ${signal.domain}`,
         file: staticDomainFileLabel(signal.sourceFiles),
@@ -111,6 +114,7 @@ export function buildWorkbenchCheckItems(params: {
       items.push({
         id: `static:new-domain:${signal.domain}`,
         source: 'static',
+        category: 'New domain',
         severity: 'LOW',
         title: `Newly observed domain: ${signal.domain}`,
         file: staticDomainFileLabel(signal.sourceFiles),
@@ -133,6 +137,7 @@ export function buildWorkbenchCheckItems(params: {
     items.push({
       id: 'ai:analysis-failed',
       source: 'ai',
+      category: 'Analysis failed',
       severity: 'HIGH',
       title: 'AI runtime analysis failed',
       file: 'network.json',
@@ -146,6 +151,7 @@ export function buildWorkbenchCheckItems(params: {
     items.push({
       id: 'ai:browser-error',
       source: 'ai',
+      category: 'Browser error',
       severity: 'HIGH',
       title: 'AI browser test reported error',
       file: 'agent status',
@@ -160,6 +166,7 @@ export function buildWorkbenchCheckItems(params: {
       items.push({
         id: `ai:malicious-runtime:${row.domain}`,
         source: 'ai',
+        category: 'Malicious runtime',
         severity: 'CRITICAL',
         title: `Malicious runtime domain: ${row.domain}`,
         file: 'network.json',
@@ -180,6 +187,7 @@ export function buildWorkbenchCheckItems(params: {
       items.push({
         id: 'ai:novel-non-malicious',
         source: 'ai',
+        category: 'Novel domains',
         severity: 'LOW',
         title: 'Novel runtime domains without malicious verdict',
         file: 'network.json',
@@ -194,6 +202,7 @@ export function buildWorkbenchCheckItems(params: {
     items.push({
       id: 'ai:runtime-aligned-static',
       source: 'ai',
+      category: 'Runtime check',
       severity: 'LOW',
       title: 'Runtime traffic aligned with static baseline',
       file: 'network.json',
