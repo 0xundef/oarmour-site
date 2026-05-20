@@ -19,6 +19,7 @@ export default async function SubscribedExtensionPage({
 
   return (
     <SubscribedDetectionWorkbench
+      storeId={extensionId}
       extensionName={matched?.name || extensionId}
     />
   );
