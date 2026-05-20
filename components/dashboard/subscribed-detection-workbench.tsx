@@ -108,7 +108,7 @@ export function SubscribedDetectionWorkbench({
           <div className="grid min-h-[72vh] grid-cols-1 lg:grid-cols-[340px_1fr]">
             <aside className="border-r bg-muted/20">
               <div className="border-b p-3">
-                <div className="text-sm font-semibold">Check Items</div>
+                <div className="text-sm font-semibold">Find issues</div>
                 <div className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : `${items.length} finding${items.length === 1 ? "" : "s"}`}
                 </div>

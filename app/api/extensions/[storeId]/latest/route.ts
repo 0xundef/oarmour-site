@@ -1,13 +1,35 @@
+import fs from 'fs'
+import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
+import { normalizeApexDomain } from '@/lib/domain-normalize'
+import { getExtensionAnalysisDir } from '@/lib/extension-storage'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
-type TopDomainSignal = {
-  topDomainSignalId: string | null
-  domain: string
-  createTime: string | null
-  isMalicious: boolean | null
+function loadDomainSourceFilesByApex(storeId: string, version: string): Record<string, string[]> {
+  const apexListPath = path.join(getExtensionAnalysisDir(storeId, version), 'apexdomain_list.json')
+  if (!fs.existsSync(apexListPath)) return {}
+  try {
+    const raw = JSON.parse(fs.readFileSync(apexListPath, 'utf8')) as unknown
+    if (!Array.isArray(raw)) return {}
+    const map: Record<string, string[]> = {}
+    for (const row of raw) {
+      if (!row || typeof row !== 'object') continue
+      const obj = row as Record<string, unknown>
+      const apex = typeof obj.apexDomain === 'string' ? obj.apexDomain : ''
+      const filesRaw = obj.sourceFiles
+      if (!apex.trim()) continue
+      const key = normalizeApexDomain(apex)
+      const files = Array.isArray(filesRaw)
+        ? filesRaw.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+        : []
+      if (files.length > 0) map[key] = files
+    }
+    return map
+  } catch {
+    return {}
+  }
 }
 
 type ManifestPermissionsPayload = {
@@ -91,21 +113,6 @@ function parseManifestIconAssets(raw: unknown): ManifestIconAssetsPayload {
   }
 }
 
-function parseTopDomainSignal(raw: string): TopDomainSignal {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>
-      const domain = typeof obj.domain === 'string' ? obj.domain : raw
-      const topDomainSignalId = typeof obj.topDomainSignalId === 'string' ? obj.topDomainSignalId : null
-      const createTime = typeof obj.createTime === 'string' ? obj.createTime : null
-      const isMalicious = typeof obj.isMalicious === 'boolean' ? obj.isMalicious : null
-      return { topDomainSignalId, domain, createTime, isMalicious }
-    }
-  } catch {}
-  return { topDomainSignalId: null, domain: raw, createTime: null, isMalicious: null }
-}
-
 export async function GET(
   _req: NextRequest,
   context: { params: Promise<{ storeId: string }> }
@@ -117,7 +124,7 @@ export async function GET(
   try {
     const ext = await prisma.globalExtension.findUnique({
       where: { storeId },
-      select: { id: true },
+      select: { id: true, version: true },
     })
     if (!ext) {
       return NextResponse.json({ error: 'Extension not found' }, { status: 404 })
@@ -160,12 +167,19 @@ export async function GET(
         select: { id: true, domain: true, createdDate: true, isMalicious: true },
       })
       : []
-    const latestDomainSignals = topEnrichments.map((item) => ({
-      topDomainSignalId: item.id,
-      domain: item.domain,
-      createTime: item.createdDate ? item.createdDate.toISOString() : null,
-      isMalicious: typeof item.isMalicious === 'boolean' ? item.isMalicious : null,
-    }))
+    const versionSegment = typeof ext.version === 'string' && ext.version.trim() ? ext.version.trim() : ''
+    const sourceFilesByApex = versionSegment ? loadDomainSourceFilesByApex(storeId, versionSegment) : {}
+
+    const latestDomainSignals = topEnrichments.map((item) => {
+      const apexKey = normalizeApexDomain(item.domain)
+      return {
+        topDomainSignalId: item.id,
+        domain: item.domain,
+        createTime: item.createdDate ? item.createdDate.toISOString() : null,
+        isMalicious: typeof item.isMalicious === 'boolean' ? item.isMalicious : null,
+        sourceFiles: sourceFilesByApex[apexKey] ?? [],
+      }
+    })
     console.warn('[analysis] latestRoute:domainDiff', {
       storeId,
       latestAnalysisId: latest.id,

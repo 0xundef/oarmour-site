@@ -20,6 +20,7 @@ export type StaticLatestPayload = {
     domain: string
     createTime: string | null
     isMalicious: boolean | null
+    sourceFiles?: string[]
   }>
   manifestPermissions?: {
     hostPermissions: string[]
@@ -43,6 +44,20 @@ function isBroadHostPermission(pattern: string): boolean {
   if (p.startsWith('http://*/') || p.startsWith('https://*/')) return true
   if (p.startsWith('*://*.')) return true
   return false
+}
+
+function staticDomainFileLabel(sourceFiles?: string[]): string {
+  const files = (sourceFiles ?? []).filter((f) => f && f.trim())
+  if (files.length === 0) return 'extension package (static scan)'
+  if (files.length === 1) return files[0]!
+  return `${files[0]!} (+${files.length - 1} files)`
+}
+
+function staticDomainProvenanceSummary(sourceFiles?: string[]): string {
+  const files = (sourceFiles ?? []).filter((f) => f && f.trim())
+  if (files.length === 0) return ''
+  if (files.length <= 6) return ` Domain URL/host references traced to: ${files.join(', ')}.`
+  return ` Domain URL/host references traced to: ${files.slice(0, 6).join(', ')} (+${files.length - 6} more).`
 }
 
 export function buildWorkbenchCheckItems(params: {
@@ -75,6 +90,7 @@ export function buildWorkbenchCheckItems(params: {
   }
 
   for (const signal of staticPayload?.topDomainSignals ?? []) {
+    const prov = staticDomainProvenanceSummary(signal.sourceFiles)
     if (signal.isMalicious === true) {
       const age = signal.createTime ? ` Domain registration context: ${signal.createTime}.` : ''
       items.push({
@@ -82,11 +98,12 @@ export function buildWorkbenchCheckItems(params: {
         source: 'static',
         severity: 'CRITICAL',
         title: `Malicious indicator: apex domain ${signal.domain}`,
-        file: 'extension package (static scan)',
-        summary: `Static analysis flagged this apex domain as malicious (VirusTotal / enrichment pipeline).${age}`,
+        file: staticDomainFileLabel(signal.sourceFiles),
+        summary: `Static analysis flagged this apex domain as malicious (VirusTotal / enrichment pipeline).${age}${prov}`,
         conditions: [
           'Domain appears in extension package or declared surface.',
           'Threat intel enrichment marked the domain as malicious.',
+          ...(signal.sourceFiles?.length ? [`Packaged paths (relative): ${signal.sourceFiles.slice(0, 8).join(', ')}${signal.sourceFiles.length > 8 ? '…' : ''}.`] : []),
         ],
         impact: 'May indicate phishing, C2, or untrusted third-party infrastructure referenced by the extension.',
       })
@@ -96,10 +113,15 @@ export function buildWorkbenchCheckItems(params: {
         source: 'static',
         severity: 'LOW',
         title: `Newly observed domain: ${signal.domain}`,
-        file: 'extension package (static scan)',
+        file: staticDomainFileLabel(signal.sourceFiles),
         summary:
-          'This apex domain is new compared to the previous completed static analysis; current intel did not mark it malicious.',
-        conditions: ['Extension was upgraded or rescanned.', 'Domain appeared in the latest static domain set.'],
+          'This apex domain is new compared to the previous completed static analysis; current intel did not mark it malicious.' +
+          prov,
+        conditions: [
+          'Extension was upgraded or rescanned.',
+          'Domain appeared in the latest static domain set.',
+          ...(signal.sourceFiles?.length ? [`Packaged paths (relative): ${signal.sourceFiles.slice(0, 8).join(', ')}${signal.sourceFiles.length > 8 ? '…' : ''}.`] : []),
+        ],
         impact: 'Informational; monitor for future reputation changes.',
       })
     }
