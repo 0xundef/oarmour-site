@@ -1073,17 +1073,7 @@ export function ThreatAlerts() {
                 </div>
               </div>
               <div className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">AI Testing</div>
-                  <Button
-                    variant="link"
-                    className="h-auto p-0 text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700"
-                    type="button"
-                    onClick={() => setAiDetailOpen(true)}
-                  >
-                    See detail
-                  </Button>
-                </div>
+                <div className="text-sm font-medium">AI Testing</div>
                 <div className="text-xs text-muted-foreground">
                   {aiTestingSummaryLoading ? (
                     <div className="text-muted-foreground">Loading...</div>

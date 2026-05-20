@@ -302,12 +302,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">AI Testing</div>
-                <Button variant="link" className="h-auto p-0 text-3xl text-blue-600 underline underline-offset-2" type="button" onClick={() => setAiDetailOpen(true)}>
-                  See detail
-                </Button>
-              </div>
+              <div className="text-3xl font-semibold">AI Testing</div>
               <div className="text-2xl text-muted-foreground">
                 {aiTestingSummaryLoading ? (
                   <div>Loading...</div>
