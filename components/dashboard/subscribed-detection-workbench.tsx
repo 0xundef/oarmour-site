@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import {
   buildWorkbenchCheckItems,
@@ -34,6 +36,7 @@ export function SubscribedDetectionWorkbench({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeId, setActiveId] = useState<string>("")
+  const [viewMode, setViewMode] = useState<"detail" | "ai">("detail")
 
   const load = useCallback(async () => {
     if (!storeId.trim()) {
@@ -91,10 +94,34 @@ export function SubscribedDetectionWorkbench({
   )
 
   return (
-    <div className="flex-1 p-4 md:px-8 md:pb-8 md:pt-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+    <div
+      className={cn(
+        "flex-1 p-4 md:px-8 md:pb-8 md:pt-4",
+        viewMode === "ai" && "flex min-h-0 flex-col overflow-hidden",
+      )}
+    >
+      <div className="mb-3 flex shrink-0 flex-wrap items-baseline justify-between gap-2">
         <div className="text-2xl font-semibold">{extensionName}</div>
-        <div className="text-xs text-muted-foreground font-mono">{storeId}</div>
+        <div className="flex items-center gap-1 rounded-md border p-1">
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === "detail" ? "secondary" : "ghost"}
+            className="h-7 px-2"
+            onClick={() => setViewMode("detail")}
+          >
+            Detail mode
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={viewMode === "ai" ? "secondary" : "ghost"}
+            className="h-7 px-2"
+            onClick={() => setViewMode("ai")}
+          >
+            AI investigation
+          </Button>
+        </div>
       </div>
 
       {loadError ? (
@@ -103,17 +130,32 @@ export function SubscribedDetectionWorkbench({
         </div>
       ) : null}
 
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="grid min-h-[72vh] grid-cols-1 lg:grid-cols-[340px_1fr]">
-            <aside className="border-r bg-muted/20">
-              <div className="border-b p-3">
-                <div className="text-sm font-semibold">Find issues</div>
+      <Card className={cn("overflow-hidden", viewMode === "ai" && "flex min-h-0 flex-1 flex-col")}>
+        <CardContent className={cn("p-0", viewMode === "ai" && "flex min-h-0 flex-1 flex-col")}>
+          <div
+            className={cn(
+              "grid grid-cols-1 lg:grid-cols-[340px_1fr]",
+              viewMode === "ai" ? "h-[calc(100dvh-11rem)] min-h-0" : "min-h-[72vh]",
+            )}
+          >
+            <aside
+              className={cn(
+                "border-r bg-muted/20",
+                viewMode === "ai" && "flex min-h-0 flex-col overflow-hidden",
+              )}
+            >
+              <div className="shrink-0 border-b p-3">
+                <div className="text-sm font-semibold">Issues</div>
                 <div className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : `${items.length} finding${items.length === 1 ? "" : "s"}`}
                 </div>
               </div>
-              <div className="max-h-[72vh] overflow-y-auto p-2">
+              <div
+                className={cn(
+                  "overflow-y-auto p-2",
+                  viewMode === "ai" ? "min-h-0 flex-1" : "max-h-[72vh]",
+                )}
+              >
                 {loading ? (
                   <div className="p-3 text-sm text-muted-foreground">Loading findings…</div>
                 ) : items.length === 0 ? (
@@ -146,9 +188,17 @@ export function SubscribedDetectionWorkbench({
               </div>
             </aside>
 
-            <section className="p-5 lg:p-6">
+            <section
+              className={cn(
+                viewMode === "ai"
+                  ? "flex min-h-0 flex-col overflow-hidden"
+                  : "p-5 lg:p-6",
+              )}
+            >
               {!active ? (
                 <div className="text-sm text-muted-foreground">Select a finding or wait for data to load.</div>
+              ) : viewMode === "ai" ? (
+                <IssueAiChatBox key={active.id} issue={active} />
               ) : (
                 <>
                   <div className="mb-3 flex flex-wrap items-center gap-3">

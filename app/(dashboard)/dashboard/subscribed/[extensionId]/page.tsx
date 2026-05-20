@@ -1,5 +1,5 @@
 import { SubscribedDetectionWorkbench } from "@/components/dashboard/subscribed-detection-workbench";
-import { getExtensions } from "@/app/actions/get-extensions";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 
@@ -13,14 +13,18 @@ export default async function SubscribedExtensionPage({
     redirect("/signin");
   }
 
-  const { extensionId } = await params;
-  const all = await getExtensions();
-  const matched = all.find((item) => item.storeId === extensionId);
+  const { extensionId: rawExtensionId } = await params;
+  const storeId = decodeURIComponent(rawExtensionId);
+  const extension = await prisma.globalExtension.findFirst({
+    where: { storeId },
+    select: { name: true },
+  });
+  const extensionName = extension?.name?.trim() || storeId;
 
   return (
     <SubscribedDetectionWorkbench
-      storeId={extensionId}
-      extensionName={matched?.name || extensionId}
+      storeId={storeId}
+      extensionName={extensionName}
     />
   );
 }
