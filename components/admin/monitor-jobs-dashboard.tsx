@@ -121,6 +121,7 @@ function MonitorOutcomeChart({
               stackId="outcome"
               fill="#16a34a"
               name="Succeeded"
+              maxBarSize={12}
               radius={[4, 4, 0, 0]}
               onClick={(entry) => onSelectRun(entry as TrendDatum)}
             />
@@ -129,6 +130,7 @@ function MonitorOutcomeChart({
               stackId="outcome"
               fill="#dc2626"
               name="Failed"
+              maxBarSize={12}
               radius={[4, 4, 0, 0]}
               onClick={(entry) => onSelectRun(entry as TrendDatum)}
             />
