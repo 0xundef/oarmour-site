@@ -25,6 +25,7 @@ import {
 } from "@/lib/ai-testing-status-client";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { Separator } from "@/components/ui/separator";
 
 type ExtRow = {
   id: string;
@@ -33,6 +34,7 @@ type ExtRow = {
   version: string | null;
   updatedAt?: string | null;
   isMonitored?: boolean;
+  aiBrowserTestingEnabled?: boolean;
   checkFrequencyMinutes?: number;
   promptMarkdown?: string | null;
 };
@@ -88,6 +90,30 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
       ...prev,
       [storeId]: { agentStatus: "pending", analysisStatus: null, analysisError: null },
     }));
+  };
+
+  const toggleAiBrowserTesting = (id: string, enabled: boolean) => {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/admin/extensions/monitor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, aiBrowserTestingEnabled: enabled }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        toast({
+          description: enabled
+            ? "AI browser testing enabled on new version detection"
+            : "AI browser testing disabled; monitor will run static analysis only",
+        });
+        setRows((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, aiBrowserTestingEnabled: enabled } : r)),
+        );
+        router.refresh();
+      } catch {
+        toast({ variant: "destructive", description: "Failed to update AI browser testing setting" });
+      }
+    });
   };
 
   const toggleMonitor = (id: string, enabled: boolean) => {
@@ -250,14 +276,29 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   </TableCell>
                   <TableCell className="w-[32rem] whitespace-nowrap px-4">
                     <div className="flex flex-nowrap items-center justify-start gap-2">
-                      <span title="Turn version monitoring on or off for this extension">
-                        <Switch
-                          checked={!!ext.isMonitored}
-                          onCheckedChange={(v) => toggleMonitor(ext.id, v)}
-                          disabled={pending}
-                          aria-label="Toggle monitoring"
-                        />
-                      </span>
+                      <div
+                        className="flex items-center gap-1.5"
+                        role="group"
+                        aria-label="Monitoring options"
+                      >
+                        <span title="Turn version monitoring on or off for this extension">
+                          <Switch
+                            checked={!!ext.isMonitored}
+                            onCheckedChange={(v) => toggleMonitor(ext.id, v)}
+                            disabled={pending}
+                            aria-label="Toggle monitoring"
+                          />
+                        </span>
+                        <span title="When monitoring detects a new version, also queue AI browser testing (static analysis always runs)">
+                          <Switch
+                            checked={!!ext.aiBrowserTestingEnabled}
+                            onCheckedChange={(v) => toggleAiBrowserTesting(ext.id, v)}
+                            disabled={pending || !ext.isMonitored}
+                            aria-label="Toggle AI browser testing on monitor"
+                          />
+                        </span>
+                      </div>
+                      <Separator orientation="vertical" className="h-6" />
                       <AiTestingRunButton
                         storeId={ext.storeId}
                         extensionName={ext.name}

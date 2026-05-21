@@ -23,6 +23,7 @@ type MonitorExtensionRow = {
   version: string | null
   packageDownloadPrefix: string | null
   packageDownloadSuffix: string | null
+  aiBrowserTestingEnabled: boolean
 }
 
 export type MonitorExtensionsOnceResult = {
@@ -95,13 +96,13 @@ async function loadMonitorExtensionList(
 ): Promise<MonitorExtensionRow[]> {
   if (targetStoreId) {
     return db.$queryRaw<MonitorExtensionRow[]>`
-      SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix"
+      SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
       FROM "GlobalExtension"
       WHERE "storeId" = ${targetStoreId}
     `
   }
   return db.$queryRaw<MonitorExtensionRow[]>`
-    SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix"
+    SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
     FROM "GlobalExtension"
     WHERE "isMonitored" = true
   `
@@ -155,6 +156,7 @@ async function monitorExtensionsOnceWithDb(
         ...item,
         packageDownloadPrefix: null,
         packageDownloadSuffix: '.zip',
+        aiBrowserTestingEnabled: false,
       }))
     } catch {
       console.warn('Monitor: extension query failed. Skipping monitoring.', e)
@@ -210,14 +212,16 @@ async function monitorExtensionsOnceWithDb(
           continue
         }
         await processExtension(ext.storeId, downloadUrl)
-        try {
-          enqueueAgentBrowserTestTask({
-            storeId: ext.storeId,
-            version: nextVersion,
-            reason: 'monitor_new_version',
-          })
-        } catch (e) {
-          console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+        if (ext.aiBrowserTestingEnabled) {
+          try {
+            enqueueAgentBrowserTestTask({
+              storeId: ext.storeId,
+              version: nextVersion,
+              reason: 'monitor_new_version',
+            })
+          } catch (e) {
+            console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+          }
         }
         updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: nextVersion, crxPath: downloadUrl })
         succeededCount += 1
@@ -233,14 +237,16 @@ async function monitorExtensionsOnceWithDb(
             data: { version: latest, updatedAt: new Date() },
           })
           await enqueueExtensionLookupJob(ext.id, db)
-          try {
-            enqueueAgentBrowserTestTask({
-              storeId: ext.storeId,
-              version: latest,
-              reason: 'monitor_new_version',
-            })
-          } catch (e) {
-            console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+          if (ext.aiBrowserTestingEnabled) {
+            try {
+              enqueueAgentBrowserTestTask({
+                storeId: ext.storeId,
+                version: latest,
+                reason: 'monitor_new_version',
+              })
+            } catch (e) {
+              console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+            }
           }
         } catch (e) {
           console.error('Failed to update DB for', ext.storeId, e)

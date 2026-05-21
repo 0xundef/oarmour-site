@@ -198,9 +198,10 @@ model GlobalExtension {
   iconUrl         String?
   
   // Monitoring Config
-  isMonitored             Boolean   @default(false)
+  isMonitored               Boolean   @default(false)
+  aiBrowserTestingEnabled   Boolean   @default(false)
   // CDN-style prefix from first allowed download URL, e.g. https://cdn.oarmour.com/{storeId}/
-  packageDownloadPrefix   String?
+  packageDownloadPrefix     String?
   packageDownloadSuffix   String?   @default(".zip")
   checkFrequencyMinutes   Int       @default(30)
   riskLevel             RiskLevel @default(UNKNOWN)

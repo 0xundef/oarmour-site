@@ -100,10 +100,10 @@ export default async function AdminPage({
   }
 
   if (section === "monitoring") {
-    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; packageDownloadPrefix: string | null; packageDownloadSuffix: string | null; checkFrequencyMinutes: number | null; promptMarkdown: string | null; updatedAt: Date }> = []
+    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; aiBrowserTestingEnabled: boolean; packageDownloadPrefix: string | null; packageDownloadSuffix: string | null; checkFrequencyMinutes: number | null; promptMarkdown: string | null; updatedAt: Date }> = []
     try {
       rawExtensions = await prisma.$queryRaw`
-        SELECT "id","name","storeId","version","isMonitored","packageDownloadPrefix","packageDownloadSuffix","checkFrequencyMinutes","promptMarkdown","updatedAt"
+        SELECT "id","name","storeId","version","isMonitored","aiBrowserTestingEnabled","packageDownloadPrefix","packageDownloadSuffix","checkFrequencyMinutes","promptMarkdown","updatedAt"
         FROM "GlobalExtension"
         ORDER BY "updatedAt" DESC
       `;
@@ -115,6 +115,7 @@ export default async function AdminPage({
       `;
       rawExtensions = legacyExtensions.map((e) => ({
         ...e,
+        aiBrowserTestingEnabled: false,
         packageDownloadPrefix: null,
         packageDownloadSuffix: '.zip',
         promptMarkdown: null,
@@ -126,6 +127,7 @@ export default async function AdminPage({
       storeId: e.storeId,
       version: e.version,
       isMonitored: e.isMonitored,
+      aiBrowserTestingEnabled: e.aiBrowserTestingEnabled,
       packageDownloadPrefix: e.packageDownloadPrefix,
       packageDownloadSuffix: e.packageDownloadSuffix,
       checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
