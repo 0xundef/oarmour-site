@@ -135,7 +135,7 @@ export async function POST(req: Request) {
     system: buildIssueChatSystem(issue),
     messages: await convertToModelMessages(messages, { tools }),
     tools,
-    stopWhen: stepCountIs(3),
+    stopWhen: stepCountIs(4),
     ...(thinkingDisabled ? { temperature: 0.2 } : {}),
     providerOptions,
   })

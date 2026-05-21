@@ -6,6 +6,7 @@ import { ChevronDownIcon, CodeIcon } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import type { LocateDomainInSourceResult } from "@/lib/domain-code-locator"
+import type { LookupDomainWhoisResult } from "@/lib/domain-whois-lookup"
 
 type ToolPart = Extract<UIMessage["parts"][number], { type: string }>
 
@@ -17,6 +18,51 @@ function formatToolLabel(part: ToolPart): string {
     return part.type.slice(5).replace(/_/g, " ")
   }
   return "Tool"
+}
+
+function LookupWhoisOutput({ output }: { output: LookupDomainWhoisResult }) {
+  if (!output.ok || !output.info) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        WHOIS lookup failed for{" "}
+        <span className="font-mono text-foreground">{output.domain}</span>
+        {output.error ? `: ${output.error}` : "."}
+      </p>
+    )
+  }
+
+  const { info } = output
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "Registrar", value: info.registrar ?? "—" },
+    {
+      label: "Created",
+      value: info.createdDate
+        ? `${info.createdDate.slice(0, 10)}${info.ageDays != null ? ` (${info.ageDays}d ago)` : ""}`
+        : "—",
+    },
+    { label: "Expires", value: info.expiresDate ? info.expiresDate.slice(0, 10) : "—" },
+    {
+      label: "Nameservers",
+      value: info.nameservers.length ? info.nameservers.slice(0, 4).join(", ") : "—",
+    },
+  ]
+
+  return (
+    <div className="space-y-2 text-xs">
+      <p className="text-muted-foreground">
+        <span className="font-mono text-foreground">{output.domain}</span>
+        {output.tld ? ` · .${output.tld}` : ""} · {output.source}
+      </p>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+        {rows.map((row) => (
+          <div key={row.label} className="contents">
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="break-all text-foreground">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
 }
 
 function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) {
@@ -70,12 +116,18 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
   if (!isToolUIPart(part)) return null
 
   if (part.state === "input-streaming" || part.state === "input-available") {
+    const domain =
+      part.input && typeof part.input === "object" && "domain" in (part.input as object)
+        ? String((part.input as { domain?: string }).domain)
+        : ""
+    const verb =
+      part.type === "tool-lookup_domain_whois"
+        ? "Looking up WHOIS"
+        : "Searching extension source"
     return (
       <p className="text-xs text-muted-foreground">
-        Searching extension source
-        {part.input && typeof part.input === "object" && "domain" in (part.input as object)
-          ? ` for ${String((part.input as { domain?: string }).domain)}`
-          : ""}
+        {verb}
+        {domain ? ` for ${domain}` : ""}
         …
       </p>
     )
@@ -87,6 +139,10 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
 
   if (part.state !== "output-available" || part.output == null) {
     return null
+  }
+
+  if (part.type === "tool-lookup_domain_whois") {
+    return <LookupWhoisOutput output={part.output as LookupDomainWhoisResult} />
   }
 
   if (part.type === "tool-locate_domain_in_source") {
