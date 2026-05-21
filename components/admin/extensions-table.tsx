@@ -17,6 +17,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Pencil, Play, Trash2 } from "lucide-react";
+import { AiTestingRunButton } from "@/components/ai-testing/ai-testing-run-button";
+import {
+  loadAiTestingStatusMap,
+  mergeAiTestingStatusMaps,
+  type AiTestingStatusEntry,
+} from "@/lib/ai-testing-status-client";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 
@@ -56,11 +62,41 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [draftPrompt, setDraftPrompt] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ExtRow | null>(null);
+  const [aiTestingStatusByStoreId, setAiTestingStatusByStoreId] = useState<
+    Record<string, AiTestingStatusEntry>
+  >({});
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   useEffect(() => {
     setRows(extensions);
   }, [extensions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await loadAiTestingStatusMap();
+        if (!cancelled) {
+          setAiTestingStatusByStoreId((prev) => mergeAiTestingStatusMaps(prev, next));
+        }
+      } catch {
+        // ignore — button state may be stale until next poll
+      }
+    };
+    void refresh();
+    const interval = setInterval(() => void refresh(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleAiTestingTriggered = (storeId: string) => {
+    setAiTestingStatusByStoreId((prev) => ({
+      ...prev,
+      [storeId]: { agentStatus: "pending", analysisStatus: null, analysisError: null },
+    }));
+  };
 
   const toggleMonitor = (id: string, enabled: boolean) => {
     startTransition(async () => {
@@ -216,14 +252,14 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             <col />
             <col className="w-28" />
             <col className="w-48" />
-            <col className="w-[26rem]" />
+            <col className="w-[32rem]" />
           </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead className="px-4">Name</TableHead>
               <TableHead className="w-28 px-4">Version</TableHead>
               <TableHead className="w-48 whitespace-nowrap px-4">Last Update</TableHead>
-              <TableHead className="w-[26rem] whitespace-nowrap px-4">Operation</TableHead>
+              <TableHead className="w-[32rem] whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -241,7 +277,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   <TableCell className="w-48 whitespace-nowrap px-4 text-muted-foreground">
                     {formatLastUpdate(ext.updatedAt)}
                   </TableCell>
-                  <TableCell className="w-[26rem] whitespace-nowrap px-4">
+                  <TableCell className="w-[32rem] whitespace-nowrap px-4">
                     <div className="flex flex-nowrap items-center justify-start gap-2">
                       <span title="Turn version monitoring on or off for this extension">
                         <Switch
@@ -259,6 +295,14 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                           aria-label="Toggle testing mode"
                         />
                       </span>
+                      <AiTestingRunButton
+                        storeId={ext.storeId}
+                        extensionName={ext.name}
+                        version={ext.version}
+                        statusEntry={aiTestingStatusByStoreId[ext.storeId]}
+                        onTriggered={handleAiTestingTriggered}
+                        disabled={pending}
+                      />
                       <Button
                         variant="outline"
                         size="sm"

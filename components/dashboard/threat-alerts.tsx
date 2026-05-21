@@ -64,107 +64,6 @@ const isInProgressStatus = (status: string) =>
   status === "PENDING" || status === "RUNNING" || status === "DOWNLOADING" || status === "EXTRACTING" || status === "QUEUED" || status === "ANALYZING"
 const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL"
 
-type AiTestingStatus = 'pending' | 'running' | 'complete' | 'error'
-
-type AiTestingStatusEntry = {
-  agentStatus: AiTestingStatus
-  analysisStatus?: string | null
-  analysisError?: string | null
-}
-
-const AI_TESTING_ACTIVE_STATUSES = new Set<AiTestingStatus>(['pending', 'running'])
-
-type AiTestingSparkleOutcome = 'idle' | 'active' | 'success' | 'failed'
-
-function resolveAiTestingSparkleOutcome(
-  entry: AiTestingStatusEntry | undefined,
-  pending: boolean,
-): AiTestingSparkleOutcome {
-  if (pending) return 'active'
-  if (!entry) return 'idle'
-  if (AI_TESTING_ACTIVE_STATUSES.has(entry.agentStatus)) return 'active'
-  if (entry.agentStatus === 'error' || entry.analysisStatus === 'FAILED') return 'failed'
-  if (entry.analysisStatus === 'COMPLETED') return 'success'
-  if (entry.agentStatus === 'complete') return 'active'
-  return 'idle'
-}
-
-const AiTestingButton = ({
-  extensionId,
-  extensionName,
-  version,
-  statusEntry,
-  onTriggered,
-}: {
-  extensionId: string
-  extensionName: string
-  version: string
-  statusEntry?: AiTestingStatusEntry
-  onTriggered: (storeId: string) => void
-}) => {
-  const { toast } = useToast()
-  const [pending, setPending] = useState(false)
-  const disabled = !version || version === 'N/A'
-
-  const handleClick = async () => {
-    if (pending || disabled) return
-    setPending(true)
-    try {
-      const res = await fetch('/api/ai-testing/enqueue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeId: extensionId, name: extensionName, version }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (data?.queued) {
-        onTriggered(extensionId)
-        toast({ description: data.message ?? 'AI testing enqueued.' })
-        return
-      }
-      toast({
-        description: data?.message ?? data?.error ?? 'Failed to enqueue AI test',
-        variant: 'destructive',
-      })
-    } catch {
-      toast({ description: 'Failed to enqueue AI test', variant: 'destructive' })
-    } finally {
-      setPending(false)
-    }
-  }
-
-  const outcome = resolveAiTestingSparkleOutcome(statusEntry, pending)
-  const sparkleClass =
-    outcome === 'failed'
-      ? 'text-red-500'
-      : outcome === 'success' || outcome === 'active'
-        ? 'text-green-400'
-        : 'text-green-400'
-  const animated = outcome === 'active'
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={handleClick}
-      disabled={pending || disabled}
-      title={
-        disabled
-          ? 'Version unavailable'
-          : outcome === 'failed'
-            ? statusEntry?.analysisError ?? 'AI testing failed (network.json missing)'
-            : animated
-              ? 'AI testing in progress'
-              : outcome === 'success'
-                ? 'AI testing completed'
-                : 'Run AI testing'
-      }
-      aria-label="Run AI testing"
-    >
-      <Sparkles className={`h-4 w-4 ${sparkleClass} ${animated ? 'animate-sparkle' : ''}`} />
-    </Button>
-  )
-}
-
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
@@ -246,8 +145,6 @@ function buildDownloadUrl(extensionId: string, version: string, testingMode: boo
 function makeColumns(
   onOpen: (row: ThreatAlert) => void,
   liveStatusByExtensionId: Record<string, LiveAnalyzeStatus>,
-  aiTestingStatusByStoreId: Record<string, AiTestingStatusEntry>,
-  onAiTestingTriggered: (storeId: string) => void,
 ): ColumnDef<ThreatAlert>[] {
   const getRowStage = (row: ThreatAlert) => {
     const liveStage = liveStatusByExtensionId[row.extensionId]?.stage
@@ -354,13 +251,6 @@ function makeColumns(
                 <Download className="h-4 w-4" />
               </a>
             </Button>
-            <AiTestingButton
-              extensionId={row.original.extensionId}
-              extensionName={row.original.extensionName}
-              version={row.original.version}
-              statusEntry={aiTestingStatusByStoreId[row.original.extensionId]}
-              onTriggered={onAiTestingTriggered}
-            />
             <OperationCell extensionId={row.original.extensionId} />
           </div>
         )
@@ -374,9 +264,6 @@ export function ThreatAlerts() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<ThreatAlert[]>([])
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
-  const [aiTestingStatusByStoreId, setAiTestingStatusByStoreId] = useState<
-    Record<string, AiTestingStatusEntry>
-  >({})
   const [loading, setLoading] = useState(true)
   const [completedScanActions, setCompletedScanActions] = useState(0)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
@@ -533,65 +420,9 @@ export function ThreatAlerts() {
     }
   }
 
-  const fetchAiTestingStatuses = async () => {
-    try {
-      const res = await fetch('/api/ai-testing/statuses', { cache: 'no-store' })
-      if (!res.ok) return
-      const payload = await res.json().catch(() => null) as
-        | {
-            statuses?: Record<
-              string,
-              {
-                status?: string
-                analysisStatus?: string | null
-                analysisError?: string | null
-              }
-            >
-          }
-        | null
-      const statuses = payload?.statuses
-      if (!statuses) return
-      const next: Record<string, AiTestingStatusEntry> = {}
-      for (const [storeId, entry] of Object.entries(statuses)) {
-        const s = entry?.status
-        if (s === 'pending' || s === 'running' || s === 'complete' || s === 'error') {
-          next[storeId] = {
-            agentStatus: s,
-            analysisStatus: entry?.analysisStatus ?? null,
-            analysisError: entry?.analysisError ?? null,
-          }
-        }
-      }
-      setAiTestingStatusByStoreId((prev) => {
-        const merged: Record<string, AiTestingStatusEntry> = { ...next }
-        for (const [storeId, entry] of Object.entries(prev)) {
-          if (entry.agentStatus === 'pending' && !next[storeId]) {
-            merged[storeId] = entry
-          }
-        }
-        return merged
-      })
-    } catch {
-      // ignore — animation just won't update this tick
-    }
-  }
-
-  const handleAiTestingTriggered = (storeId: string) => {
-    setAiTestingStatusByStoreId((prev) => ({
-      ...prev,
-      [storeId]: { agentStatus: 'pending', analysisStatus: null, analysisError: null },
-    }))
-  }
-
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    fetchAiTestingStatuses();
-    const interval = setInterval(fetchAiTestingStatuses, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1008,7 +839,7 @@ export function ThreatAlerts() {
             setAiTestingSummary(null)
             setSelected(row)
             setOpen(true)
-          }, liveStatusByExtensionId, aiTestingStatusByStoreId, handleAiTestingTriggered)}
+          }, liveStatusByExtensionId)}
           searchKey="extensionName"
         />
         <Sheet open={open} onOpenChange={setOpen}>
