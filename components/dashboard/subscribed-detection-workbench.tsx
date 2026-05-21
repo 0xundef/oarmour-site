@@ -157,7 +157,7 @@ export function SubscribedDetectionWorkbench({
               {!active ? (
                 <div className="p-5 text-sm text-muted-foreground">Select a finding or wait for data to load.</div>
               ) : (
-                <IssueAiChatBox key={active.id} issue={active} />
+                <IssueAiChatBox key={active.id} storeId={storeId} issue={active} />
               )}
             </section>
           </div>

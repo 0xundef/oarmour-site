@@ -1,16 +1,100 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { convertToModelMessages, streamText, type UIMessage } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
-import { authOptions } from "@/lib/auth-options"
 import { buildIssueChatSystem, type IssueChatContext } from "@/lib/issue-chat-context"
+import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
+import {
+  deleteIssueInvestigationChat,
+  loadIssueInvestigationMessages,
+  parseIssueChatScope,
+  saveIssueInvestigationMessages,
+} from "@/lib/issue-investigation-chat"
 import { getOpenAiChatboxConfig } from "@/lib/openai-chatbox-config"
 
 export const runtime = "nodejs"
 
+export async function GET(req: Request) {
+  const userId = await getIssueChatSessionUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const scope = parseIssueChatScope({
+    storeId: searchParams.get("storeId"),
+    issueId: searchParams.get("issueId"),
+  })
+  if (!scope) {
+    return NextResponse.json({ error: "Missing storeId or issueId." }, { status: 400 })
+  }
+
+  const messages = await loadIssueInvestigationMessages({
+    userId,
+    storeId: scope.storeId,
+    issueId: scope.issueId,
+  })
+
+  if (!messages) {
+    return NextResponse.json({ messages: null }, { status: 404 })
+  }
+
+  return NextResponse.json({ messages })
+}
+
+export async function DELETE(req: Request) {
+  const userId = await getIssueChatSessionUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const scope = parseIssueChatScope({
+    storeId: searchParams.get("storeId"),
+    issueId: searchParams.get("issueId"),
+  })
+  if (!scope) {
+    return NextResponse.json({ error: "Missing storeId or issueId." }, { status: 400 })
+  }
+
+  const deleted = await deleteIssueInvestigationChat({
+    userId,
+    storeId: scope.storeId,
+    issueId: scope.issueId,
+  })
+
+  return NextResponse.json({ ok: true, deleted })
+}
+
+export async function PUT(req: Request) {
+  const userId = await getIssueChatSessionUserId()
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const body = (await req.json().catch(() => null)) as
+    | { storeId?: string; issueId?: string; messages?: UIMessage[] }
+    | null
+  const scope = parseIssueChatScope({ storeId: body?.storeId, issueId: body?.issueId })
+  if (!scope || !Array.isArray(body?.messages)) {
+    return NextResponse.json({ error: "Missing storeId, issueId, or messages." }, { status: 400 })
+  }
+
+  try {
+    await saveIssueInvestigationMessages({
+      userId,
+      storeId: scope.storeId,
+      issueId: scope.issueId,
+      messages: body.messages,
+    })
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ error: "Invalid messages payload." }, { status: 400 })
+  }
+}
+
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.email) {
+  const userId = await getIssueChatSessionUserId()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -31,13 +115,17 @@ export async function POST(req: Request) {
   }).chat(chatbox.model)
 
   const body = (await req.json().catch(() => null)) as
-    | { issue?: IssueChatContext; messages?: UIMessage[] }
+    | { issue?: IssueChatContext; storeId?: string; messages?: UIMessage[] }
     | null
   const issue = body?.issue
   const messages = body?.messages
+  const scope = parseIssueChatScope({ storeId: body?.storeId, issueId: issue?.id })
 
-  if (!issue || !Array.isArray(messages) || messages.length === 0) {
-    return NextResponse.json({ error: "Missing issue context or messages." }, { status: 400 })
+  if (!issue || !scope || !Array.isArray(messages) || messages.length === 0) {
+    return NextResponse.json(
+      { error: "Missing issue context, storeId, or messages." },
+      { status: 400 },
+    )
   }
 
   const result = streamText({
@@ -47,5 +135,19 @@ export async function POST(req: Request) {
     temperature: 0.2,
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse({
+    originalMessages: messages,
+    onFinish: async ({ messages: updatedMessages }) => {
+      try {
+        await saveIssueInvestigationMessages({
+          userId,
+          storeId: scope.storeId,
+          issueId: scope.issueId,
+          messages: updatedMessages,
+        })
+      } catch (e) {
+        console.error("[issues/chat] Failed to persist messages:", e)
+      }
+    },
+  })
 }

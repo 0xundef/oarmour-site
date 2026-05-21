@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, type UIMessage } from "ai"
-import { ArrowUpIcon, SquareIcon } from "lucide-react"
+import { ArrowUpIcon, SquareIcon, Trash2Icon } from "lucide-react"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
+import { Button } from "@/components/ui/button"
 import {
   Conversation,
   ConversationContent,
@@ -25,7 +27,12 @@ import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
-import { buildIssueDetailContextText, toIssueChatContext } from "@/lib/issue-chat-context"
+import {
+  buildInitialContextMessage,
+  isContextSeedMessage,
+  mergeLoadedMessagesWithSeed,
+} from "@/lib/issue-chat-messages"
+import { toIssueChatContext } from "@/lib/issue-chat-context"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 const SUGGESTIONS = [
@@ -34,20 +41,6 @@ const SUGGESTIONS = [
   "What is the blast radius if this finding is real?",
   "Summarize the evidence we have for this issue.",
 ] as const
-
-const CONTEXT_MESSAGE_PREFIX = "issue-context-"
-
-function buildInitialContextMessage(issue: WorkbenchCheckItem): UIMessage {
-  return {
-    id: `${CONTEXT_MESSAGE_PREFIX}${issue.id}`,
-    role: "user",
-    parts: [{ type: "text", text: buildIssueDetailContextText(issue) }],
-  }
-}
-
-function isContextSeedMessage(message: UIMessage): boolean {
-  return message.id.startsWith(CONTEXT_MESSAGE_PREFIX)
-}
 
 function messageHasVisibleText(message: UIMessage): boolean {
   return message.parts.some((part) => part.type === "text" && (part.text ?? "").trim().length > 0)
@@ -61,31 +54,101 @@ function showAssistantThinking(messages: UIMessage[], isBusy: boolean): boolean 
   return false
 }
 
-export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
-  const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
+async function persistIssueChatMessages(params: {
+  storeId: string
+  issueId: string
+  messages: UIMessage[]
+}) {
+  await fetch("/api/issues/chat", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      storeId: params.storeId,
+      issueId: params.issueId,
+      messages: params.messages,
+    }),
+  })
+}
 
-  const initialMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
+async function deleteIssueChatHistory(params: { storeId: string; issueId: string }) {
+  const qs = new URLSearchParams({
+    storeId: params.storeId,
+    issueId: params.issueId,
+  })
+  const res = await fetch(`/api/issues/chat?${qs.toString()}`, { method: "DELETE" })
+  if (!res.ok) {
+    throw new Error("Failed to clear conversation")
+  }
+}
+
+function IssueAiChatBoxInner({
+  storeId,
+  issue,
+  initialMessages,
+  loadError,
+}: {
+  storeId: string
+  issue: WorkbenchCheckItem
+  initialMessages: UIMessage[]
+  loadError: string
+}) {
+  const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [clearActionError, setClearActionError] = useState("")
+
+  const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/issues/chat",
-        body: { issue: issueContext },
+        body: { issue: issueContext, storeId },
       }),
-    [issueContext],
+    [issueContext, storeId],
   )
 
-  const { messages, sendMessage, status, error, stop } = useChat({
-    id: `issue-chat-${issue.id}`,
+  const saveMessages = useCallback(
+    (messages: UIMessage[]) => {
+      void persistIssueChatMessages({ storeId, issueId: issue.id, messages }).catch(() => {
+        // Server also persists on stream finish; ignore transient client save errors.
+      })
+    },
+    [storeId, issue.id],
+  )
+
+  const { messages, sendMessage, status, error, stop, setMessages, clearError: resetChatError } =
+    useChat({
+    id: `issue-chat-${storeId}-${issue.id}`,
     transport,
     messages: initialMessages,
-  })
+      onFinish: ({ messages: nextMessages }) => {
+        saveMessages(nextMessages)
+      },
+    })
 
   const isBusy = status === "submitted" || status === "streaming"
   const hasAssistantReply = messages.some(
     (message) => message.role === "assistant" && messageHasVisibleText(message),
   )
+  const hasClearableHistory = messages.some((message) => !isContextSeedMessage(message))
   const thinking = showAssistantThinking(messages, isBusy)
+
+  const handleClearConversation = async () => {
+    setClearActionError("")
+    setClearing(true)
+    try {
+      if (isBusy) stop()
+      await deleteIssueChatHistory({ storeId, issueId: issue.id })
+      setMessages(seedMessages)
+      resetChatError()
+      setClearDialogOpen(false)
+    } catch {
+      setClearActionError("Could not clear conversation. Try again.")
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const sendPrompt = (text: string) => {
     const prompt = text.trim()
@@ -95,6 +158,32 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {hasClearableHistory ? (
+        <div className="flex shrink-0 items-center justify-end border-b px-4 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+            disabled={isBusy || clearing}
+            onClick={() => setClearDialogOpen(true)}
+          >
+            <Trash2Icon className="size-3.5" />
+            Clear conversation
+          </Button>
+        </div>
+      ) : null}
+
+      <ConfirmDeleteDialog
+        open={clearDialogOpen}
+        onOpenChange={setClearDialogOpen}
+        onConfirm={() => void handleClearConversation()}
+        title="Clear conversation?"
+        description="This removes all messages for this finding from your saved investigation history. The finding context will remain so you can start over."
+        confirmLabel="Clear"
+        loading={clearing}
+      />
+
       <Conversation className="min-h-0 flex-1 overflow-hidden">
         <ConversationContent className="mx-auto w-full max-w-3xl">
           {messages.map((message, index) => {
@@ -177,6 +266,14 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
         <ConversationScrollButton />
       </Conversation>
 
+      {loadError ? (
+        <p className="shrink-0 px-4 pb-1 text-xs text-amber-600 dark:text-amber-400">{loadError}</p>
+      ) : null}
+
+      {clearActionError ? (
+        <p className="shrink-0 px-4 pb-1 text-xs text-destructive">{clearActionError}</p>
+      ) : null}
+
       {error ? (
         <p className="shrink-0 px-4 pb-2 text-xs text-destructive">Chat failed: {error.message}</p>
       ) : null}
@@ -208,5 +305,78 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
         </PromptInput>
       </div>
     </div>
+  )
+}
+
+export function IssueAiChatBox({
+  storeId,
+  issue,
+}: {
+  storeId: string
+  issue: WorkbenchCheckItem
+}) {
+  const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
+  const [hydratedMessages, setHydratedMessages] = useState<UIMessage[] | null>(null)
+  const [loadError, setLoadError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    setHydratedMessages(null)
+    setLoadError("")
+
+    const params = new URLSearchParams({
+      storeId,
+      issueId: issue.id,
+    })
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/issues/chat?${params.toString()}`, { cache: "no-store" })
+        if (cancelled) return
+
+        if (res.status === 404) {
+          setHydratedMessages(seedMessages)
+          return
+        }
+
+        if (!res.ok) {
+          setLoadError("Could not load saved conversation.")
+          setHydratedMessages(seedMessages)
+          return
+        }
+
+        const data = (await res.json()) as { messages?: UIMessage[] | null }
+        const stored = Array.isArray(data.messages) ? data.messages : []
+        setHydratedMessages(mergeLoadedMessagesWithSeed(stored, issue))
+      } catch {
+        if (!cancelled) {
+          setLoadError("Could not load saved conversation.")
+          setHydratedMessages(seedMessages)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [storeId, issue, seedMessages])
+
+  if (hydratedMessages === null) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Spinner className="size-5" />
+        <span>Loading conversation…</span>
+      </div>
+    )
+  }
+
+  return (
+    <IssueAiChatBoxInner
+      key={`${storeId}-${issue.id}`}
+      storeId={storeId}
+      issue={issue}
+      initialMessages={hydratedMessages}
+      loadError={loadError}
+    />
   )
 }

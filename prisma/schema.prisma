@@ -41,6 +41,7 @@ model User {
   subscriptions AssetSubscription[]
   submissions   Submission[]
   loginActivities LoginActivity[]
+  issueInvestigationChats IssueInvestigationChat[]
   notificationSubscriptions NotificationSubscription[]
 
   // Stripe Subscription
@@ -79,6 +80,21 @@ model LoginActivity {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+}
+
+model IssueInvestigationChat {
+  id        String   @id @default(uuid())
+  userId    String
+  storeId   String
+  issueId   String
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId, issueId])
+  @@index([userId, storeId])
 }
 
 model Account {
