@@ -17,12 +17,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { useToast } from "@/components/ui/use-toast"
-
-type AnalyzeInput = {
-  extensionId: string | null
-  downloadUrl?: string
-  isOarmourCdn?: boolean
-}
+import { resolveAnalyzeInput, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
 
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false)
@@ -43,48 +38,21 @@ export function GlobalSearch() {
     return () => document.removeEventListener("keydown", down)
   }, [])
 
-  // removed unused runCommand
-
-  const resolveAnalyzeInput = (input: string): AnalyzeInput => {
-    const trimmed = input.trim()
-    const idRegex = /^[a-z]{32}$/
-    if (idRegex.test(trimmed)) return { extensionId: trimmed }
-    try {
-      const url = new URL(trimmed)
-      const host = url.hostname.toLowerCase()
-      const path = url.pathname
-      const isChromeWebStore =
-        host.includes("chromewebstore.google.com") ||
-        (host.includes("chrome.google.com") && path.includes("/webstore/"))
-      if (isChromeWebStore && path.includes("/detail/")) {
-        const match = path.match(/[a-z]{32}/)
-        if (match) return { extensionId: match[0] }
-      }
-      const customMatch = path.match(/^\/([a-z]{32})\/([^/]+)$/)
-      if (customMatch && host === "cdn.oarmour.com") {
-        return {
-          extensionId: customMatch[1],
-          downloadUrl: trimmed,
-          isOarmourCdn: true,
-        }
-      }
-    } catch {
-      
-    }
-    return { extensionId: null }
-  }
-
   const parsedInput = React.useMemo(() => resolveAnalyzeInput(query), [query])
+  const isOarmourCdn = !!(
+    parsedInput &&
+    (usesPrefixBasedVersionCheck(parsedInput.packageDownloadPrefix) ||
+      parsedInput.downloadUrl?.includes("cdn.oarmour.com"))
+  )
 
   const handleAnalyze = async () => {
     if (!query || submitting) return;
-    const parsed = parsedInput
-    const extensionId = parsed.extensionId
+    const extensionId = parsedInput?.extensionId
     if (!extensionId) {
         toast({
             variant: "destructive",
             title: "输入不合法",
-            description: "请输入 32 位插件 ID、Chrome Web Store 链接或自定义 ZIP 下载链接。",
+            description: "请输入 32 位插件 ID、Chrome Web Store 链接，或 cdn.oarmour.com / Chrome 官方下载链接。",
         });
         return;
     }
@@ -101,7 +69,7 @@ export function GlobalSearch() {
         const res = await fetch('/api/extensions/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ extensionId, downloadUrl: parsed.downloadUrl })
+            body: JSON.stringify({ extensionId, downloadUrl: parsedInput?.downloadUrl })
         });
 
         if (!res.ok) throw new Error('Failed to start analysis');
@@ -150,7 +118,7 @@ export function GlobalSearch() {
     setOpen(false);
     // Navigate to search page or handle search
     // For now, let's redirect to dashboard with search param
-    const extensionId = parsedInput.extensionId;
+    const extensionId = parsedInput?.extensionId;
     const searchQuery = extensionId || query;
     router.push(`/dashboard/extension?search=${searchQuery}`);
   }
@@ -175,7 +143,7 @@ export function GlobalSearch() {
             onKeyDown={(e) => {
               if (e.key !== "Enter") return
               e.preventDefault()
-              if (parsedInput.extensionId) {
+              if (parsedInput?.extensionId) {
                 handleAnalyze()
               } else {
                 handleSearch()
@@ -199,16 +167,16 @@ export function GlobalSearch() {
           <CommandGroup heading="Quick Actions">
              <CommandItem onSelect={handleAnalyze}>
               <PlusIcon className="mr-2 h-4 w-4" />
-              <span>{submitting ? "Analyzing..." : "Analyze Extension"}: {parsedInput.extensionId || query || "..."}</span>
+              <span>{submitting ? "Analyzing..." : "Analyze Extension"}: {parsedInput?.extensionId || query || "..."}</span>
             </CommandItem>
           </CommandGroup>
-          {parsedInput.isOarmourCdn && parsedInput.extensionId && (
+          {isOarmourCdn && parsedInput?.extensionId && (
             <>
               <CommandSeparator />
               <CommandGroup heading="CDN Analyze">
                 <CommandItem onSelect={handleAnalyze}>
                   <PlusIcon className="mr-2 h-4 w-4" />
-                  <span>Analyze for testing: {parsedInput.extensionId}</span>
+                  <span>Analyze CDN package: {parsedInput.extensionId}</span>
                 </CommandItem>
               </CommandGroup>
             </>

@@ -16,13 +16,15 @@ import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSumma
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
+import { buildDashboardDownloadUrl, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
 
 type ThreatAlert = {
   id: string
   extensionName: string
   extensionId: string
   version: string
-  testingMode: boolean
+  packageDownloadPrefix: string | null
+  packageDownloadSuffix: string | null
   lastUpdate: string
   risk: string
   analysisStatus: string
@@ -135,13 +137,6 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
   )
 }
 
-function buildDownloadUrl(extensionId: string, version: string, testingMode: boolean): string {
-  if (testingMode && version && version !== "N/A") {
-    return `https://cdn.oarmour.com/${encodeURIComponent(extensionId)}/${encodeURIComponent(version)}.zip`
-  }
-  return `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=131.0.0.0&acceptformat=crx2,crx3&x=id%3D${encodeURIComponent(extensionId)}%26uc`
-}
-
 function makeColumns(
   onOpen: (row: ThreatAlert) => void,
   liveStatusByExtensionId: Record<string, LiveAnalyzeStatus>,
@@ -239,10 +234,11 @@ function makeColumns(
       id: "operation",
       header: "Operation",
       cell: ({ row }) => {
-        const downloadUrl = buildDownloadUrl(
+        const downloadUrl = buildDashboardDownloadUrl(
           row.original.extensionId,
           row.original.version,
-          row.original.testingMode,
+          row.original.packageDownloadPrefix,
+          row.original.packageDownloadSuffix,
         )
         return (
           <div className="flex items-center gap-2">
@@ -316,7 +312,7 @@ export function ThreatAlerts() {
     const completedScans = completedScanActions
     const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
     const findings = highCritical
-    const aiTesting = data.filter((row) => row.testingMode).length
+    const aiTesting = data.filter((row) => usesPrefixBasedVersionCheck(row.packageDownloadPrefix)).length
     const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
     const inProgress = data.filter((row) => isInProgressStatus(row.analysisStatus)).length
     const awaitingConfirmation = data.filter((row) => isHighOrCritical(row.risk) && isCompletedStatus(row.analysisStatus)).length
@@ -391,7 +387,8 @@ export function ThreatAlerts() {
             storeId: string
             name: string
             version: string | null
-            testingMode: boolean
+            packageDownloadPrefix: string | null
+            packageDownloadSuffix: string | null
             updatedAt: string
             riskLevel: string
             analysisStatus: string
@@ -405,7 +402,8 @@ export function ThreatAlerts() {
             extensionName: ext.name,
             extensionId: ext.storeId,
             version: ext.version || 'N/A',
-            testingMode: ext.testingMode,
+            packageDownloadPrefix: ext.packageDownloadPrefix ?? null,
+            packageDownloadSuffix: ext.packageDownloadSuffix ?? null,
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus,

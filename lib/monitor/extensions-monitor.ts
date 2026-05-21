@@ -5,12 +5,25 @@ import type { Prisma, PrismaClient } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { enqueueExtensionLookupJob, processExtension } from '@/lib/analysis-service'
 import { enqueueAgentBrowserTestTask } from '@/lib/agent-queue'
+import {
+  buildPackageDownloadUrl,
+  getNextVersion,
+  usesPrefixBasedVersionCheck,
+} from '@/lib/package-download-url'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
 const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
 const EXTENSION_MONITOR_ADVISORY_KEY2 = 0x4d6f6e30
 
 type DbClient = PrismaClient | Prisma.TransactionClient
+
+type MonitorExtensionRow = {
+  id: string
+  storeId: string
+  version: string | null
+  packageDownloadPrefix: string | null
+  packageDownloadSuffix: string | null
+}
 
 export type MonitorExtensionsOnceResult = {
   checked: number
@@ -65,14 +78,7 @@ async function fetchStoreVersion(extensionId: string) {
   return null
 }
 
-function getNextVersion(version?: string | null) {
-  if (!version || !/^\d+(\.\d+)*$/.test(version)) return null
-  const parts = version.split('.').map((x) => parseInt(x, 10))
-  parts[parts.length - 1] = (parts[parts.length - 1] ?? 0) + 1
-  return parts.join('.')
-}
-
-async function hasCdnPackage(downloadUrl: string) {
+async function hasRemotePackage(downloadUrl: string) {
   const res = await axios.get(downloadUrl, {
     responseType: 'stream',
     validateStatus: () => true,
@@ -83,10 +89,27 @@ async function hasCdnPackage(downloadUrl: string) {
   return res.status === 200 || res.status === 206
 }
 
+async function loadMonitorExtensionList(
+  db: DbClient,
+  targetStoreId: string | undefined,
+): Promise<MonitorExtensionRow[]> {
+  if (targetStoreId) {
+    return db.$queryRaw<MonitorExtensionRow[]>`
+      SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix"
+      FROM "GlobalExtension"
+      WHERE "storeId" = ${targetStoreId}
+    `
+  }
+  return db.$queryRaw<MonitorExtensionRow[]>`
+    SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix"
+    FROM "GlobalExtension"
+    WHERE "isMonitored" = true
+  `
+}
+
 async function monitorExtensionsOnceWithDb(
   db: DbClient,
   targetStoreId: string | undefined,
-  options: { preferCdnNextVersion?: boolean } | undefined,
 ): Promise<MonitorExtensionsOnceResult> {
   let runId: string | null = null
   let failedCount = 0
@@ -112,20 +135,10 @@ async function monitorExtensionsOnceWithDb(
   } catch (e) {
     console.warn('Monitor: failed to create monitor run record.', e)
   }
-  let list: Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>
+
+  let list: MonitorExtensionRow[] = []
   try {
-    if (targetStoreId) {
-      list = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
-        SELECT "id","storeId","version","testingMode" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
-      `
-    } else {
-      list = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null; testingMode: boolean }>>`
-        SELECT "id","storeId","version","testingMode"
-        FROM "GlobalExtension"
-        WHERE "isMonitored" = true
-          AND COALESCE("testingMode", false) = false
-      `
-    }
+    list = await loadMonitorExtensionList(db, targetStoreId)
   } catch (e) {
     try {
       let legacyList: Array<{ id: string; storeId: string; version: string | null }>
@@ -140,10 +153,11 @@ async function monitorExtensionsOnceWithDb(
       }
       list = legacyList.map((item) => ({
         ...item,
-        testingMode: false,
+        packageDownloadPrefix: null,
+        packageDownloadSuffix: '.zip',
       }))
     } catch {
-      console.warn('Monitor: isMonitored flag query failed. Skipping monitoring.', e)
+      console.warn('Monitor: extension query failed. Skipping monitoring.', e)
       if (runId) {
         try {
           if (monitorRunDelegate) {
@@ -175,17 +189,22 @@ async function monitorExtensionsOnceWithDb(
       return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> }
     }
   }
+
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> = []
   for (const ext of list) {
     try {
-      if (options?.preferCdnNextVersion || ext.testingMode) {
+      if (usesPrefixBasedVersionCheck(ext.packageDownloadPrefix)) {
         const nextVersion = getNextVersion(ext.version)
         if (!nextVersion) {
           succeededCount += 1
           continue
         }
-        const downloadUrl = `https://cdn.oarmour.com/${ext.storeId}/${nextVersion}.zip`
-        const available = await hasCdnPackage(downloadUrl)
+        const downloadUrl = buildPackageDownloadUrl(
+          ext.packageDownloadPrefix!,
+          nextVersion,
+          ext.packageDownloadSuffix ?? '.zip',
+        )
+        const available = await hasRemotePackage(downloadUrl)
         if (!available) {
           succeededCount += 1
           continue
@@ -204,6 +223,7 @@ async function monitorExtensionsOnceWithDb(
         succeededCount += 1
         continue
       }
+
       const latest = await fetchStoreVersion(ext.storeId)
       if (!latest) continue
       if (cmpVersion(latest, ext.version) > 0) {
@@ -274,10 +294,9 @@ async function monitorExtensionsOnceWithDb(
  */
 export async function monitorExtensionsOnce(
   targetStoreId?: string,
-  options?: { preferCdnNextVersion?: boolean },
 ): Promise<MonitorExtensionsOnceResult> {
   if (targetStoreId) {
-    return monitorExtensionsOnceWithDb(prisma, targetStoreId, options)
+    return monitorExtensionsOnceWithDb(prisma, targetStoreId)
   }
   return prisma.$transaction(
     async (tx) => {
@@ -294,7 +313,7 @@ export async function monitorExtensionsOnce(
           skippedDueToConcurrentInstance: true,
         }
       }
-      return monitorExtensionsOnceWithDb(tx, undefined, options)
+      return monitorExtensionsOnceWithDb(tx, undefined)
     },
     { maxWait: 15_000, timeout: 900_000 },
   )

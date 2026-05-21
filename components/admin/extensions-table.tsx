@@ -33,7 +33,6 @@ type ExtRow = {
   version: string | null;
   updatedAt?: string | null;
   isMonitored?: boolean;
-  testingMode?: boolean;
   checkFrequencyMinutes?: number;
   promptMarkdown?: string | null;
 };
@@ -43,13 +42,6 @@ function formatLastUpdate(iso?: string | null) {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "N/A";
   return date.toLocaleString();
-}
-
-function getNextVersion(version?: string | null) {
-  if (!version || !/^\d+(\.\d+)*$/.test(version)) return null;
-  const parts = version.split(".").map((x) => Number.parseInt(x, 10));
-  parts[parts.length - 1] = (parts[parts.length - 1] ?? 0) + 1;
-  return parts.join(".");
 }
 
 export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
@@ -112,24 +104,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         router.refresh();
       } catch {
         toast({ variant: "destructive", description: "Failed to update monitoring setting" });
-      }
-    });
-  };
-
-  const toggleTestingMode = (id: string, enabled: boolean) => {
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/admin/extensions/monitor", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, testingMode: enabled }),
-        });
-        if (!res.ok) throw new Error("Failed to update");
-        toast({ description: enabled ? "Testing mode enabled" : "Testing mode disabled" });
-        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, testingMode: enabled } : r)));
-        router.refresh();
-      } catch {
-        toast({ variant: "destructive", description: "Failed to update testing mode" });
       }
     });
   };
@@ -215,9 +189,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     }
     startTransition(async () => {
       try {
-        const nextVersion = getNextVersion(ext.version) ?? "{next-version}";
-        const downloadUri = `https://cdn.oarmour.com/${ext.storeId}/${nextVersion}.zip`;
-        console.info("[monitor-check] next download uri:", downloadUri);
         const res = await fetch("/api/monitor/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -285,14 +256,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                           onCheckedChange={(v) => toggleMonitor(ext.id, v)}
                           disabled={pending}
                           aria-label="Toggle monitoring"
-                        />
-                      </span>
-                      <span title="Turn AI browser testing on or off for this extension">
-                        <Switch
-                          checked={!!ext.testingMode}
-                          onCheckedChange={(v) => toggleTestingMode(ext.id, v)}
-                          disabled={pending}
-                          aria-label="Toggle testing mode"
                         />
                       </span>
                       <AiTestingRunButton

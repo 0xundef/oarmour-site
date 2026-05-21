@@ -8,7 +8,8 @@ export type ExtensionWithAnalysis = {
   name: string
   version: string | null
   publisher: string | null
-  testingMode: boolean
+  packageDownloadPrefix: string | null
+  packageDownloadSuffix: string | null
   updatedAt: Date
   riskLevel: string
   analysisStatus: string
@@ -39,7 +40,8 @@ export async function listExtensionsWithAnalysis(): Promise<ExtensionWithAnalysi
       name: ext.name,
       version: ext.version,
       publisher: ext.publisher,
-      testingMode: !!(ext as { testingMode?: boolean }).testingMode,
+      packageDownloadPrefix: ext.packageDownloadPrefix ?? null,
+      packageDownloadSuffix: ext.packageDownloadSuffix ?? null,
       updatedAt: ext.updatedAt,
       riskLevel: ext.riskLevel,
       analysisStatus: latestAnalysis?.status || 'PENDING',

@@ -25,6 +25,10 @@ import {
     getExtensionAnalyzerRoot,
 } from '@/lib/extension-storage';
 import { ensureDefaultCliConfigIfAbsent } from '@/lib/agent-artifact-defaults';
+import {
+    derivePackageDownloadPrefixFromUrl,
+    isAllowedPackageDownloadUrl,
+} from '@/lib/package-download-url';
 
 
 const nowIso = () => new Date().toISOString()
@@ -651,6 +655,10 @@ export async function processExtension(extensionId: string, downloadUrl?: string
     const pendingSourceDir = path.join(pendingDir, 'source');
     const startedAt = Date.now()
 
+    if (downloadUrl && !isAllowedPackageDownloadUrl(downloadUrl)) {
+        throw new Error('Download URL must be from Chrome update endpoints or cdn.oarmour.com')
+    }
+
     try {
         logInfo('[analysis] processExtension:start', { extensionId, pendingDir })
         setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
@@ -690,6 +698,20 @@ export async function processExtension(extensionId: string, downloadUrl?: string
         const version = typeof manifest.version === 'string' ? manifest.version : null
         const manifestPermissions = extractManifestPermissions(manifest)
         const manifestIconAssets = extractManifestIconAssets(manifest, extensionRootDir)
+        const existingPackageSource = await prisma.globalExtension.findUnique({
+            where: { storeId: extensionId },
+            select: { packageDownloadPrefix: true },
+        })
+        const derivedPackageSource = downloadUrl
+            ? derivePackageDownloadPrefixFromUrl(downloadUrl, extensionId)
+            : null
+        const firstPackageSource =
+            !existingPackageSource?.packageDownloadPrefix && derivedPackageSource
+                ? {
+                      packageDownloadPrefix: derivedPackageSource.prefix,
+                      packageDownloadSuffix: derivedPackageSource.suffix,
+                  }
+                : {}
         const extension = await prisma.globalExtension.upsert({
             where: { storeId: extensionId },
             update: {
@@ -697,7 +719,8 @@ export async function processExtension(extensionId: string, downloadUrl?: string
                 version,
                 description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
-                updatedAt: new Date()
+                updatedAt: new Date(),
+                ...firstPackageSource,
             },
             create: {
                 storeId: extensionId,
@@ -705,7 +728,8 @@ export async function processExtension(extensionId: string, downloadUrl?: string
                 version,
                 description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
-                platform: 'CHROME'
+                platform: 'CHROME',
+                ...firstPackageSource,
             }
         });
         logInfo('[analysis] processExtension:upserted', {

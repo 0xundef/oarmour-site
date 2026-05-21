@@ -4,44 +4,41 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { enqueueExtensionLookupJob, processExtension } from "@/lib/analysis-service";
 import { setAnalyzeProgressStage } from '@/lib/analyze-progress';
-
-const EXT_ID_REGEX = /^[a-z]{32}$/;
-
-function extractExtensionIdFromInput(input: string): string | null {
-  const trimmed = input.trim();
-  if (EXT_ID_REGEX.test(trimmed)) return trimmed;
-  try {
-    const url = new URL(trimmed);
-    const host = url.hostname.toLowerCase();
-    const path = url.pathname;
-    const isChromeWebStore =
-      host.includes("chromewebstore.google.com") ||
-      (host.includes("chrome.google.com") && path.includes("/webstore/"));
-    if (isChromeWebStore && path.includes("/detail/")) {
-      const match = path.match(/[a-z]{32}/);
-      if (match) return match[0];
-    }
-    const customMatch = path.match(/^\/([a-z]{32})\/([^/]+)$/);
-    if (customMatch && host === "cdn.oarmour.com") return customMatch[1];
-  } catch {}
-  return null;
-}
+import {
+  extractExtensionIdFromInput,
+  isAllowedPackageDownloadUrl,
+  resolveAnalyzeInput,
+} from '@/lib/package-download-url';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const rawExtensionId = typeof body?.extensionId === "string" ? body.extensionId.trim() : "";
     const rawDownloadUrl = typeof body?.downloadUrl === "string" ? body.downloadUrl.trim() : "";
-    const extensionId = rawExtensionId || (rawDownloadUrl ? extractExtensionIdFromInput(rawDownloadUrl) : null);
-    const downloadUrl = rawDownloadUrl || undefined;
+    const inputForParse = rawDownloadUrl || rawExtensionId;
+    const parsed = inputForParse ? resolveAnalyzeInput(inputForParse) : null;
+    const extensionId =
+      parsed?.extensionId ||
+      (rawDownloadUrl ? extractExtensionIdFromInput(rawDownloadUrl) : null) ||
+      (rawExtensionId && /^[a-z]{32}$/.test(rawExtensionId) ? rawExtensionId : null);
+    const downloadUrl = parsed?.downloadUrl ?? (rawDownloadUrl || undefined);
 
     if (!extensionId) {
       return NextResponse.json({ error: 'Extension ID is required' }, { status: 400 });
     }
     if (downloadUrl) {
+      if (!isAllowedPackageDownloadUrl(downloadUrl)) {
+        return NextResponse.json(
+          {
+            error:
+              'Download URL must be from Chrome update endpoints (clients2.google.com) or cdn.oarmour.com',
+          },
+          { status: 400 },
+        );
+      }
       try {
-        const parsed = new URL(downloadUrl);
-        if (!["http:", "https:"].includes(parsed.protocol)) {
+        const parsedUrl = new URL(downloadUrl);
+        if (!["http:", "https:"].includes(parsedUrl.protocol)) {
           return NextResponse.json({ error: 'Invalid download URL protocol' }, { status: 400 });
         }
       } catch {

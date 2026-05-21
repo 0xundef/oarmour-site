@@ -26,16 +26,13 @@ function buildUpdateQuery(data: Record<string, boolean>, whereId: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { id, storeId, isMonitored, testingMode } = await req.json()
+    const { id, storeId, isMonitored } = await req.json()
     const hasIsMonitored = typeof isMonitored === 'boolean'
-    const hasTestingMode = typeof testingMode === 'boolean'
-    if (!hasIsMonitored && !hasTestingMode) {
+    if (!hasIsMonitored) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    const updates: Record<string, boolean> = {}
-    if (hasIsMonitored) updates.isMonitored = isMonitored
-    if (hasTestingMode) updates.testingMode = testingMode
+    const updates: Record<string, boolean> = { isMonitored }
 
     if (id) {
       try {
@@ -47,7 +44,7 @@ export async function POST(req: NextRequest) {
         if (msg.includes('Record to update not found')) {
           return NextResponse.json({ error: 'Extension not found' }, { status: 404 })
         }
-        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode'))) {
+        if (msg.includes('column') && msg.includes('isMonitored')) {
           return NextResponse.json({ error: 'Monitoring columns not available. Run DB migration.' }, { status: 400 })
         }
         return NextResponse.json({ error: 'Update failed' }, { status: 500 })
@@ -74,7 +71,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, id: ext.id })
       } catch (e: unknown) {
         const msg = getErrorMessage(e)
-        if (msg.includes('column') && (msg.includes('isMonitored') || msg.includes('testingMode'))) {
+        if (msg.includes('column') && msg.includes('isMonitored')) {
           return NextResponse.json({ error: 'Monitoring columns not available. Run DB migration.' }, { status: 400 })
         }
         return NextResponse.json({ error: 'Upsert failed', message: msg }, { status: 500 })
