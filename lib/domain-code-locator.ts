@@ -230,22 +230,30 @@ function readUtf8Range(fd: number, start: number, length: number): string {
   return buf.toString("utf8")
 }
 
-function lineColumnAtOffset(fd: number, matchStart: number): { line: number; column: number } {
-  let newlines = 0
-  let lastNl = -1
-  let pos = 0
-  while (pos < matchStart) {
-    const len = Math.min(CHUNK_READ_SIZE, matchStart - pos)
-    const slice = readUtf8Range(fd, pos, len)
-    for (let i = 0; i < slice.length; i++) {
-      if (slice[i] === "\n") {
-        newlines++
-        lastNl = pos + i
-      }
+type LineCounter = {
+  line: number
+  lastNl: number
+  scannedThrough: number
+}
+
+function advanceLineCounter(
+  counter: LineCounter,
+  windowStartOffset: number,
+  content: string,
+  fromInContent: number,
+  toInContent: number,
+) {
+  for (let i = fromInContent; i < toInContent; i++) {
+    if (content[i] === "\n") {
+      counter.line++
+      counter.lastNl = windowStartOffset + i
     }
-    pos += len
   }
-  return { line: newlines + 1, column: matchStart - lastNl }
+  counter.scannedThrough = windowStartOffset + toInContent
+}
+
+function lineColumnAtGlobal(counter: LineCounter, globalIdx: number): { line: number; column: number } {
+  return { line: counter.line, column: globalIdx - counter.lastNl }
 }
 
 function readSnippetAtOffset(
@@ -271,16 +279,29 @@ function collectHitsInWindow(params: {
   displayPath: string
   hits: DomainCodeOccurrence[]
   seenGlobal: Set<number>
+  lineCounter: LineCounter
 }): void {
-  const { window, windowStartOffset, chunkStart, chunkEnd, terms, fd, fileSize, displayPath, hits, seenGlobal } =
-    params
+  const {
+    window,
+    windowStartOffset,
+    chunkStart,
+    chunkEnd,
+    terms,
+    fd,
+    fileSize,
+    displayPath,
+    hits,
+    seenGlobal,
+    lineCounter,
+  } = params
   if (window.includes("\u0000")) return
 
+  const pending: Array<{ globalIdx: number; matchEnd: number; term: string }> = []
   const lower = window.toLowerCase()
   for (const term of terms) {
     const termLower = term.toLowerCase()
     let from = 0
-    while (hits.length < MAX_OCCURRENCES_PER_FILE) {
+    while (pending.length + hits.length < MAX_OCCURRENCES_PER_FILE) {
       const idx = lower.indexOf(termLower, from)
       if (idx === -1) break
       const globalIdx = windowStartOffset + idx
@@ -293,17 +314,28 @@ function collectHitsInWindow(params: {
         continue
       }
       seenGlobal.add(globalIdx)
-      const matchEnd = globalIdx + termLower.length
-      const { line, column } = lineColumnAtOffset(fd, globalIdx)
-      hits.push({
-        file: displayPath,
-        line,
-        column,
-        matchedTerm: term,
-        snippet: readSnippetAtOffset(fd, fileSize, globalIdx, matchEnd),
-      })
+      pending.push({ globalIdx, matchEnd: globalIdx + termLower.length, term })
       from = idx + Math.max(1, termLower.length)
     }
+  }
+
+  pending.sort((a, b) => a.globalIdx - b.globalIdx)
+  let cursorLocal = Math.max(0, lineCounter.scannedThrough - windowStartOffset)
+  for (const match of pending) {
+    if (hits.length >= MAX_OCCURRENCES_PER_FILE) break
+    const localIdx = match.globalIdx - windowStartOffset
+    if (localIdx > cursorLocal) {
+      advanceLineCounter(lineCounter, windowStartOffset, window, cursorLocal, localIdx)
+      cursorLocal = localIdx
+    }
+    const { line, column } = lineColumnAtGlobal(lineCounter, match.globalIdx)
+    hits.push({
+      file: displayPath,
+      line,
+      column,
+      matchedTerm: match.term,
+      snippet: readSnippetAtOffset(fd, fileSize, match.globalIdx, match.matchEnd),
+    })
   }
 }
 
@@ -324,6 +356,7 @@ function findOccurrencesChunked(params: {
 
     const hits: DomainCodeOccurrence[] = []
     const seenGlobal = new Set<number>()
+    const lineCounter: LineCounter = { line: 1, lastNl: -1, scannedThrough: 0 }
     let prefix = ""
 
     for (let pos = 0; pos < fileSize && hits.length < MAX_OCCURRENCES_PER_FILE; pos += CHUNK_READ_SIZE) {
@@ -344,7 +377,14 @@ function findOccurrencesChunked(params: {
         displayPath,
         hits,
         seenGlobal,
+        lineCounter,
       })
+
+      const chunkEndLocal = Math.min(window.length, chunkEnd - windowStartOffset)
+      const cursorLocal = Math.max(0, lineCounter.scannedThrough - windowStartOffset)
+      if (cursorLocal < chunkEndLocal) {
+        advanceLineCounter(lineCounter, windowStartOffset, window, cursorLocal, chunkEndLocal)
+      }
 
       prefix = window.slice(-overlap)
     }
