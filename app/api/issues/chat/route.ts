@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { convertToModelMessages, streamText, type UIMessage } from "ai"
+import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai"
+import { createIssueChatTools } from "@/lib/issue-chat-tools"
 import { createOpenAI } from "@ai-sdk/openai"
 import { buildIssueChatSystem, type IssueChatContext } from "@/lib/issue-chat-context"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
@@ -128,10 +129,14 @@ export async function POST(req: Request) {
     )
   }
 
+  const tools = createIssueChatTools({ storeId: scope.storeId })
+
   const result = streamText({
     model: investigationModel,
     system: buildIssueChatSystem(issue),
     messages: await convertToModelMessages(messages),
+    tools,
+    stopWhen: stepCountIs(5),
     temperature: 0.2,
   })
 

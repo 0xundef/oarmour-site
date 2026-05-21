@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, type UIMessage } from "ai"
+import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
 import { ArrowUpIcon, SquareIcon, Trash2Icon } from "lucide-react"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,7 @@ import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
+import { IssueChatToolPart } from "@/components/dashboard/issue-chat-tool-part"
 import {
   buildInitialContextMessage,
   isContextSeedMessage,
@@ -203,6 +204,14 @@ function IssueAiChatBoxInner({
                     <IssueContextDisplay issue={issue} />
                   ) : (
                     message.parts.map((part, partIndex) => {
+                      if (isToolUIPart(part)) {
+                        return (
+                          <IssueChatToolPart
+                            key={`${message.id}-tool-${partIndex}`}
+                            part={part}
+                          />
+                        )
+                      }
                       if (part.type !== "text" || !part.text) return null
                       const hasLaterText = message.parts
                         .slice(partIndex + 1)
