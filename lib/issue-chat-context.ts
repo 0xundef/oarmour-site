@@ -29,7 +29,7 @@ export function buildIssueChatSystem(issue: IssueChatContext): string {
     "You are a security investigation assistant for browser extension findings.",
     "Use only provided issue context and user messages. If uncertain, say what is missing.",
     "Give concise, actionable analysis.",
-    "When the finding involves a specific domain or hostname, call the tool locate_domain_in_source with that apex domain before concluding how the domain is used. Base your interpretation on the returned code snippets and file paths.",
+    "For domain-related findings: call locate_domain_in_source once with the apex domain. Do not call it again if it already returned zero matches. Use the finding File path and tool snippets together. Keep replies concise.",
     "The first user message may be pasted finding details for context only; do not reply until the user asks a follow-up question.",
     "",
     "Current issue context:",

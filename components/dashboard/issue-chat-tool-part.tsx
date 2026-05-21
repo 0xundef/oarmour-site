@@ -23,7 +23,10 @@ function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) 
   if (output.occurrences.length === 0) {
     return (
       <div className="space-y-2 text-xs text-muted-foreground">
-        <p>No code matches found for <span className="font-mono text-foreground">{output.apexDomain}</span>.</p>
+        <p>
+          No code matches found for{" "}
+          <span className="font-mono text-foreground">{output.apexDomain}</span>.
+        </p>
         {output.notes.map((note) => (
           <p key={note}>{note}</p>
         ))}
@@ -36,30 +39,19 @@ function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) 
       <p className="text-muted-foreground">
         {output.occurrences.length} match(es) in {output.scannedFiles.length} file(s)
         {output.extensionVersion ? ` · v${output.extensionVersion}` : ""}
+        {" · "}
+        compact char snippets
       </p>
       {output.occurrences.map((hit, index) => (
         <div
-          key={`${hit.file}-${hit.line}-${index}`}
+          key={`${hit.file}-${hit.line}-${hit.column}-${index}`}
           className="overflow-hidden rounded-md border bg-muted/30 font-mono text-[11px] leading-relaxed"
         >
           <div className="border-b bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground">
-            {hit.file}:{hit.line}:{hit.column}
+            {hit.file}:{hit.line}:{hit.column} · {hit.matchedTerm}
           </div>
-          <pre className="max-h-48 overflow-auto p-2 whitespace-pre-wrap break-all">
-            {hit.before.map((line) => (
-              <span key={`b-${line}`} className="text-muted-foreground">
-                {line}
-                {"\n"}
-              </span>
-            ))}
-            <span className="text-foreground">{hit.lineText}</span>
-            {"\n"}
-            {hit.after.map((line) => (
-              <span key={`a-${line}`} className="text-muted-foreground">
-                {line}
-                {"\n"}
-              </span>
-            ))}
+          <pre className="max-h-32 overflow-auto p-2 whitespace-pre-wrap break-all text-foreground">
+            {hit.snippet}
           </pre>
         </div>
       ))}

@@ -126,7 +126,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const tools = createIssueChatTools({ storeId: scope.storeId })
+  const tools = createIssueChatTools({ storeId: scope.storeId, findingFile: issue.file })
   const providerOptions = resolveInvestigationProviderOptions(investigation.modelId)
   const thinkingDisabled = providerOptions.deepseek.thinking?.type === "disabled"
 
@@ -135,7 +135,7 @@ export async function POST(req: Request) {
     system: buildIssueChatSystem(issue),
     messages: await convertToModelMessages(messages, { tools }),
     tools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(3),
     ...(thinkingDisabled ? { temperature: 0.2 } : {}),
     providerOptions,
   })
