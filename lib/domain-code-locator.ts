@@ -7,7 +7,11 @@ import {
 } from "@/lib/issue-extension-artifact"
 import { listAiTestingRunsWithRecordings } from "@/lib/extension-storage"
 
+/** Files at or below this size are read whole; larger files use chunked search. */
 const MAX_FILE_BYTES = 512_000
+/** Refuse chunked scan above this size (memory/time guard). */
+const MAX_CHUNKED_SCAN_BYTES = 6 * 1024 * 1024
+const CHUNK_READ_SIZE = 256 * 1024
 const MAX_FILES_TO_SCAN = 16
 const MAX_OCCURRENCES_TOTAL = 12
 const MAX_OCCURRENCES_PER_FILE = 4
@@ -201,16 +205,14 @@ function lineColumnAt(content: string, index: number): { line: number; column: n
   return { line, column }
 }
 
-function buildSnippet(
+function buildSnippetFromSlice(
   content: string,
-  matchStart: number,
-  matchEnd: number,
+  matchStartInContent: number,
+  matchEndInContent: number,
 ): string {
-  const sliceStart = Math.max(0, matchStart - CHARS_BEFORE)
-  const sliceEnd = Math.min(content.length, matchEnd + CHARS_AFTER)
-  let before = content.slice(sliceStart, matchStart)
-  let match = content.slice(matchStart, matchEnd)
-  let after = content.slice(matchEnd, sliceEnd)
+  let before = content.slice(0, matchStartInContent)
+  let match = content.slice(matchStartInContent, matchEndInContent)
+  let after = content.slice(matchEndInContent)
   if (match.length > MAX_MATCH_CHARS) {
     match = `${match.slice(0, MAX_MATCH_CHARS)}…`
   }
@@ -221,26 +223,145 @@ function buildSnippet(
   return snippet.replace(/\r/g, "")
 }
 
-function findOccurrencesInFile(params: {
+function readUtf8Range(fd: number, start: number, length: number): string {
+  if (length <= 0) return ""
+  const buf = Buffer.alloc(length)
+  fs.readSync(fd, buf, 0, length, start)
+  return buf.toString("utf8")
+}
+
+function lineColumnAtOffset(fd: number, matchStart: number): { line: number; column: number } {
+  let newlines = 0
+  let lastNl = -1
+  let pos = 0
+  while (pos < matchStart) {
+    const len = Math.min(CHUNK_READ_SIZE, matchStart - pos)
+    const slice = readUtf8Range(fd, pos, len)
+    for (let i = 0; i < slice.length; i++) {
+      if (slice[i] === "\n") {
+        newlines++
+        lastNl = pos + i
+      }
+    }
+    pos += len
+  }
+  return { line: newlines + 1, column: matchStart - lastNl }
+}
+
+function readSnippetAtOffset(
+  fd: number,
+  fileSize: number,
+  matchStart: number,
+  matchEnd: number,
+): string {
+  const readStart = Math.max(0, matchStart - CHARS_BEFORE)
+  const readEnd = Math.min(fileSize, matchEnd + CHARS_AFTER)
+  const content = readUtf8Range(fd, readStart, readEnd - readStart)
+  return buildSnippetFromSlice(content, matchStart - readStart, matchEnd - readStart)
+}
+
+function collectHitsInWindow(params: {
+  window: string
+  windowStartOffset: number
+  chunkStart: number
+  chunkEnd: number
+  terms: string[]
+  fd: number
+  fileSize: number
+  displayPath: string
+  hits: DomainCodeOccurrence[]
+  seenGlobal: Set<number>
+}): void {
+  const { window, windowStartOffset, chunkStart, chunkEnd, terms, fd, fileSize, displayPath, hits, seenGlobal } =
+    params
+  if (window.includes("\u0000")) return
+
+  const lower = window.toLowerCase()
+  for (const term of terms) {
+    const termLower = term.toLowerCase()
+    let from = 0
+    while (hits.length < MAX_OCCURRENCES_PER_FILE) {
+      const idx = lower.indexOf(termLower, from)
+      if (idx === -1) break
+      const globalIdx = windowStartOffset + idx
+      if (globalIdx < chunkStart || globalIdx >= chunkEnd) {
+        from = idx + 1
+        continue
+      }
+      if (seenGlobal.has(globalIdx)) {
+        from = idx + Math.max(1, termLower.length)
+        continue
+      }
+      seenGlobal.add(globalIdx)
+      const matchEnd = globalIdx + termLower.length
+      const { line, column } = lineColumnAtOffset(fd, globalIdx)
+      hits.push({
+        file: displayPath,
+        line,
+        column,
+        matchedTerm: term,
+        snippet: readSnippetAtOffset(fd, fileSize, globalIdx, matchEnd),
+      })
+      from = idx + Math.max(1, termLower.length)
+    }
+  }
+}
+
+function findOccurrencesChunked(params: {
   absolutePath: string
   displayPath: string
   terms: string[]
+  fileSize: number
 }): DomainCodeOccurrence[] {
-  const { absolutePath, displayPath, terms } = params
-  let stat: fs.Stats
-  try {
-    stat = fs.statSync(absolutePath)
-  } catch {
-    return []
-  }
-  if (!stat.isFile() || stat.size > MAX_FILE_BYTES) return []
+  const { absolutePath, displayPath, terms, fileSize } = params
+  const maxTermLen = Math.max(...terms.map((t) => t.length), 8)
+  const overlap = Math.max(maxTermLen + 64, 96)
 
-  let content: string
+  const fd = fs.openSync(absolutePath, "r")
   try {
-    content = fs.readFileSync(absolutePath, "utf8")
-  } catch {
-    return []
+    const probe = readUtf8Range(fd, 0, Math.min(8192, fileSize))
+    if (probe.includes("\u0000")) return []
+
+    const hits: DomainCodeOccurrence[] = []
+    const seenGlobal = new Set<number>()
+    let prefix = ""
+
+    for (let pos = 0; pos < fileSize && hits.length < MAX_OCCURRENCES_PER_FILE; pos += CHUNK_READ_SIZE) {
+      const readLen = Math.min(CHUNK_READ_SIZE, fileSize - pos)
+      const chunk = readUtf8Range(fd, pos, readLen)
+      const window = prefix + chunk
+      const windowStartOffset = pos - prefix.length
+      const chunkEnd = pos + readLen
+
+      collectHitsInWindow({
+        window,
+        windowStartOffset,
+        chunkStart: pos,
+        chunkEnd,
+        terms,
+        fd,
+        fileSize,
+        displayPath,
+        hits,
+        seenGlobal,
+      })
+
+      prefix = window.slice(-overlap)
+    }
+
+    return hits.sort((a, b) => a.line - b.line || a.column - b.column)
+  } finally {
+    fs.closeSync(fd)
   }
+}
+
+function findOccurrencesInMemory(params: {
+  absolutePath: string
+  displayPath: string
+  terms: string[]
+  content: string
+}): DomainCodeOccurrence[] {
+  const { displayPath, terms, content } = params
   if (content.includes("\u0000")) return []
 
   const lower = content.toLowerCase()
@@ -257,12 +378,18 @@ function findOccurrencesInFile(params: {
         seen.add(idx)
         const matchEnd = idx + termLower.length
         const { line, column } = lineColumnAt(content, idx)
+        const sliceStart = Math.max(0, idx - CHARS_BEFORE)
+        const sliceEnd = Math.min(content.length, matchEnd + CHARS_AFTER)
         hits.push({
           file: displayPath,
           line,
           column,
           matchedTerm: term,
-          snippet: buildSnippet(content, idx, matchEnd),
+          snippet: buildSnippetFromSlice(
+            content.slice(sliceStart, sliceEnd),
+            idx - sliceStart,
+            matchEnd - sliceStart,
+          ),
         })
       }
       from = idx + Math.max(1, termLower.length)
@@ -270,6 +397,40 @@ function findOccurrencesInFile(params: {
   }
 
   return hits.sort((a, b) => a.line - b.line || a.column - b.column)
+}
+
+function findOccurrencesInFile(params: {
+  absolutePath: string
+  displayPath: string
+  terms: string[]
+}): DomainCodeOccurrence[] {
+  const { absolutePath, displayPath, terms } = params
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(absolutePath)
+  } catch {
+    return []
+  }
+  if (!stat.isFile() || stat.size === 0) return []
+  if (stat.size > MAX_CHUNKED_SCAN_BYTES) return []
+
+  if (stat.size > MAX_FILE_BYTES) {
+    return findOccurrencesChunked({
+      absolutePath,
+      displayPath,
+      terms,
+      fileSize: stat.size,
+    })
+  }
+
+  let content: string
+  try {
+    content = fs.readFileSync(absolutePath, "utf8")
+  } catch {
+    return []
+  }
+
+  return findOccurrencesInMemory({ absolutePath, displayPath, terms, content })
 }
 
 function discoverFallbackFiles(artifact: IssueExtensionArtifactContext): string[] {
