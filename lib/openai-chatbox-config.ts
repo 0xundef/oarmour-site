@@ -1,5 +1,6 @@
 /**
  * Issue investigation chatbox (DeepSeek / OpenAI-compatible).
+ * Runtime uses `@ai-sdk/deepseek` for correct thinking-mode + tool `reasoning_content` round-trip.
  *
  * GitHub Actions:
  * - secrets.OPENAI_CHATBOX_API_KEY
@@ -7,6 +8,9 @@
  * - vars.OPENAI_CHATBOX_MODEL
  *
  * Local: same names in `.env.local`.
+ *
+ * Optional: OPENAI_CHATBOX_THINKING=disabled|enabled|adaptive
+ * (see lib/investigation-chat-model.ts; tool+thinking needs @ai-sdk/deepseek).
  */
 export type OpenAiChatboxConfig = {
   apiKey: string

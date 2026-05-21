@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai"
 import { createIssueChatTools } from "@/lib/issue-chat-tools"
-import { createOpenAI } from "@ai-sdk/openai"
 import { buildIssueChatSystem, type IssueChatContext } from "@/lib/issue-chat-context"
+import {
+  getInvestigationLanguageModel,
+  resolveInvestigationProviderOptions,
+} from "@/lib/investigation-chat-model"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import {
   deleteIssueInvestigationChat,
@@ -10,7 +13,6 @@ import {
   parseIssueChatScope,
   saveIssueInvestigationMessages,
 } from "@/lib/issue-investigation-chat"
-import { getOpenAiChatboxConfig } from "@/lib/openai-chatbox-config"
 
 export const runtime = "nodejs"
 
@@ -99,8 +101,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const chatbox = getOpenAiChatboxConfig()
-  if (!chatbox) {
+  const investigation = getInvestigationLanguageModel()
+  if (!investigation) {
     return NextResponse.json(
       {
         error:
@@ -109,11 +111,6 @@ export async function POST(req: Request) {
       { status: 500 },
     )
   }
-
-  const investigationModel = createOpenAI({
-    apiKey: chatbox.apiKey,
-    baseURL: chatbox.baseURL,
-  }).chat(chatbox.model)
 
   const body = (await req.json().catch(() => null)) as
     | { issue?: IssueChatContext; storeId?: string; messages?: UIMessage[] }
@@ -130,14 +127,17 @@ export async function POST(req: Request) {
   }
 
   const tools = createIssueChatTools({ storeId: scope.storeId })
+  const providerOptions = resolveInvestigationProviderOptions(investigation.modelId)
+  const thinkingDisabled = providerOptions.deepseek.thinking?.type === "disabled"
 
   const result = streamText({
-    model: investigationModel,
+    model: investigation.model,
     system: buildIssueChatSystem(issue),
-    messages: await convertToModelMessages(messages),
+    messages: await convertToModelMessages(messages, { tools }),
     tools,
     stopWhen: stepCountIs(5),
-    temperature: 0.2,
+    ...(thinkingDisabled ? { temperature: 0.2 } : {}),
+    providerOptions,
   })
 
   return result.toUIMessageStreamResponse({
