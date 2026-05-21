@@ -3,9 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
-import { ArrowUpIcon, SquareIcon, Trash2Icon } from "lucide-react"
+import { ArrowUpIcon, Link2Icon, MoreHorizontal, SquareIcon, Trash2Icon } from "lucide-react"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Conversation,
   ConversationContent,
@@ -28,6 +34,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
 import { IssueChatToolPart } from "@/components/dashboard/issue-chat-tool-part"
+import { IssueInvestigationShareDialog } from "@/components/dashboard/issue-investigation-share-dialog"
 import {
   buildInitialContextMessage,
   isContextSeedMessage,
@@ -95,6 +102,7 @@ function IssueAiChatBoxInner({
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [clearActionError, setClearActionError] = useState("")
 
@@ -159,21 +167,50 @@ function IssueAiChatBoxInner({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {hasClearableHistory ? (
-        <div className="flex shrink-0 items-center justify-end border-b px-4 py-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
-            disabled={isBusy || clearing}
-            onClick={() => setClearDialogOpen(true)}
-          >
-            <Trash2Icon className="size-3.5" />
-            Clear conversation
-          </Button>
-        </div>
-      ) : null}
+      <div className="flex shrink-0 items-center justify-end border-b px-3 py-1.5">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground"
+              aria-label="Conversation actions"
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              disabled={isBusy || messages.length === 0}
+              onClick={() => setShareDialogOpen(true)}
+            >
+              <Link2Icon className="size-3.5" />
+              Share
+            </DropdownMenuItem>
+            {hasClearableHistory ? (
+              <DropdownMenuItem
+                className="gap-2 text-xs text-destructive focus:text-destructive"
+                disabled={isBusy || clearing}
+                onClick={() => setClearDialogOpen(true)}
+              >
+                <Trash2Icon className="size-3.5" />
+                Clear conversation
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <IssueInvestigationShareDialog
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        storeId={storeId}
+        issue={issue}
+        messages={messages}
+        disabled={isBusy}
+      />
 
       <ConfirmDeleteDialog
         open={clearDialogOpen}

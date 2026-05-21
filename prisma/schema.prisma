@@ -42,6 +42,7 @@ model User {
   submissions   Submission[]
   loginActivities LoginActivity[]
   issueInvestigationChats IssueInvestigationChat[]
+  issueInvestigationShares IssueInvestigationShare[]
   notificationSubscriptions NotificationSubscription[]
 
   // Stripe Subscription
@@ -95,6 +96,23 @@ model IssueInvestigationChat {
 
   @@unique([userId, storeId, issueId])
   @@index([userId, storeId])
+}
+
+model IssueInvestigationShare {
+  id              String    @id @default(uuid())
+  shareToken      String    @unique
+  createdByUserId String
+  storeId         String
+  issueId         String
+  issueSnapshot   Json
+  messages        Json
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([createdByUserId, createdAt(sort: Desc)])
 }
 
 model Account {
