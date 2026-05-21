@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
@@ -40,7 +39,6 @@ export function SubscribedDetectionWorkbench({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeId, setActiveId] = useState<string>("")
-  const [viewMode, setViewMode] = useState<"detail" | "ai">("detail")
 
   const load = useCallback(async () => {
     if (!storeId.trim()) {
@@ -98,68 +96,24 @@ export function SubscribedDetectionWorkbench({
   )
 
   return (
-    <div
-      className={cn(
-        "flex-1 p-4 md:px-8 md:pb-8 md:pt-4",
-        viewMode === "ai" && "flex min-h-0 flex-col overflow-hidden",
-      )}
-    >
-      <div className="mb-3 flex shrink-0 flex-wrap items-baseline justify-between gap-2">
-        <div className="text-2xl font-semibold">{extensionName}</div>
-        <div className="flex items-center gap-1 rounded-md border p-1">
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === "detail" ? "secondary" : "ghost"}
-            className="h-7 px-2"
-            onClick={() => setViewMode("detail")}
-          >
-            Detail mode
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === "ai" ? "secondary" : "ghost"}
-            className="h-7 px-2"
-            onClick={() => setViewMode("ai")}
-          >
-            AI investigation
-          </Button>
-        </div>
-      </div>
-
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:pb-8 md:pt-4">
       {loadError ? (
-        <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <div className="mb-3 shrink-0 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100">
           {loadError}
         </div>
       ) : null}
 
-      <Card className={cn("overflow-hidden", viewMode === "ai" && "flex min-h-0 flex-1 flex-col")}>
-        <CardContent className={cn("p-0", viewMode === "ai" && "flex min-h-0 flex-1 flex-col")}>
-          <div
-            className={cn(
-              "grid grid-cols-1 lg:grid-cols-[340px_1fr]",
-              viewMode === "ai" ? "h-[calc(100dvh-11rem)] min-h-0" : "min-h-[72vh]",
-            )}
-          >
-            <aside
-              className={cn(
-                "border-r bg-muted/20",
-                viewMode === "ai" && "flex min-h-0 flex-col overflow-hidden",
-              )}
-            >
+      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          <div className="grid h-[calc(100dvh-8rem)] min-h-0 grid-cols-1 lg:grid-cols-[340px_1fr]">
+            <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-muted/20">
               <div className="shrink-0 border-b p-3">
-                <div className="text-sm font-semibold">Issues</div>
+                <div className="text-base font-semibold leading-snug">{extensionName}</div>
                 <div className="text-xs text-muted-foreground">
                   {loading ? "Loading…" : `${items.length} finding${items.length === 1 ? "" : "s"}`}
                 </div>
               </div>
-              <div
-                className={cn(
-                  "overflow-y-auto p-2",
-                  viewMode === "ai" ? "min-h-0 flex-1" : "max-h-[72vh]",
-                )}
-              >
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {loading ? (
                   <div className="p-3 text-sm text-muted-foreground">Loading findings…</div>
                 ) : items.length === 0 ? (
@@ -199,47 +153,11 @@ export function SubscribedDetectionWorkbench({
               </div>
             </aside>
 
-            <section
-              className={cn(
-                viewMode === "ai"
-                  ? "flex min-h-0 flex-col overflow-hidden"
-                  : "p-5 lg:p-6",
-              )}
-            >
+            <section className="flex min-h-0 flex-col overflow-hidden">
               {!active ? (
-                <div className="text-sm text-muted-foreground">Select a finding or wait for data to load.</div>
-              ) : viewMode === "ai" ? (
-                <IssueAiChatBox key={active.id} issue={active} />
+                <div className="p-5 text-sm text-muted-foreground">Select a finding or wait for data to load.</div>
               ) : (
-                <>
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <Badge className={severityClass(active.severity)}>{active.severity}</Badge>
-                    <Badge className={cn("h-6 px-2 text-[11px]", sourceBadgeClass(active.source))}>{active.source}</Badge>
-                    <Badge variant="outline" className={cn("h-6 px-2 text-[11px] font-normal", categoryBadgeClass())}>
-                      {active.category}
-                    </Badge>
-                  </div>
-                  <h2 className="mb-4 text-2xl font-bold leading-snug md:text-3xl">{active.title}</h2>
-
-                  <div className="mb-5">
-                    <div className="mb-1 text-sm font-semibold text-muted-foreground">Summary</div>
-                    <p className="text-base leading-7">{active.summary}</p>
-                  </div>
-
-                  <div className="mb-5">
-                    <div className="mb-1 text-sm font-semibold text-muted-foreground">Conditions</div>
-                    <ul className="list-disc space-y-1 pl-5 text-base">
-                      {active.conditions.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <div className="mb-1 text-sm font-semibold text-muted-foreground">Impact</div>
-                    <p className="text-base leading-7">{active.impact}</p>
-                  </div>
-                </>
+                <IssueAiChatBox key={active.id} issue={active} />
               )}
             </section>
           </div>

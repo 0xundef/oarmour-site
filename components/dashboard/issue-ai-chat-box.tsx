@@ -2,12 +2,11 @@
 
 import { useMemo } from "react"
 import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport } from "ai"
-import { ArrowUpIcon, SparklesIcon, SquareIcon } from "lucide-react"
+import { DefaultChatTransport, type UIMessage } from "ai"
+import { ArrowUpIcon, SquareIcon } from "lucide-react"
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation"
 import {
@@ -25,7 +24,8 @@ import {
 import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
-import { toIssueChatContext } from "@/lib/issue-chat-context"
+import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
+import { buildIssueDetailContextText, toIssueChatContext } from "@/lib/issue-chat-context"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 const SUGGESTIONS = [
@@ -35,8 +35,24 @@ const SUGGESTIONS = [
   "Summarize the evidence we have for this issue.",
 ] as const
 
+const CONTEXT_MESSAGE_PREFIX = "issue-context-"
+
+function buildInitialContextMessage(issue: WorkbenchCheckItem): UIMessage {
+  return {
+    id: `${CONTEXT_MESSAGE_PREFIX}${issue.id}`,
+    role: "user",
+    parts: [{ type: "text", text: buildIssueDetailContextText(issue) }],
+  }
+}
+
+function isContextSeedMessage(message: UIMessage): boolean {
+  return message.id.startsWith(CONTEXT_MESSAGE_PREFIX)
+}
+
 export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
   const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
+
+  const initialMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
 
   const transport = useMemo(
     () =>
@@ -50,9 +66,11 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
   const { messages, sendMessage, status, error, stop } = useChat({
     id: `issue-chat-${issue.id}`,
     transport,
+    messages: initialMessages,
   })
 
   const isBusy = status === "submitted" || status === "streaming"
+  const hasAssistantReply = messages.some((message) => message.role === "assistant")
 
   const sendPrompt = (text: string) => {
     const prompt = text.trim()
@@ -62,25 +80,60 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b px-4 py-2">
-        <div className="text-xs text-muted-foreground">
-          {issue.id} · {issue.severity} · {issue.source}
-        </div>
-      </div>
-
       <Conversation className="min-h-0 flex-1 overflow-hidden">
-        <ConversationContent
-          className={cn("mx-auto w-full max-w-3xl", messages.length === 0 && "justify-center")}
-        >
-          {messages.length === 0 ? (
-            <div className="flex w-full flex-col items-center gap-8 py-6">
-              <ConversationEmptyState
-                className="p-0"
-                description="Ask about false positives, blast radius, exploitability, or mitigation for this finding."
-                icon={<SparklesIcon className="size-8" />}
-                title="What can I help investigate?"
-              />
-              <div className="grid w-full gap-3 sm:grid-cols-2">
+        <ConversationContent className="mx-auto w-full max-w-3xl">
+          {messages.map((message, index) => {
+            const isContextSeed = isContextSeedMessage(message)
+            const isLast = index === messages.length - 1
+            const isStreaming = isBusy && isLast && message.role === "assistant"
+
+            return (
+              <Message key={message.id} from={message.role}>
+                <MessageContent
+                  className={cn(
+                    isContextSeed &&
+                      "max-w-full rounded-lg border border-dashed border-muted-foreground/30 bg-muted/40 px-4 py-3",
+                  )}
+                >
+                  {isContextSeed ? (
+                    <IssueContextDisplay issue={issue} />
+                  ) : (
+                    message.parts.map((part, partIndex) => {
+                      if (part.type !== "text" || !part.text) return null
+                      const hasLaterText = message.parts
+                        .slice(partIndex + 1)
+                        .some((p) => p.type === "text" && p.text)
+
+                      if (message.role === "assistant") {
+                        return (
+                          <MessageResponse
+                            key={`${message.id}-${partIndex}`}
+                            isAnimating={isStreaming && !hasLaterText}
+                          >
+                            {part.text}
+                          </MessageResponse>
+                        )
+                      }
+
+                      return (
+                        <div
+                          key={`${message.id}-${partIndex}`}
+                          className="whitespace-pre-wrap text-sm leading-6"
+                        >
+                          {part.text}
+                        </div>
+                      )
+                    })
+                  )}
+                </MessageContent>
+              </Message>
+            )
+          })}
+
+          {!hasAssistantReply ? (
+            <div className="pt-1">
+              <p className="mb-2 text-xs text-muted-foreground">Ask a follow-up about this finding:</p>
+              <div className="grid gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
                   <Suggestion
                     key={suggestion}
@@ -88,42 +141,12 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
                     disabled={isBusy}
                     onClick={sendPrompt}
                     variant="outline"
-                    className="h-auto min-h-[4.5rem] w-full justify-start rounded-xl px-4 py-3 text-left text-sm font-normal whitespace-normal"
+                    className="h-auto min-h-0 w-full justify-start rounded-lg px-3 py-2 text-left text-xs font-normal leading-snug whitespace-normal"
                   />
                 ))}
               </div>
             </div>
-          ) : (
-            messages.map((message, index) => {
-              const isLast = index === messages.length - 1
-              const isStreaming =
-                isBusy && isLast && message.role === "assistant"
-
-              return (
-                <Message key={message.id} from={message.role}>
-                  <MessageContent>
-                    {message.parts.map((part, partIndex) => {
-                      if (part.type !== "text" || !part.text) return null
-                      const hasLaterText = message.parts
-                        .slice(partIndex + 1)
-                        .some((p) => p.type === "text" && p.text)
-
-                      return message.role === "assistant" ? (
-                        <MessageResponse
-                          key={`${message.id}-${partIndex}`}
-                          isAnimating={isStreaming && !hasLaterText}
-                        >
-                          {part.text}
-                        </MessageResponse>
-                      ) : (
-                        <span key={`${message.id}-${partIndex}`}>{part.text}</span>
-                      )
-                    })}
-                  </MessageContent>
-                </Message>
-              )
-            })
-          )}
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -132,15 +155,15 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
         <p className="shrink-0 px-4 pb-2 text-xs text-destructive">Chat failed: {error.message}</p>
       ) : null}
 
-      <div className="shrink-0 bg-background p-4 pt-2">
+      <div className="shrink-0 bg-background px-4 pb-3 pt-2">
         <PromptInput
-          className="mx-auto max-w-3xl [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm"
+          className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
           onSubmit={({ text }) => sendPrompt(text)}
         >
           <PromptInputBody>
-            <PromptInputTextarea placeholder="Ask about this issue..." rows={3} />
+            <PromptInputTextarea placeholder="Ask about this issue..." rows={1} />
           </PromptInputBody>
-          <PromptInputFooter className="px-2 pb-2">
+          <PromptInputFooter className="px-2 pb-1.5 pt-0">
             <div className="flex-1" />
             <PromptInputSubmit
               className="size-9 rounded-full bg-foreground text-background shadow-none hover:bg-foreground/90 disabled:opacity-50"
