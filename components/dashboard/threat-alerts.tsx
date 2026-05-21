@@ -841,6 +841,8 @@ export function ThreatAlerts() {
             setOpen(true)
           }, liveStatusByExtensionId)}
           searchKey="extensionName"
+          searchKeys={["extensionName", "extensionId"]}
+          searchPlaceholder="Search extension name or ID..."
         />
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent

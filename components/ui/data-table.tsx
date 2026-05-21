@@ -23,20 +23,38 @@ import { Button } from "./button";
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  /** Primary column for single-column filter (legacy). */
   searchKey: string;
+  /** When set, filter rows if any key matches (case-insensitive substring). */
+  searchKeys?: string[];
+  searchPlaceholder?: string;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  searchKeys,
+  searchPlaceholder,
 }: DataTableProps<TData, TValue>) {
+  const filterKeys = searchKeys ?? [searchKey];
+  const useGlobalFilter = filterKeys.length > 1;
+
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const query = String(filterValue ?? "").trim().toLowerCase();
+      if (!query) return true;
+      return filterKeys.some((key) =>
+        String(row.getValue(key) ?? "")
+          .toLowerCase()
+          .includes(query),
+      );
+    },
     initialState: {
       pagination: {
         pageIndex: 0,
@@ -52,11 +70,25 @@ export function DataTable<TData, TValue>({
     <>
       <div className="flex items-center py-4">
         <Input
-          placeholder={`Search ${searchKey}...`}
-          value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn(searchKey)?.setFilterValue(event.target.value)
+          placeholder={
+            searchPlaceholder ??
+            (useGlobalFilter
+              ? `Search ${filterKeys.join(" or ")}...`
+              : `Search ${searchKey}...`)
           }
+          value={
+            useGlobalFilter
+              ? ((table.getState().globalFilter as string) ?? "")
+              : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")
+          }
+          onChange={(event) => {
+            const value = event.target.value;
+            if (useGlobalFilter) {
+              table.setGlobalFilter(value);
+            } else {
+              table.getColumn(searchKey)?.setFilterValue(value);
+            }
+          }}
           className="w-full md:max-w-sm"
         />
       </div>
