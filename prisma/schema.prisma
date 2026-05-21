@@ -107,7 +107,6 @@ model IssueInvestigationShare {
   issueSnapshot   Json
   messages        Json
   expiresAt       DateTime?
-  revokedAt       DateTime?
   createdAt       DateTime  @default(now())
 
   user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)

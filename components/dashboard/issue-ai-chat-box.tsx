@@ -41,6 +41,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   buildInitialContextMessage,
+  CONTEXT_MESSAGE_PREFIX,
   isContextSeedMessage,
   mergeLoadedMessagesWithSeed,
 } from "@/lib/issue-chat-messages"
@@ -143,7 +144,7 @@ function IssueAiChatBoxInner({
 
   const shareableIds = useMemo(() => messages.map((m) => m.id), [messages])
   const optionalShareIds = useMemo(
-    () => shareableIds.filter((id) => !id.startsWith("issue-context-")),
+    () => shareableIds.filter((id) => !id.startsWith(CONTEXT_MESSAGE_PREFIX)),
     [shareableIds],
   )
 

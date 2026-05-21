@@ -24,7 +24,7 @@ export function isValidShareToken(token: string): boolean {
   return /^[A-Za-z0-9_-]{16,64}$/.test(token)
 }
 
-function parseIssueSnapshot(raw: unknown): WorkbenchCheckItem | null {
+export function parseWorkbenchCheckItem(raw: unknown): WorkbenchCheckItem | null {
   if (!raw || typeof raw !== "object") return null
   const o = raw as Record<string, unknown>
   const severity = o.severity
@@ -136,7 +136,7 @@ export async function createIssueInvestigationShare(params: {
   issue: WorkbenchCheckItem
   messages: UIMessage[]
   messageIds: string[]
-}): Promise<{ shareToken: string; shareUrl: string }> {
+}): Promise<{ shareToken: string }> {
   const allowed = await userCanShareStoreInvestigation(params.userId, params.storeId)
   if (!allowed) {
     throw new Error("FORBIDDEN")
@@ -160,7 +160,7 @@ export async function createIssueInvestigationShare(params: {
     },
   })
 
-  return { shareToken, shareUrl: "" }
+  return { shareToken }
 }
 
 export async function loadIssueInvestigationShare(
@@ -174,7 +174,7 @@ export async function loadIssueInvestigationShare(
   if (!row) return null
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null
 
-  const issue = parseIssueSnapshot(row.issueSnapshot)
+  const issue = parseWorkbenchCheckItem(row.issueSnapshot)
   const messages = await parseStoredUIMessages(row.messages)
   if (!issue || !messages) return null
 

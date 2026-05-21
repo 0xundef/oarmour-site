@@ -33,7 +33,7 @@ export function InvestigationPublicSharePage({ shareToken }: { shareToken: strin
             setPayload(null)
             setError(
               res.status === 404
-                ? "This share link is invalid or has been revoked."
+                ? "This share link is invalid or no longer available."
                 : "Failed to load shared investigation.",
             )
           }

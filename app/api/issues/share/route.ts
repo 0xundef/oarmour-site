@@ -1,47 +1,13 @@
 import { NextResponse } from "next/server"
 import { safeValidateUIMessages, type UIMessage } from "ai"
-import { createIssueInvestigationShare } from "@/lib/issue-investigation-share"
+import {
+  createIssueInvestigationShare,
+  parseWorkbenchCheckItem,
+} from "@/lib/issue-investigation-share"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import { parseIssueChatScope } from "@/lib/issue-investigation-chat"
-import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
-import { buildInvestigationShareUrl, getPublicSiteOrigin } from "@/lib/public-site-url"
 
 export const runtime = "nodejs"
-
-function parseIssueBody(raw: unknown): WorkbenchCheckItem | null {
-  if (!raw || typeof raw !== "object") return null
-  const o = raw as Record<string, unknown>
-  const severity = o.severity
-  const source = o.source
-  if (
-    typeof o.id !== "string" ||
-    typeof o.title !== "string" ||
-    typeof o.file !== "string" ||
-    typeof o.summary !== "string" ||
-    typeof o.impact !== "string" ||
-    typeof o.category !== "string" ||
-    (source !== "static" && source !== "ai") ||
-    (severity !== "CRITICAL" &&
-      severity !== "HIGH" &&
-      severity !== "MEDIUM" &&
-      severity !== "LOW") ||
-    !Array.isArray(o.conditions) ||
-    !o.conditions.every((c) => typeof c === "string")
-  ) {
-    return null
-  }
-  return {
-    id: o.id,
-    source,
-    category: o.category,
-    severity,
-    title: o.title,
-    file: o.file,
-    summary: o.summary,
-    conditions: o.conditions,
-    impact: o.impact,
-  }
-}
 
 export async function POST(req: Request) {
   const userId = await getIssueChatSessionUserId()
@@ -60,7 +26,7 @@ export async function POST(req: Request) {
     | null
 
   const scope = parseIssueChatScope({ storeId: body?.storeId, issueId: body?.issueId })
-  const issue = parseIssueBody(body?.issue)
+  const issue = parseWorkbenchCheckItem(body?.issue)
   const messageIds = Array.isArray(body?.messageIds)
     ? body.messageIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : []
@@ -88,9 +54,7 @@ export async function POST(req: Request) {
       messageIds,
     })
 
-    const shareUrl = buildInvestigationShareUrl(getPublicSiteOrigin(req), shareToken)
-
-    return NextResponse.json({ ok: true, shareToken, shareUrl })
+    return NextResponse.json({ ok: true, shareToken })
   } catch (e) {
     const message = e instanceof Error ? e.message : ""
     if (message === "FORBIDDEN") {

@@ -4,10 +4,6 @@ import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 export const CONTEXT_MESSAGE_PREFIX = "issue-context-"
 
-export function buildIssueChatId(userId: string, storeId: string, issueId: string): string {
-  return `investigation:${userId}:${storeId}:${issueId}`
-}
-
 export function buildInitialContextMessage(issue: WorkbenchCheckItem): UIMessage {
   return {
     id: `${CONTEXT_MESSAGE_PREFIX}${issue.id}`,
