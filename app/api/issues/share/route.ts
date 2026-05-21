@@ -7,6 +7,7 @@ import {
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import { parseIssueChatScope } from "@/lib/issue-investigation-chat"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
+import { buildInvestigationShareUrl, getPublicSiteOrigin } from "@/lib/public-site-url"
 
 export const runtime = "nodejs"
 
@@ -31,11 +32,11 @@ export async function GET(req: Request) {
     issueId: scope.issueId,
   })
 
-  const origin = new URL(req.url).origin
+  const origin = getPublicSiteOrigin(req)
   return NextResponse.json({
     shares: shares.map((share) => ({
       ...share,
-      shareUrl: `${origin}/investigation/${encodeURIComponent(share.shareToken)}`,
+      shareUrl: buildInvestigationShareUrl(origin, share.shareToken),
     })),
   })
 }
@@ -120,8 +121,7 @@ export async function POST(req: Request) {
       messageIds,
     })
 
-    const origin = new URL(req.url).origin
-    const shareUrl = `${origin}/investigation/${encodeURIComponent(shareToken)}`
+    const shareUrl = buildInvestigationShareUrl(getPublicSiteOrigin(req), shareToken)
 
     return NextResponse.json({ ok: true, shareToken, shareUrl })
   } catch (e) {

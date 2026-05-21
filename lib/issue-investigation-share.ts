@@ -229,13 +229,11 @@ export async function revokeIssueInvestigationShare(params: {
 }): Promise<boolean> {
   if (!isValidShareToken(params.shareToken)) return false
 
-  const result = await prisma.issueInvestigationShare.updateMany({
+  const result = await prisma.issueInvestigationShare.deleteMany({
     where: {
       shareToken: params.shareToken,
       createdByUserId: params.userId,
-      revokedAt: null,
     },
-    data: { revokedAt: new Date() },
   })
   return result.count > 0
 }

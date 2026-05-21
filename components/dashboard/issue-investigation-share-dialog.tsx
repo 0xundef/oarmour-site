@@ -48,6 +48,12 @@ function formatShareTime(iso: string): string {
   }
 }
 
+/** Use the browser origin so links match how the user accesses the app (same as AI testing share). */
+function buildClientShareUrl(shareToken: string): string {
+  if (typeof window === "undefined") return ""
+  return `${window.location.origin}/investigation/${encodeURIComponent(shareToken)}`
+}
+
 export function IssueInvestigationShareDialog({
   open,
   onOpenChange,
@@ -91,8 +97,15 @@ export function IssueInvestigationShareDialog({
         setActiveShares([])
         return
       }
-      const json = (await res.json()) as { shares?: ActiveShare[] }
-      setActiveShares(Array.isArray(json.shares) ? json.shares : [])
+      const json = (await res.json()) as { shares?: Array<ActiveShare & { shareToken: string }> }
+      setActiveShares(
+        Array.isArray(json.shares)
+          ? json.shares.map((share) => ({
+              ...share,
+              shareUrl: buildClientShareUrl(share.shareToken),
+            }))
+          : [],
+      )
     } catch {
       setActiveShares([])
     } finally {
@@ -156,17 +169,20 @@ export function IssueInvestigationShareDialog({
         }),
       })
       const json = (await res.json().catch(() => null)) as
-        | { shareUrl?: string; error?: string }
+        | { shareToken?: string; shareUrl?: string; error?: string }
         | null
-      if (!res.ok || !json?.shareUrl) {
+      const createdUrl = json?.shareToken
+        ? buildClientShareUrl(json.shareToken)
+        : json?.shareUrl ?? ""
+      if (!res.ok || !createdUrl) {
         toast({
           variant: "destructive",
           description: json?.error ?? "Failed to create share link.",
         })
         return
       }
-      setShareUrl(json.shareUrl)
-      await navigator.clipboard.writeText(json.shareUrl)
+      setShareUrl(createdUrl)
+      await navigator.clipboard.writeText(createdUrl)
       toast({ description: "Share link created and copied to clipboard." })
       await loadActiveShares()
     } catch {
