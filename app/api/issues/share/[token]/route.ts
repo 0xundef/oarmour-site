@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server"
-import {
-  isValidShareToken,
-  loadIssueInvestigationShare,
-  revokeIssueInvestigationShare,
-} from "@/lib/issue-investigation-share"
-import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
+import { isValidShareToken, loadIssueInvestigationShare } from "@/lib/issue-investigation-share"
 
 export const runtime = "nodejs"
 
@@ -24,25 +19,4 @@ export async function GET(_req: Request, context: RouteContext) {
   }
 
   return NextResponse.json(payload)
-}
-
-export async function DELETE(_req: Request, context: RouteContext) {
-  const userId = await getIssueChatSessionUserId()
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { token } = await context.params
-  const shareToken = decodeURIComponent(token ?? "").trim()
-
-  if (!isValidShareToken(shareToken)) {
-    return NextResponse.json({ error: "Invalid share link." }, { status: 400 })
-  }
-
-  const revoked = await revokeIssueInvestigationShare({ userId, shareToken })
-  if (!revoked) {
-    return NextResponse.json({ error: "Share link not found." }, { status: 404 })
-  }
-
-  return NextResponse.json({ ok: true, revoked: true })
 }

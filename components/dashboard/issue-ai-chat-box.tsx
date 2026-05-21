@@ -34,7 +34,11 @@ import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
 import { IssueChatToolPart } from "@/components/dashboard/issue-chat-tool-part"
-import { IssueInvestigationShareDialog } from "@/components/dashboard/issue-investigation-share-dialog"
+import {
+  IssueInvestigationShareFooter,
+  IssueInvestigationShareHeader,
+} from "@/components/dashboard/issue-investigation-share-panel"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   buildInitialContextMessage,
   isContextSeedMessage,
@@ -102,7 +106,8 @@ function IssueAiChatBoxInner({
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
-  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareMode, setShareMode] = useState(false)
+  const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set())
   const [clearing, setClearing] = useState(false)
   const [clearActionError, setClearActionError] = useState("")
 
@@ -136,6 +141,12 @@ function IssueAiChatBoxInner({
       },
     })
 
+  const shareableIds = useMemo(() => messages.map((m) => m.id), [messages])
+  const optionalShareIds = useMemo(
+    () => shareableIds.filter((id) => !id.startsWith("issue-context-")),
+    [shareableIds],
+  )
+
   const isBusy = status === "submitted" || status === "streaming"
   const hasAssistantReply = messages.some(
     (message) => message.role === "assistant" && messageHasVisibleText(message),
@@ -161,56 +172,71 @@ function IssueAiChatBoxInner({
 
   const sendPrompt = (text: string) => {
     const prompt = text.trim()
-    if (!prompt || isBusy) return
+    if (!prompt || isBusy || shareMode) return
     void sendMessage({ text: prompt })
+  }
+
+  const enterShareMode = () => {
+    setShareSelectedIds(new Set(shareableIds))
+    setShareMode(true)
+  }
+
+  const exitShareMode = () => {
+    setShareMode(false)
+    setShareSelectedIds(new Set())
+  }
+
+  const toggleShareMessage = (message: UIMessage, checked: boolean) => {
+    if (isContextSeedMessage(message)) return
+    setShareSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(message.id)
+      else next.delete(message.id)
+      return next
+    })
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-end border-b px-3 py-1.5">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground"
-              aria-label="Conversation actions"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem
-              className="gap-2 text-xs"
-              disabled={isBusy || messages.length === 0}
-              onClick={() => setShareDialogOpen(true)}
-            >
-              <Link2Icon className="size-3.5" />
-              Share
-            </DropdownMenuItem>
-            {hasClearableHistory ? (
-              <DropdownMenuItem
-                className="gap-2 text-xs text-destructive focus:text-destructive"
-                disabled={isBusy || clearing}
-                onClick={() => setClearDialogOpen(true)}
+      {!shareMode ? (
+        <div className="flex shrink-0 items-center justify-end border-b px-3 py-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="Conversation actions"
               >
-                <Trash2Icon className="size-3.5" />
-                Clear conversation
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem
+                className="gap-2 text-xs"
+                disabled={isBusy || messages.length === 0}
+                onClick={enterShareMode}
+              >
+                <Link2Icon className="size-3.5" />
+                Share
               </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <IssueInvestigationShareDialog
-        open={shareDialogOpen}
-        onOpenChange={setShareDialogOpen}
-        storeId={storeId}
-        issue={issue}
-        messages={messages}
-        disabled={isBusy}
-      />
+              {hasClearableHistory ? (
+                <DropdownMenuItem
+                  className="gap-2 text-xs text-destructive focus:text-destructive"
+                  disabled={isBusy || clearing}
+                  onClick={() => setClearDialogOpen(true)}
+                >
+                  <Trash2Icon className="size-3.5" />
+                  Clear conversation
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : (
+        <IssueInvestigationShareHeader onCancel={exitShareMode} />
+      )}
 
       <ConfirmDeleteDialog
         open={clearDialogOpen}
@@ -229,8 +255,28 @@ function IssueAiChatBoxInner({
             const isLast = index === messages.length - 1
             const isStreaming = isBusy && isLast && message.role === "assistant"
 
+            const shareChecked = shareSelectedIds.has(message.id)
+            const shareLocked = isContextSeedMessage(message)
+
             return (
-              <Message key={message.id} from={message.role}>
+              <div
+                key={message.id}
+                className={cn(
+                  "flex gap-2",
+                  shareMode && "rounded-lg",
+                  shareMode && shareChecked && "bg-primary/5 ring-1 ring-primary/15",
+                )}
+              >
+                {shareMode ? (
+                  <Checkbox
+                    className="mt-4 shrink-0"
+                    checked={shareChecked}
+                    disabled={shareLocked || isBusy}
+                    onCheckedChange={(value) => toggleShareMessage(message, value === true)}
+                    aria-label={shareLocked ? "Finding context (always included)" : "Include in share"}
+                  />
+                ) : null}
+                <Message from={message.role} className="min-w-0 flex-1">
                 <MessageContent
                   className={cn(
                     isContextSeed &&
@@ -277,6 +323,7 @@ function IssueAiChatBoxInner({
                   )}
                 </MessageContent>
               </Message>
+              </div>
             )
           })}
 
@@ -291,7 +338,7 @@ function IssueAiChatBoxInner({
             </Message>
           ) : null}
 
-          {!hasAssistantReply && !thinking ? (
+          {!shareMode && !hasAssistantReply && !thinking ? (
             <div className="pt-1">
               <p className="mb-2 text-xs text-muted-foreground">Ask a follow-up about this finding:</p>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -324,32 +371,46 @@ function IssueAiChatBoxInner({
         <p className="shrink-0 px-4 pb-2 text-xs text-destructive">Chat failed: {error.message}</p>
       ) : null}
 
-      <div className="shrink-0 bg-background px-4 pb-3 pt-2">
-        <PromptInput
-          className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
-          onSubmit={({ text }) => sendPrompt(text)}
-        >
-          <PromptInputBody>
-            <PromptInputTextarea placeholder="Ask about this issue..." rows={1} />
-          </PromptInputBody>
-          <PromptInputFooter className="px-2 pb-1.5 pt-0">
-            <div className="flex-1" />
-            <PromptInputSubmit
-              className="size-9 rounded-full bg-foreground text-background shadow-none hover:bg-foreground/90 disabled:opacity-50"
-              onStop={stop}
-              status={status}
-            >
-              {status === "submitted" ? (
-                <Spinner className="size-4 text-background" />
-              ) : status === "streaming" ? (
-                <SquareIcon className="size-4" />
-              ) : (
-                <ArrowUpIcon className="size-4" />
-              )}
-            </PromptInputSubmit>
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+      {shareMode ? (
+        <IssueInvestigationShareFooter
+          storeId={storeId}
+          issue={issue}
+          messages={messages}
+          shareableIds={shareableIds}
+          optionalIds={optionalShareIds}
+          selectedIds={shareSelectedIds}
+          onSelectedIdsChange={setShareSelectedIds}
+          onDone={exitShareMode}
+          disabled={isBusy}
+        />
+      ) : (
+        <div className="shrink-0 bg-background px-4 pb-3 pt-2">
+          <PromptInput
+            className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
+            onSubmit={({ text }) => sendPrompt(text)}
+          >
+            <PromptInputBody>
+              <PromptInputTextarea placeholder="Ask about this issue..." rows={1} />
+            </PromptInputBody>
+            <PromptInputFooter className="px-2 pb-1.5 pt-0">
+              <div className="flex-1" />
+              <PromptInputSubmit
+                className="size-9 rounded-full bg-foreground text-background shadow-none hover:bg-foreground/90 disabled:opacity-50"
+                onStop={stop}
+                status={status}
+              >
+                {status === "submitted" ? (
+                  <Spinner className="size-4 text-background" />
+                ) : status === "streaming" ? (
+                  <SquareIcon className="size-4" />
+                ) : (
+                  <ArrowUpIcon className="size-4" />
+                )}
+              </PromptInputSubmit>
+            </PromptInputFooter>
+          </PromptInput>
+        </div>
+      )}
     </div>
   )
 }

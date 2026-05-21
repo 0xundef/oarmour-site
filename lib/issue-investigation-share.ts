@@ -16,11 +16,6 @@ export type IssueInvestigationSharePayload = {
   createdAt: string
 }
 
-export type IssueInvestigationShareSummary = {
-  shareToken: string
-  createdAt: string
-}
-
 export function createShareToken(): string {
   return randomBytes(24).toString("base64url")
 }
@@ -176,7 +171,7 @@ export async function loadIssueInvestigationShare(
   const row = await prisma.issueInvestigationShare.findUnique({
     where: { shareToken },
   })
-  if (!row || row.revokedAt) return null
+  if (!row) return null
   if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null
 
   const issue = parseIssueSnapshot(row.issueSnapshot)
@@ -199,41 +194,3 @@ export async function loadIssueInvestigationShare(
   }
 }
 
-export async function listActiveIssueInvestigationShares(params: {
-  userId: string
-  storeId: string
-  issueId: string
-}): Promise<IssueInvestigationShareSummary[]> {
-  const now = new Date()
-  const rows = await prisma.issueInvestigationShare.findMany({
-    where: {
-      createdByUserId: params.userId,
-      storeId: params.storeId,
-      issueId: params.issueId,
-      revokedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-    },
-    orderBy: { createdAt: "desc" },
-    select: { shareToken: true, createdAt: true },
-  })
-
-  return rows.map((row) => ({
-    shareToken: row.shareToken,
-    createdAt: row.createdAt.toISOString(),
-  }))
-}
-
-export async function revokeIssueInvestigationShare(params: {
-  userId: string
-  shareToken: string
-}): Promise<boolean> {
-  if (!isValidShareToken(params.shareToken)) return false
-
-  const result = await prisma.issueInvestigationShare.deleteMany({
-    where: {
-      shareToken: params.shareToken,
-      createdByUserId: params.userId,
-    },
-  })
-  return result.count > 0
-}

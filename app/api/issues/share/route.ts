@@ -1,45 +1,12 @@
 import { NextResponse } from "next/server"
 import { safeValidateUIMessages, type UIMessage } from "ai"
-import {
-  createIssueInvestigationShare,
-  listActiveIssueInvestigationShares,
-} from "@/lib/issue-investigation-share"
+import { createIssueInvestigationShare } from "@/lib/issue-investigation-share"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import { parseIssueChatScope } from "@/lib/issue-investigation-chat"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 import { buildInvestigationShareUrl, getPublicSiteOrigin } from "@/lib/public-site-url"
 
 export const runtime = "nodejs"
-
-export async function GET(req: Request) {
-  const userId = await getIssueChatSessionUserId()
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { searchParams } = new URL(req.url)
-  const scope = parseIssueChatScope({
-    storeId: searchParams.get("storeId"),
-    issueId: searchParams.get("issueId"),
-  })
-  if (!scope) {
-    return NextResponse.json({ error: "Missing storeId or issueId." }, { status: 400 })
-  }
-
-  const shares = await listActiveIssueInvestigationShares({
-    userId,
-    storeId: scope.storeId,
-    issueId: scope.issueId,
-  })
-
-  const origin = getPublicSiteOrigin(req)
-  return NextResponse.json({
-    shares: shares.map((share) => ({
-      ...share,
-      shareUrl: buildInvestigationShareUrl(origin, share.shareToken),
-    })),
-  })
-}
 
 function parseIssueBody(raw: unknown): WorkbenchCheckItem | null {
   if (!raw || typeof raw !== "object") return null
