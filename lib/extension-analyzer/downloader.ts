@@ -11,7 +11,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  console.warn('[analysis] downloadExtension:start', { extensionId, url, filePath });
+  console.info('[analysis] downloadExtension:start', { extensionId, url, filePath });
   setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Starting download')
   const writer = fs.createWriteStream(filePath);
 
@@ -24,7 +24,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
       maxRedirects: 5,
       validateStatus: (status) => status >= 200 && status < 400,
     });
-    console.warn('[analysis] downloadExtension:response', {
+    console.info('[analysis] downloadExtension:response', {
       extensionId,
       status: response.status,
       contentType: response.headers['content-type'],
@@ -40,7 +40,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
       setAnalyzeDownloadProgress(extensionId, bytesWritten, Number.isFinite(totalBytes || NaN) ? totalBytes : null);
     });
     response.data.on('end', () => {
-      console.warn('[analysis] downloadExtension:streamEnded', {
+      console.info('[analysis] downloadExtension:streamEnded', {
         extensionId,
         filePath,
         bytesWritten,
@@ -51,7 +51,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
 
     return new Promise((resolve, reject) => {
       writer.on('finish', () => {
-        console.warn('[analysis] downloadExtension:finished', { extensionId, filePath, bytesWritten });
+        console.info('[analysis] downloadExtension:finished', { extensionId, filePath, bytesWritten });
         setAnalyzeProgressStage(extensionId, 'EXTRACTING', 65, 'Download complete, extracting package');
         resolve(filePath);
       });

@@ -22,10 +22,10 @@ const nowIso = () => new Date().toISOString()
 
 const logInfo = (message: string, payload?: unknown) => {
   if (typeof payload === 'undefined') {
-    console.warn(`${nowIso()} ${message}`)
+    console.info(`${nowIso()} ${message}`)
     return
   }
-  console.warn(`${nowIso()} ${message}`, payload)
+  console.info(`${nowIso()} ${message}`, payload)
 }
 
 const logError = (message: string, payload?: unknown) => {
@@ -319,9 +319,13 @@ export async function processCompletedAiTestingRuns() {
         staticDomains: normalizeStoredDomainList(staticAnalysis.domains),
       })
       processed += 1
+      logInfo('[ai-analysis] batch item processed', { storeId, version, runId })
     } catch (e) {
       logError('[ai-analysis] run failed', { storeId, version, runId, error: e })
     }
+  }
+  if (processed > 0) {
+    logInfo('[ai-analysis] tick finished', { processed })
   }
   return { processed }
 }

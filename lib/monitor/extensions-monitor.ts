@@ -134,7 +134,7 @@ async function monitorExtensionsOnceWithDb(
       )
     }
   } catch (e) {
-    console.warn('Monitor: failed to create monitor run record.', e)
+    console.info('Monitor: failed to create monitor run record.', e)
   }
 
   let list: MonitorExtensionRow[] = []
@@ -159,7 +159,7 @@ async function monitorExtensionsOnceWithDb(
         aiBrowserTestingEnabled: false,
       }))
     } catch {
-      console.warn('Monitor: extension query failed. Skipping monitoring.', e)
+      console.error('Monitor: extension query failed. Skipping monitoring.', e)
       if (runId) {
         try {
           if (monitorRunDelegate) {
@@ -185,12 +185,18 @@ async function monitorExtensionsOnceWithDb(
             )
           }
         } catch (updateError) {
-          console.warn('Monitor: failed to update failed monitor run record.', updateError)
+          console.info('Monitor: failed to update failed monitor run record.', updateError)
         }
       }
       return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> }
     }
   }
+
+  console.info('[monitor] run started', {
+    targetStoreId: targetStoreId ?? null,
+    extensionCount: list.length,
+    runId,
+  })
 
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> = []
   for (const ext of list) {
@@ -211,6 +217,12 @@ async function monitorExtensionsOnceWithDb(
           succeededCount += 1
           continue
         }
+        console.info('[monitor] new version (cdn prefix)', {
+          storeId: ext.storeId,
+          from: ext.version,
+          to: nextVersion,
+          downloadUrl,
+        })
         await processExtension(ext.storeId, downloadUrl)
         if (ext.aiBrowserTestingEnabled) {
           try {
@@ -231,6 +243,11 @@ async function monitorExtensionsOnceWithDb(
       const latest = await fetchStoreVersion(ext.storeId)
       if (!latest) continue
       if (cmpVersion(latest, ext.version) > 0) {
+        console.info('[monitor] new version (chrome store)', {
+          storeId: ext.storeId,
+          from: ext.version,
+          to: latest,
+        })
         try {
           await db.globalExtension.update({
             where: { id: ext.id },
@@ -287,9 +304,17 @@ async function monitorExtensionsOnceWithDb(
         )
       }
     } catch (e) {
-      console.warn('Monitor: failed to finalize monitor run record.', e)
+      console.info('Monitor: failed to finalize monitor run record.', e)
     }
   }
+  console.info('[monitor] run finished', {
+    targetStoreId: targetStoreId ?? null,
+    checked: list.length,
+    succeededCount,
+    failedCount,
+    updatedCount: updated.length,
+    runId,
+  })
   return { checked: list.length, updated }
 }
 
@@ -313,6 +338,7 @@ export async function monitorExtensionsOnce(
         ) AS ok
       `
       if (!rows[0]?.ok) {
+        console.info('[monitor] skipped: another instance holds the advisory lock')
         return {
           checked: 0,
           updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }>,

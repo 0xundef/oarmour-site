@@ -35,10 +35,10 @@ const nowIso = () => new Date().toISOString()
 
 const logInfo = (message: string, payload?: unknown) => {
     if (typeof payload === 'undefined') {
-        console.warn(`${nowIso()} ${message}`)
+        console.info(`${nowIso()} ${message}`)
         return
     }
-    console.warn(`${nowIso()} ${message}`, payload)
+    console.info(`${nowIso()} ${message}`, payload)
 }
 
 const logError = (message: string, payload?: unknown) => {
@@ -596,6 +596,7 @@ export async function processPendingLookupJob() {
         if (!extension) {
             throw new Error(`Extension not found for job ${pending.id}`)
         }
+        logInfo('[analysis] lookup job started', { jobId: pending.id, storeId: extension.storeId })
         await runLookupForExtension(extension.id, extension.storeId)
         await prisma.scanJob.update({
             where: { id: pending.id },
@@ -603,6 +604,11 @@ export async function processPendingLookupJob() {
                 status: 'COMPLETED',
                 durationMs: Date.now() - activeStartedAt,
             },
+        })
+        logInfo('[analysis] lookup job completed', {
+            jobId: pending.id,
+            storeId: extension.storeId,
+            durationMs: Date.now() - activeStartedAt,
         })
         return { processed: true as const, id: pending.id, status: 'COMPLETED' as const }
     } catch (e) {
