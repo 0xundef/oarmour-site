@@ -49,6 +49,18 @@ function isContextSeedMessage(message: UIMessage): boolean {
   return message.id.startsWith(CONTEXT_MESSAGE_PREFIX)
 }
 
+function messageHasVisibleText(message: UIMessage): boolean {
+  return message.parts.some((part) => part.type === "text" && (part.text ?? "").trim().length > 0)
+}
+
+function showAssistantThinking(messages: UIMessage[], isBusy: boolean): boolean {
+  if (!isBusy) return false
+  const last = messages[messages.length - 1]
+  if (!last || last.role === "user") return true
+  if (last.role === "assistant" && !messageHasVisibleText(last)) return true
+  return false
+}
+
 export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
   const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
 
@@ -70,7 +82,10 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
   })
 
   const isBusy = status === "submitted" || status === "streaming"
-  const hasAssistantReply = messages.some((message) => message.role === "assistant")
+  const hasAssistantReply = messages.some(
+    (message) => message.role === "assistant" && messageHasVisibleText(message),
+  )
+  const thinking = showAssistantThinking(messages, isBusy)
 
   const sendPrompt = (text: string) => {
     const prompt = text.trim()
@@ -130,7 +145,18 @@ export function IssueAiChatBox({ issue }: { issue: WorkbenchCheckItem }) {
             )
           })}
 
-          {!hasAssistantReply ? (
+          {thinking ? (
+            <Message from="assistant">
+              <MessageContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Spinner className="size-4 shrink-0" />
+                  <span>AI is thinking…</span>
+                </div>
+              </MessageContent>
+            </Message>
+          ) : null}
+
+          {!hasAssistantReply && !thinking ? (
             <div className="pt-1">
               <p className="mb-2 text-xs text-muted-foreground">Ask a follow-up about this finding:</p>
               <div className="grid gap-2 sm:grid-cols-2">
