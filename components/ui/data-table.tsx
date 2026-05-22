@@ -49,11 +49,17 @@ export function DataTable<TData, TValue>({
     globalFilterFn: (row, _columnId, filterValue) => {
       const query = String(filterValue ?? "").trim().toLowerCase();
       if (!query) return true;
-      return filterKeys.some((key) =>
-        String(row.getValue(key) ?? "")
+      const original = row.original as Record<string, unknown>;
+      return filterKeys.some((key) => {
+        const columnValue = row.getValue(key);
+        const raw =
+          columnValue !== undefined && columnValue !== null && columnValue !== ""
+            ? columnValue
+            : original[key];
+        return String(raw ?? "")
           .toLowerCase()
-          .includes(query),
-      );
+          .includes(query);
+      });
     },
     initialState: {
       pagination: {
