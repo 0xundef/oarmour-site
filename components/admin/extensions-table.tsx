@@ -31,7 +31,6 @@ import {
   type AiTestingStatusEntry,
 } from "@/lib/ai-testing-status-client";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
-import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Separator } from "@/components/ui/separator";
 
 type ExtRow = {
@@ -56,8 +55,14 @@ type VersionListItem = {
 
 type DeleteVersionTarget = {
   ext: ExtRow;
-  version: string;
 };
+
+function pickPreferredDeleteVersion(ext: ExtRow, versions: VersionListItem[]): string {
+  if (ext.version && versions.some((v) => v.version === ext.version)) {
+    return ext.version;
+  }
+  return versions[0]?.version ?? "";
+}
 
 function formatLastUpdate(iso?: string | null) {
   if (!iso) return "N/A";
@@ -76,11 +81,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [draftPrompt, setDraftPrompt] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteVersionTarget | null>(null);
+  const [deleteModalVersion, setDeleteModalVersion] = useState("");
   const [versionsByExtensionId, setVersionsByExtensionId] = useState<
     Record<string, VersionListItem[]>
-  >({});
-  const [selectedVersionByExtensionId, setSelectedVersionByExtensionId] = useState<
-    Record<string, string>
   >({});
   const [aiTestingStatusByStoreId, setAiTestingStatusByStoreId] = useState<
     Record<string, AiTestingStatusEntry>
@@ -122,18 +125,10 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
       );
       if (cancelled) return;
       const nextVersions: Record<string, VersionListItem[]> = {};
-      const nextSelected: Record<string, string> = {};
       for (const [id, versions] of entries) {
         nextVersions[id] = [...versions];
-        const row = extensions.find((e) => e.id === id);
-        const preferred =
-          row?.version && versions.some((v) => v.version === row.version)
-            ? row.version
-            : versions[0]?.version ?? "";
-        if (preferred) nextSelected[id] = preferred;
       }
       setVersionsByExtensionId(nextVersions);
-      setSelectedVersionByExtensionId(nextSelected);
     };
     void loadAllVersions();
     return () => {
@@ -270,28 +265,26 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     const json = (await res.json()) as { versions?: VersionListItem[] };
     const versions = json.versions ?? [];
     setVersionsByExtensionId((prev) => ({ ...prev, [extensionId]: versions }));
-    setSelectedVersionByExtensionId((prev) => {
-      const current = prev[extensionId];
-      if (current && versions.some((v) => v.version === current)) {
-        return prev;
-      }
-      const row = rows.find((r) => r.id === extensionId);
-      const preferred =
-        row?.version && versions.some((v) => v.version === row.version)
-          ? row.version
-          : versions[0]?.version ?? "";
-      if (!preferred) {
-        const next = { ...prev };
-        delete next[extensionId];
-        return next;
-      }
-      return { ...prev, [extensionId]: preferred };
-    });
+  };
+
+  const openDeleteVersionModal = (ext: ExtRow) => {
+    const versions = versionsByExtensionId[ext.id] ?? [];
+    if (versions.length === 0) {
+      toast({ variant: "destructive", description: "No versions available to delete." });
+      return;
+    }
+    setDeleteModalVersion(pickPreferredDeleteVersion(ext, versions));
+    setDeleteTarget({ ext });
   };
 
   const confirmDeleteVersion = () => {
     if (!deleteTarget) return;
-    const { ext, version } = deleteTarget;
+    const version = deleteModalVersion.trim();
+    if (!version) {
+      toast({ variant: "destructive", description: "Select a version to delete." });
+      return;
+    }
+    const { ext } = deleteTarget;
     startTransition(async () => {
       try {
         const res = await fetch(`/api/admin/extensions/${ext.id}/versions`, {
@@ -307,6 +300,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         }
         toast({ description: `Deleted version ${version} for ${ext.name}` });
         setDeleteTarget(null);
+        setDeleteModalVersion("");
         await refreshVersionsForExtension(ext.id);
         setRows((prev) =>
           prev.map((r) =>
@@ -467,47 +461,13 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         <Pencil className="mr-1.5 h-3.5 w-3.5" />
                         Edit
                       </Button>
-                      <Select
-                        value={selectedVersionByExtensionId[ext.id] ?? ""}
-                        onValueChange={(value) =>
-                          setSelectedVersionByExtensionId((prev) => ({
-                            ...prev,
-                            [ext.id]: value,
-                          }))
-                        }
-                        disabled={pending || (versionsByExtensionId[ext.id]?.length ?? 0) === 0}
-                      >
-                        <SelectTrigger
-                          className="h-8 w-[7.5rem] text-xs"
-                          aria-label="Version to delete"
-                          title="Select a completed detection version to delete"
-                        >
-                          <SelectValue placeholder="Version" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(versionsByExtensionId[ext.id] ?? []).map((item) => (
-                            <SelectItem key={item.version} value={item.version}>
-                              {item.version}
-                              {item.hasStaticCompleted ? "" : " (disk only)"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                       <Button
                         variant="destructive"
                         size="sm"
-                        disabled={
-                          pending ||
-                          !selectedVersionByExtensionId[ext.id] ||
-                          (versionsByExtensionId[ext.id]?.length ?? 0) === 0
-                        }
-                        onClick={() => {
-                          const version = selectedVersionByExtensionId[ext.id];
-                          if (!version) return;
-                          setDeleteTarget({ ext, version });
-                        }}
-                        aria-label="Delete selected version"
-                        title="Delete DB records and extension-data for the selected version"
+                        disabled={pending || (versionsByExtensionId[ext.id]?.length ?? 0) === 0}
+                        onClick={() => openDeleteVersionModal(ext)}
+                        aria-label="Delete version"
+                        title="Delete database records and on-disk data for a version"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -520,20 +480,67 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
         </Table>
       </div>
 
-      <ConfirmDeleteDialog
+      <Dialog
         open={!!deleteTarget}
         onOpenChange={(open) => {
-          if (!open && !pending) setDeleteTarget(null);
+          if (!open && !pending) {
+            setDeleteTarget(null);
+            setDeleteModalVersion("");
+          }
         }}
-        title="Delete version?"
-        description={
-          deleteTarget
-            ? `Delete all data for "${deleteTarget.ext.name}" version ${deleteTarget.version}? This removes database records and files under extension-data and chrome-extension-analyzer for that version. This cannot be undone.`
-            : "This action cannot be undone."
-        }
-        loading={pending}
-        onConfirm={confirmDeleteVersion}
-      />
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete version</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? `Choose a version of "${deleteTarget.ext.name}" to remove. This deletes database records and files under extension-data and chrome-extension-analyzer for that version. This cannot be undone.`
+                : "This action cannot be undone."}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="space-y-2">
+              <Label htmlFor="delete-version-select">Version</Label>
+              <Select
+                value={deleteModalVersion}
+                onValueChange={setDeleteModalVersion}
+                disabled={pending}
+              >
+                <SelectTrigger id="delete-version-select" className="w-full">
+                  <SelectValue placeholder="Select version" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(versionsByExtensionId[deleteTarget.ext.id] ?? []).map((item) => (
+                    <SelectItem key={item.version} value={item.version}>
+                      {item.version}
+                      {item.hasStaticCompleted ? "" : " (disk only)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteModalVersion("");
+              }}
+              disabled={pending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending || !deleteModalVersion.trim()}
+              onClick={() => confirmDeleteVersion()}
+            >
+              {pending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!editingExtension}
