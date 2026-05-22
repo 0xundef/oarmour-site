@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { normalizeApexDomain } from '@/lib/domain-normalize'
 import { getExtensionAnalysisDir } from '@/lib/extension-storage'
 import type { AiTestingLatestPayload } from '@/lib/ai-testing-display'
+import { loadFindingResolutionsForUser, countOpenHighCriticalFindings } from '@/lib/finding-resolution-store'
 import {
   countHighCriticalWorkbenchFindings,
   versionsAligned,
@@ -169,6 +170,7 @@ async function loadStaticLatestPayload(
 export async function countHighCriticalFindingsForSubscribed(
   storeId: string,
   versionHint?: string | null,
+  userId?: string | null,
 ): Promise<number> {
   const staticPayload = await loadStaticLatestPayload(storeId, versionHint)
   const staticVersion =
@@ -184,5 +186,11 @@ export async function countHighCriticalFindingsForSubscribed(
     }
   }
 
-  return countHighCriticalWorkbenchFindings({ staticPayload, aiPayload })
+  const payloads = { staticPayload, aiPayload }
+  if (!userId?.trim()) {
+    return countHighCriticalWorkbenchFindings(payloads)
+  }
+
+  const resolutions = await loadFindingResolutionsForUser(userId.trim(), storeId)
+  return countOpenHighCriticalFindings(payloads, resolutions)
 }

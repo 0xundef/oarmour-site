@@ -55,6 +55,7 @@ export default async function Sidebar() {
               highCriticalCount: await countHighCriticalFindingsForSubscribed(
                 item.extension.storeId,
                 item.extension.version,
+                user?.id,
               ),
             })),
           )

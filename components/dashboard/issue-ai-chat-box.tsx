@@ -3,7 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
-import { ArrowUpIcon, Link2Icon, MoreHorizontal, SquareIcon, Trash2Icon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  ChevronDownIcon,
+  Link2Icon,
+  MoreHorizontal,
+  ShieldOffIcon,
+  SquareIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { FindingDismissDialog } from "@/components/dashboard/finding-dismiss-dialog"
+import { Separator } from "@/components/ui/separator"
+import { domainFromMaliciousFindingIssueId } from "@/lib/finding-resolution"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -99,14 +110,22 @@ function IssueAiChatBoxInner({
   issue,
   initialMessages,
   loadError,
+  extensionVersion,
+  listTab,
+  onResolutionChange,
 }: {
   storeId: string
   issue: WorkbenchCheckItem
   initialMessages: UIMessage[]
   loadError: string
+  extensionVersion?: string | null
+  listTab: "open" | "closed"
+  onResolutionChange: () => void
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [dismissDialogOpen, setDismissDialogOpen] = useState(false)
+  const allowlistDomain = useMemo(() => domainFromMaliciousFindingIssueId(issue.id), [issue.id])
   const [shareMode, setShareMode] = useState(false)
   const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set())
   const [clearing, setClearing] = useState(false)

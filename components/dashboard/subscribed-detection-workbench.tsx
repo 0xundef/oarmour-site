@@ -3,10 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
+import { ExtensionDomainAllowlistSheet } from "@/components/dashboard/extension-domain-allowlist-sheet"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
+import {
+  applyFindingResolutions,
+  partitionWorkbenchFindings,
+} from "@/lib/finding-resolution"
 import {
   buildWorkbenchCheckItems,
   normalizeExtensionVersion,
@@ -31,6 +37,11 @@ function categoryBadgeClass() {
   return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
 }
 
+type ResolutionState = {
+  dismissedIssueIds: Set<string>
+  allowlistedDomains: Set<string>
+}
+
 export function SubscribedDetectionWorkbench({
   storeId,
   extensionName,
@@ -40,15 +51,44 @@ export function SubscribedDetectionWorkbench({
   extensionName: string
   extensionVersion?: string | null
 }) {
-  const [items, setItems] = useState<WorkbenchCheckItem[]>([])
+  const [allItems, setAllItems] = useState<WorkbenchCheckItem[]>([])
+  const [resolutions, setResolutions] = useState<ResolutionState>({
+    dismissedIssueIds: new Set(),
+    allowlistedDomains: new Set(),
+  })
+  const [listTab, setListTab] = useState<"open" | "closed">("open")
   const [alignedVersion, setAlignedVersion] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeId, setActiveId] = useState<string>("")
 
+  const loadResolutions = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/extensions/${encodeURIComponent(storeId)}/findings/resolutions`,
+        { cache: "no-store" },
+      )
+      if (!res.ok) return
+      const data = (await res.json()) as {
+        dismissals?: Array<{ issueId: string }>
+        allowlist?: Array<{ domain: string }>
+      }
+      setResolutions({
+        dismissedIssueIds: new Set(
+          (data.dismissals ?? []).map((d) => d.issueId).filter(Boolean),
+        ),
+        allowlistedDomains: new Set(
+          (data.allowlist ?? []).map((a) => a.domain.trim().toLowerCase()).filter(Boolean),
+        ),
+      })
+    } catch {
+      // Non-fatal; show unfiltered findings if resolutions fail to load.
+    }
+  }, [storeId])
+
   const load = useCallback(async () => {
     if (!storeId.trim()) {
-      setItems([])
+      setAllItems([])
       setLoading(false)
       return
     }
@@ -59,6 +99,8 @@ export function SubscribedDetectionWorkbench({
     let aiPayload: AiTestingLatestPayload | null = null
 
     try {
+      await loadResolutions()
+
       const staticRes = await fetch(`/api/extensions/${encodeURIComponent(storeId)}/latest`, {
         cache: "no-store",
       })
@@ -85,7 +127,7 @@ export function SubscribedDetectionWorkbench({
 
       if (!staticRes.ok && !staticPayload) {
         setLoadError("No static analysis or AI testing data available yet.")
-        setItems([])
+        setAllItems([])
         setActiveId("")
         return
       }
@@ -95,28 +137,49 @@ export function SubscribedDetectionWorkbench({
       setAlignedVersion(versionLabel)
 
       const built = buildWorkbenchCheckItems({ staticPayload, aiPayload })
-      setItems(built)
-      setActiveId((prev) => {
-        if (prev && built.some((i) => i.id === prev)) return prev
-        return built[0]?.id ?? ""
-      })
+      setAllItems(built)
     } catch {
       setLoadError("Failed to load findings.")
-      setItems([])
+      setAllItems([])
       setActiveId("")
     } finally {
       setLoading(false)
     }
-  }, [storeId, extensionVersionHint])
+  }, [storeId, extensionVersionHint, loadResolutions])
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
-  const active = useMemo(
-    () => items.find((item) => item.id === activeId) ?? items[0] ?? null,
-    [activeId, items],
+  const { open: openItems, closed: closedItems } = useMemo(
+    () => partitionWorkbenchFindings(allItems, resolutions),
+    [allItems, resolutions],
   )
+
+  const listItems = listTab === "open" ? openItems : closedItems
+
+  const openHighCriticalCount = useMemo(() => {
+    return applyFindingResolutions(
+      allItems.filter((i) => i.severity === "CRITICAL" || i.severity === "HIGH"),
+      resolutions,
+    ).length
+  }, [allItems, resolutions])
+
+  useEffect(() => {
+    setActiveId((prev) => {
+      if (prev && listItems.some((i) => i.id === prev)) return prev
+      return listItems[0]?.id ?? ""
+    })
+  }, [listItems, listTab])
+
+  const active = useMemo(
+    () => listItems.find((item) => item.id === activeId) ?? listItems[0] ?? null,
+    [activeId, listItems],
+  )
+
+  const handleResolutionChange = useCallback(() => {
+    void loadResolutions().then(() => load())
+  }, [loadResolutions, load])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:pb-8 md:pt-4">
@@ -131,25 +194,58 @@ export function SubscribedDetectionWorkbench({
           <div className="grid h-[calc(100dvh-8rem)] min-h-0 grid-cols-1 lg:grid-cols-[340px_1fr]">
             <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-muted/20">
               <div className="shrink-0 border-b p-3">
-                <div className="text-base font-semibold leading-snug">{extensionName}</div>
-                <div className="text-xs text-muted-foreground">
-                  {loading
-                    ? "Loading…"
-                    : alignedVersion
-                      ? `${items.length} finding${items.length === 1 ? "" : "s"} · version ${alignedVersion}`
-                      : `${items.length} finding${items.length === 1 ? "" : "s"}`}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold leading-snug">{extensionName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {loading
+                        ? "Loading…"
+                        : alignedVersion
+                          ? `${openItems.length} open · version ${alignedVersion}`
+                          : `${openItems.length} open finding${openItems.length === 1 ? "" : "s"}`}
+                    </div>
+                  </div>
+                  <ExtensionDomainAllowlistSheet
+                    storeId={storeId}
+                    onChanged={handleResolutionChange}
+                  />
                 </div>
+                <Tabs
+                  value={listTab}
+                  onValueChange={(v) => setListTab(v === "closed" ? "closed" : "open")}
+                  className="mt-3"
+                >
+                  <TabsList className="grid h-8 w-full grid-cols-2">
+                    <TabsTrigger value="open" className="text-xs">
+                      Open
+                      {!loading && openHighCriticalCount > 0 ? (
+                        <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                          {openHighCriticalCount}
+                        </Badge>
+                      ) : null}
+                    </TabsTrigger>
+                    <TabsTrigger value="closed" className="text-xs">
+                      Closed
+                      {!loading && closedItems.length > 0 ? (
+                        <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
+                          {closedItems.length}
+                        </Badge>
+                      ) : null}
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {loading ? (
                   <div className="p-3 text-sm text-muted-foreground">Loading findings…</div>
-                ) : items.length === 0 ? (
+                ) : listItems.length === 0 ? (
                   <div className="p-3 text-sm text-muted-foreground">
-                    No findings from the latest static scan or AI test match the current rules (e.g. broad permissions,
-                    flagged domains, runtime failures).
+                    {listTab === "open"
+                      ? "No open findings. Dismissed or allowlisted items appear under Closed."
+                      : "No closed findings yet."}
                   </div>
                 ) : (
-                  items.map((item) => (
+                  listItems.map((item) => (
                     <button
                       key={item.id}
                       type="button"
@@ -157,6 +253,7 @@ export function SubscribedDetectionWorkbench({
                       className={cn(
                         "mb-2 w-full rounded-md border p-3 text-left hover:bg-accent",
                         active && item.id === active.id ? "border-primary bg-accent" : "bg-background",
+                        listTab === "closed" && "opacity-80",
                       )}
                     >
                       <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -187,7 +284,14 @@ export function SubscribedDetectionWorkbench({
               {!active ? (
                 <div className="p-5 text-sm text-muted-foreground">Select a finding or wait for data to load.</div>
               ) : (
-                <IssueAiChatBox key={active.id} storeId={storeId} issue={active} />
+                <IssueAiChatBox
+                  key={active.id}
+                  storeId={storeId}
+                  issue={active}
+                  extensionVersion={alignedVersion}
+                  listTab={listTab}
+                  onResolutionChange={handleResolutionChange}
+                />
               )}
             </section>
           </div>

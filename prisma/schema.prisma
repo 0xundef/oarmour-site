@@ -45,6 +45,8 @@ model User {
   issueInvestigationChats IssueInvestigationChat[]
   issueInvestigationShares IssueInvestigationShare[]
   notificationSubscriptions NotificationSubscription[]
+  findingDismissals FindingDismissal[]
+  extensionDomainAllowlistEntries ExtensionDomainAllowlist[]
 
   // Stripe Subscription
   stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
@@ -217,6 +219,38 @@ model GlobalExtension {
   analysisResults ExtensionAnalysisResult[]
   aiAnalysisResults AiExtensionAnalysisResult[]
   notificationSubscriptions NotificationSubscription[]
+  domainAllowlistEntries ExtensionDomainAllowlist[]
+}
+
+model FindingDismissal {
+  id               String   @id @default(uuid())
+  userId           String
+  storeId          String
+  issueId          String
+  extensionVersion String?
+  reason           String
+  note             String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId, issueId])
+  @@index([userId, storeId])
+}
+
+model ExtensionDomainAllowlist {
+  id            String   @id @default(uuid())
+  storeId       String
+  domain        String
+  note          String?  @db.Text
+  addedByUserId String
+  createdAt     DateTime @default(now())
+
+  extension GlobalExtension @relation(fields: [storeId], references: [storeId], onDelete: Cascade)
+  addedBy   User            @relation(fields: [addedByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, domain])
+  @@index([storeId])
 }
 
 // Extension Analysis Results
