@@ -288,10 +288,13 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
                 {filteredAddedDomains.map(({ domain, signal, displayAgeDays }) => {
                   const isMalicious = signal?.isMalicious === true
                   return (
-                    <div key={domain} className="grid grid-cols-[1fr_132px] items-center gap-2">
-                      <div className="truncate">+ {domain}</div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="h-8 w-[86px] justify-center px-2 text-xl leading-none">
+                    <div key={domain} className="grid grid-cols-[1fr_7rem] items-center gap-2">
+                      <div className="min-w-0 truncate">+ {domain}</div>
+                      <div className="flex shrink-0 items-center justify-end gap-2">
+                        <Badge
+                          variant="secondary"
+                          className="h-8 w-[5.75rem] shrink-0 justify-center whitespace-nowrap px-1 text-xl leading-none"
+                        >
                           {formatDomainAgeDisplay(displayAgeDays)}
                         </Badge>
                         <span className={`inline-block h-5 w-5 rounded-full ${isMalicious ? "bg-red-500" : "bg-green-500"}`} />

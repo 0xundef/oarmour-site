@@ -888,10 +888,13 @@ export function ThreatAlerts() {
                   {filteredAddedDomains.map(({ domain, signal, displayAgeDays }) => {
                     const isMalicious = signal?.isMalicious === true
                     return (
-                    <div key={domain} className="mb-px grid grid-cols-[1fr_132px] items-center gap-2">
+                    <div key={domain} className="mb-px grid grid-cols-[1fr_5.5rem] items-center gap-2">
                       <div className="min-w-0 truncate">+ {domain}</div>
-                      <div className="flex items-center justify-start gap-2">
-                        <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
+                      <div className="flex shrink-0 items-center justify-end gap-2">
+                        <Badge
+                          variant="secondary"
+                          className="h-5 w-[4.75rem] shrink-0 justify-center whitespace-nowrap px-1 text-[10px] leading-none"
+                        >
                           {formatDomainAgeDisplay(displayAgeDays)}
                         </Badge>
                         <span
