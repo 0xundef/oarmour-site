@@ -7,6 +7,13 @@ export default withAuth(
     return NextResponse.next();
   },
   {
+    callbacks: {
+      authorized: ({ token }) => {
+        if (!token) return false;
+        if ((token as { blocked?: boolean }).blocked) return false;
+        return true;
+      },
+    },
     pages: {
       signIn: '/signin',
     },

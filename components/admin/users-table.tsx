@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ interface UserRow {
   name: string | null;
   email: string;
   role: string;
+  disabled: boolean;
   createdAt: Date;
   submissions: {
     id: string;
@@ -61,6 +63,7 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
   const [rows, setRows] = useState(users);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const [draftRole, setDraftRole] = useState<UserRole>("USER");
+  const [draftDisabled, setDraftDisabled] = useState(false);
 
   useEffect(() => {
     setRows(users);
@@ -69,33 +72,40 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
   const openEdit = (user: UserRow) => {
     setEditingUser(user);
     setDraftRole(user.role === "ADMIN" ? "ADMIN" : "USER");
+    setDraftDisabled(user.disabled);
   };
 
-  const saveRole = () => {
+  const saveUser = () => {
     if (!editingUser) return;
     startTransition(async () => {
       try {
         const res = await fetch(`/api/admin/users/${editingUser.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role: draftRole }),
+          body: JSON.stringify({ role: draftRole, disabled: draftDisabled }),
         });
         const payload = await res.json().catch(() => null);
         if (!res.ok) {
           const message =
-            typeof payload?.error === "string" ? payload.error : "Failed to update role";
+            typeof payload?.error === "string" ? payload.error : "Failed to update user";
           throw new Error(message);
         }
         setRows((prev) =>
           prev.map((row) =>
-            row.id === editingUser.id ? { ...row, role: draftRole } : row,
+            row.id === editingUser.id
+              ? { ...row, role: draftRole, disabled: draftDisabled }
+              : row,
           ),
         );
-        toast({ description: `Role updated to ${draftRole}` });
+        toast({
+          description: draftDisabled
+            ? "User disabled. They can no longer sign in."
+            : `User updated (${draftRole})`,
+        });
         setEditingUser(null);
         router.refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to update role";
+        const message = error instanceof Error ? error.message : "Failed to update user";
         toast({ variant: "destructive", description: message });
       }
     });
@@ -108,12 +118,13 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
       <div className="rounded-md border">
         <Table className="table-fixed">
           <colgroup>
-            <col className="w-[12%]" />
+            <col className="w-[11%]" />
             <col />
+            <col className="w-[8%]" />
+            <col className="w-[9%]" />
             <col className="w-[9%]" />
             <col className="w-[10%]" />
-            <col className="w-[11%]" />
-            <col className="w-[14%]" />
+            <col className="w-[12%]" />
             <col className="w-[10rem]" />
           </colgroup>
           <TableHeader>
@@ -121,6 +132,7 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
               <TableHead className="px-4">Name</TableHead>
               <TableHead className="px-4">Email</TableHead>
               <TableHead className="px-4">Role</TableHead>
+              <TableHead className="px-4">Status</TableHead>
               <TableHead className="px-4 text-right">Submissions</TableHead>
               <TableHead className="px-4 text-right">Subscriptions</TableHead>
               <TableHead className="whitespace-nowrap px-4">Joined</TableHead>
@@ -130,13 +142,13 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center">
+                <TableCell colSpan={8} className="text-center">
                   No users found.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.id} className={user.disabled ? "opacity-70" : undefined}>
                   <TableCell className="truncate px-4" title={user.name || "Unknown"}>
                     {user.name || "Unknown"}
                   </TableCell>
@@ -145,6 +157,13 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
                   </TableCell>
                   <TableCell className="px-4">
                     <Badge variant="outline">{user.role}</Badge>
+                  </TableCell>
+                  <TableCell className="px-4">
+                    {user.disabled ? (
+                      <Badge variant="destructive">Disabled</Badge>
+                    ) : (
+                      <Badge variant="secondary">Active</Badge>
+                    )}
                   </TableCell>
                   <TableCell className="px-4 text-right tabular-nums">
                     {user.submissions.length}
@@ -162,7 +181,7 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
                       size="sm"
                       disabled={pending}
                       onClick={() => openEdit(user)}
-                      aria-label={`Edit role for ${user.email}`}
+                      aria-label={`Edit ${user.email}`}
                     >
                       <Pencil className="mr-1.5 h-3.5 w-3.5" />
                       Edit
@@ -183,31 +202,53 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit user role</DialogTitle>
+            <DialogTitle>Edit user</DialogTitle>
             <DialogDescription>
               {editingUser
-                ? `Set role for ${editingUser.name || editingUser.email}.`
+                ? `Manage role and sign-in access for ${editingUser.name || editingUser.email}.`
                 : ""}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="user-role-select">Role</Label>
-            <Select
-              value={draftRole}
-              onValueChange={(value) => setDraftRole(value as UserRole)}
-              disabled={pending || (isSelf && draftRole === "ADMIN")}
-            >
-              <SelectTrigger id="user-role-select">
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="USER">Regular user</SelectItem>
-                <SelectItem value="ADMIN">Admin</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="user-role-select">Role</Label>
+              <Select
+                value={draftRole}
+                onValueChange={(value) => setDraftRole(value as UserRole)}
+                disabled={pending || isSelf}
+              >
+                <SelectTrigger id="user-role-select">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USER">Regular user</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              {isSelf ? (
+                <p className="text-xs text-muted-foreground">
+                  You cannot change your own role away from Admin.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="user-disabled-switch">Disabled</Label>
+                <p className="text-xs text-muted-foreground">
+                  Disabled users cannot sign in (email or OAuth).
+                </p>
+              </div>
+              <Switch
+                id="user-disabled-switch"
+                checked={draftDisabled}
+                onCheckedChange={setDraftDisabled}
+                disabled={pending || isSelf}
+                aria-label="Disable user account"
+              />
+            </div>
             {isSelf ? (
               <p className="text-xs text-muted-foreground">
-                You cannot change your own role away from Admin.
+                You cannot disable your own account.
               </p>
             ) : null}
           </div>
@@ -220,7 +261,7 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
             >
               Cancel
             </Button>
-            <Button type="button" disabled={pending} onClick={saveRole}>
+            <Button type="button" disabled={pending} onClick={saveUser}>
               Save
             </Button>
           </DialogFooter>

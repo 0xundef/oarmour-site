@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { clientIpFromHeaders } from "@/lib/request-ip";
 import { recordLoginActivity, resolveUserIdForLoginLog } from "@/lib/record-login-activity";
+import { isUserDisabled, isUserDisabledByEmail } from "@/lib/user-account-status";
 import bcrypt from "bcryptjs";
 
 const enableAdapter =
@@ -41,6 +42,8 @@ export const authOptions: NextAuthOptions = {
         const password = String(credentials?.password ?? "");
         if (!email || !password) return null;
 
+        if (await isUserDisabledByEmail(email)) return null;
+
         const user = await prisma.user.findUnique({
           where: { email },
           select: {
@@ -49,9 +52,10 @@ export const authOptions: NextAuthOptions = {
             email: true,
             password: true,
             role: true,
+            disabled: true,
           },
         });
-        if (!user?.password) return null;
+        if (!user?.password || user.disabled) return null;
 
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) return null;
@@ -72,6 +76,9 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       try {
         const userId = await resolveUserIdForLoginLog(user);
+        if (userId && (await isUserDisabled(userId))) {
+          return "/signin?error=AccountDisabled";
+        }
         if (userId) {
           const h = await headers();
           const ipAddress = clientIpFromHeaders(h);
@@ -87,6 +94,9 @@ export const authOptions: NextAuthOptions = {
       return baseUrl + '/dashboard';
     },
     async session({ session, token }) {
+      if ((token as { blocked?: boolean }).blocked) {
+        return { ...session, expires: new Date(0).toISOString() };
+      }
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.role = (token.role as any) ?? "USER";
@@ -98,6 +108,18 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as any).role ?? token.role ?? "USER";
         (token as any).email = (user as any).email ?? (token as any).email;
+      }
+      if (typeof token.id === "string") {
+        const row = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { disabled: true, role: true },
+        });
+        if (!row || row.disabled) {
+          (token as { blocked?: boolean }).blocked = true;
+          return token;
+        }
+        (token as { blocked?: boolean }).blocked = false;
+        token.role = row.role as typeof token.role;
       }
       const rawList = process.env.NEXTAUTH_DEV_ADMIN_EMAILS ?? "";
       const devListRaw =

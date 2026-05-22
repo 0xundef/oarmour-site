@@ -22,11 +22,14 @@ export default function UserAuthForm() {
   useEffect(() => {
     const registered = searchParams.get("registered");
     const registerError = searchParams.get("register_error");
+    const authError = searchParams.get("error");
     if (registered === "1") {
       setInfo("Email verified. Your account is now active. Please sign in.");
       setMode("login");
     } else if (registerError) {
       setError("Verification link is invalid or expired. Please request a new one.");
+    } else if (authError === "AccountDisabled" || authError === "AccessDenied") {
+      setError("This account has been disabled. Contact an administrator.");
     }
   }, [searchParams]);
 
@@ -73,7 +76,11 @@ export default function UserAuthForm() {
         callbackUrl,
       });
       if (result?.error) {
-        setError("Invalid email or password");
+        setError(
+          result.error === "AccessDenied"
+            ? "This account has been disabled. Contact an administrator."
+            : "Invalid email or password",
+        );
         return;
       }
       window.location.href = result?.url ?? callbackUrl;

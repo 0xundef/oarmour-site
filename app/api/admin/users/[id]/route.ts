@@ -23,23 +23,47 @@ export async function PATCH(
       return NextResponse.json({ error: "Missing id" }, { status: 400 })
     }
 
-    const body = (await req.json().catch(() => null)) as { role?: string } | null
-    const role = typeof body?.role === "string" ? body.role.trim().toUpperCase() : ""
-    if (!ALLOWED_ROLES.has(role)) {
-      return NextResponse.json({ error: "Role must be USER or ADMIN." }, { status: 400 })
+    const body = (await req.json().catch(() => null)) as {
+      role?: string
+      disabled?: boolean
+    } | null
+
+    const hasRole = typeof body?.role === "string"
+    const hasDisabled = typeof body?.disabled === "boolean"
+    if (!hasRole && !hasDisabled) {
+      return NextResponse.json({ error: "Nothing to update." }, { status: 400 })
     }
 
-    if (actor.id === id && role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "You cannot remove your own admin role." },
-        { status: 400 },
-      )
+    const data: { role?: "USER" | "ADMIN"; disabled?: boolean } = {}
+
+    if (hasRole) {
+      const role = body!.role!.trim().toUpperCase()
+      if (!ALLOWED_ROLES.has(role)) {
+        return NextResponse.json({ error: "Role must be USER or ADMIN." }, { status: 400 })
+      }
+      if (actor.id === id && role !== "ADMIN") {
+        return NextResponse.json(
+          { error: "You cannot remove your own admin role." },
+          { status: 400 },
+        )
+      }
+      data.role = role as "USER" | "ADMIN"
+    }
+
+    if (hasDisabled) {
+      if (actor.id === id && body!.disabled) {
+        return NextResponse.json(
+          { error: "You cannot disable your own account." },
+          { status: 400 },
+        )
+      }
+      data.disabled = body!.disabled
     }
 
     const updated = await prisma.user.update({
       where: { id },
-      data: { role: role as "USER" | "ADMIN" },
-      select: { id: true, name: true, email: true, role: true },
+      data,
+      select: { id: true, name: true, email: true, role: true, disabled: true },
     })
 
     return NextResponse.json({ ok: true, user: updated })
