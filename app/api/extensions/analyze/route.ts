@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
           data: {
             extensionId: dbId,
             status: 'PENDING',
+            version: extension?.version?.trim() || null,
           },
         })
       }
@@ -125,10 +126,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (extension) {
-        const analysis = await prisma.extensionAnalysisResult.findFirst({
-            where: { extensionId: extension.id, status: 'COMPLETED' },
-            orderBy: { createdAt: 'desc' }
-        });
+        const analysis = extension.version
+          ? await prisma.extensionAnalysisResult.findFirst({
+              where: {
+                extensionId: extension.id,
+                status: 'COMPLETED',
+                version: extension.version,
+              },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
 
         if (analysis) {
              if (submissionId) {

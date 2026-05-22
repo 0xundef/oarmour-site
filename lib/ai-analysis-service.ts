@@ -48,17 +48,20 @@ let lastDbUnavailableAiLogAt = 0
 
 export async function resolveStaticAnalysisForBatch(params: {
   extensionDbId: string
+  version?: string | null
   completedBefore?: Date
 }) {
   const completedBefore = params.completedBefore ?? new Date()
+  const version = params.version?.trim() || undefined
   return prisma.extensionAnalysisResult.findFirst({
     where: {
       extensionId: params.extensionDbId,
       status: 'COMPLETED',
+      ...(version ? { version } : {}),
       updatedAt: { lte: completedBefore },
     },
     orderBy: { updatedAt: 'desc' },
-    select: { id: true, domains: true, updatedAt: true },
+    select: { id: true, domains: true, updatedAt: true, version: true },
   })
 }
 
@@ -284,6 +287,7 @@ export async function processCompletedAiTestingRuns() {
       const completedBefore = entry.status_time ? new Date(entry.status_time) : new Date()
       const staticAnalysis = await resolveStaticAnalysisForBatch({
         extensionDbId: extension.id,
+        version,
         completedBefore,
       })
       if (!staticAnalysis) {

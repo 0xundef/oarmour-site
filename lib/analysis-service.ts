@@ -295,9 +295,11 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         where: {
             extensionId: dbId,
             status: 'COMPLETED',
+            id: { not: analysisId },
+            version: { not: versionSegment },
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, domains: true },
+        select: { id: true, domains: true, version: true },
     })
     const previousApexDomains = normalizeStoredDomainList(previousCompletedAnalysis?.domains || [])
     const previousApexDomainSet = new Set(previousApexDomains)
@@ -392,6 +394,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
         where: { id: analysisId },
         data: {
             status: 'COMPLETED',
+            version: versionSegment,
             domains: allUniqueApexDomains,
             ips: Array.from(results.ips).slice(0, 200),
             urls: Array.from(results.urls).slice(0, 200),
@@ -436,6 +439,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
 }
 
 async function runLookupForExtension(dbId: string, extensionId: string) {
+    const extRow = await prisma.globalExtension.findUnique({
+        where: { id: dbId },
+        select: { version: true },
+    })
+    const targetVersion = extRow?.version?.trim() || null
+
     const pendingAnalysis = await prisma.extensionAnalysisResult.findFirst({
         where: { extensionId: dbId, status: 'PENDING' },
         orderBy: { createdAt: 'asc' },
@@ -444,13 +453,14 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     const analysis = pendingAnalysis
         ? await prisma.extensionAnalysisResult.update({
             where: { id: pendingAnalysis.id },
-            data: { status: 'RUNNING', updatedAt: new Date() },
+            data: { status: 'RUNNING', version: targetVersion, updatedAt: new Date() },
             select: { id: true },
         })
         : await prisma.extensionAnalysisResult.create({
             data: {
                 extensionId: dbId,
                 status: 'RUNNING',
+                version: targetVersion,
             },
             select: { id: true },
         })
@@ -458,10 +468,7 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     const pendingDir = buildPendingDir(bucketRoot, extensionId);
     const pendingSourceDir = path.join(pendingDir, 'source');
     try {
-        const ext = await prisma.globalExtension.findUnique({
-            where: { id: dbId },
-            select: { version: true },
-        })
+        const ext = extRow
         const reusableSourceDir = resolveReusableAnalyzerSourceDir(extensionId, ext?.version)
         if (reusableSourceDir) {
             setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
@@ -505,6 +512,7 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
             where: { id: analysis.id },
             data: {
                 status: 'FAILED',
+                version: targetVersion,
                 updatedAt: new Date(),
             },
         })
@@ -543,10 +551,15 @@ export async function enqueueExtensionLookupJob(dbId: string, db: DbClient = pri
         select: { id: true },
     })
     if (!hasInFlightAnalysis) {
+        const ext = await db.globalExtension.findUnique({
+            where: { id: dbId },
+            select: { version: true },
+        })
         await db.extensionAnalysisResult.create({
             data: {
                 extensionId: dbId,
                 status: 'PENDING',
+                version: ext?.version?.trim() || null,
             },
         })
     }
@@ -783,10 +796,12 @@ export async function processExtension(extensionId: string, downloadUrl?: string
 
 export async function triggerAsyncAnalysis(dbId: string, extensionId: string, sourceDir: string) {
     try {
+        const versionFromDir = path.basename(path.resolve(sourceDir))
         const analysis = await prisma.extensionAnalysisResult.create({
             data: {
                 extensionId: dbId,
                 status: 'RUNNING',
+                version: versionFromDir || null,
             },
             select: { id: true },
         });

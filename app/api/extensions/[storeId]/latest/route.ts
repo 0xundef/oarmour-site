@@ -129,19 +129,41 @@ export async function GET(
     if (!ext) {
       return NextResponse.json({ error: 'Extension not found' }, { status: 404 })
     }
-    const results = await prisma.extensionAnalysisResult.findMany({
-      where: { extensionId: ext.id },
-      orderBy: { createdAt: 'desc' },
-      take: 2,
-      select: { id: true, domains: true, ips: true, urls: true, filesScanned: true, status: true },
-    })
-    if (results.length === 0) {
-      return NextResponse.json({ error: 'No analysis found' }, { status: 404 })
+
+    const versionSegment = typeof ext.version === 'string' && ext.version.trim() ? ext.version.trim() : ''
+    if (!versionSegment) {
+      return NextResponse.json({ error: 'Extension version not set' }, { status: 404 })
     }
-    const latest = results[0]
-    const previous = results[1]
+
+    const latest = await prisma.extensionAnalysisResult.findFirst({
+      where: {
+        extensionId: ext.id,
+        status: 'COMPLETED',
+        version: versionSegment,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, domains: true, ips: true, urls: true, filesScanned: true, status: true, version: true },
+    })
+
+    if (!latest) {
+      return NextResponse.json(
+        { error: 'No completed static analysis for current extension version', extensionVersion: versionSegment },
+        { status: 404 },
+      )
+    }
+
+    const previous = await prisma.extensionAnalysisResult.findFirst({
+      where: {
+        extensionId: ext.id,
+        status: 'COMPLETED',
+        version: { not: versionSegment },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, domains: true, ips: true },
+    })
+
     const snapshot = await prisma.assetSnapshot.findFirst({
-      where: { targetType: 'EXTENSION', targetId: ext.id },
+      where: { targetType: 'EXTENSION', targetId: ext.id, version: versionSegment },
       orderBy: { capturedAt: 'desc' },
       select: { metadata: true },
     })
@@ -167,8 +189,7 @@ export async function GET(
         select: { id: true, domain: true, createdDate: true, isMalicious: true },
       })
       : []
-    const versionSegment = typeof ext.version === 'string' && ext.version.trim() ? ext.version.trim() : ''
-    const sourceFilesByApex = versionSegment ? loadDomainSourceFilesByApex(storeId, versionSegment) : {}
+    const sourceFilesByApex = loadDomainSourceFilesByApex(storeId, versionSegment)
 
     const latestDomainSignals = topEnrichments.map((item) => {
       const apexKey = normalizeApexDomain(item.domain)
@@ -182,14 +203,17 @@ export async function GET(
     })
     console.warn('[analysis] latestRoute:domainDiff', {
       storeId,
+      extensionVersion: versionSegment,
       latestAnalysisId: latest.id,
+      latestAnalysisVersion: latest.version,
       previousAnalysisId: previous?.id ?? null,
       prev_domains: prevDomains.length,
       curr_domains: latestDomains.length,
       diff_domains: addedDomains.length,
     })
     return NextResponse.json({
-      extensionVersion: versionSegment || null,
+      extensionVersion: versionSegment,
+      analysisVersion: latest.version,
       status: latest.status,
       filesScanned: latest.filesScanned,
       totalDomains: latestDomains.length,

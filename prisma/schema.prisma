@@ -224,7 +224,9 @@ model ExtensionAnalysisResult {
   
   // Status
   status      JobStatus @default(PENDING)
-  
+  /// Package version this analysis run targeted (matches GlobalExtension.version when completed).
+  version     String?
+
   // Extracted Intelligence
   domains     String[] // Stored as array of strings
   ips         String[]
@@ -237,6 +239,8 @@ model ExtensionAnalysisResult {
   extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
   domainEnrichments DomainEnrichment[]
   aiAnalysisResults AiExtensionAnalysisResult[]
+
+  @@index([extensionId, version, status])
 }
 
 // Runtime network analysis after AI browser testing (diff vs same-batch static domains)
