@@ -4,6 +4,9 @@ export function formatDomainAgeDisplay(days: number): string {
   if (d >= 365) {
     return `${(d / 365).toFixed(1)} year`
   }
+  if (d >= 30) {
+    return `${Math.floor(d / 30)} month`
+  }
   if (d >= 7) {
     return `${Math.floor(d / 7)} week`
   }
