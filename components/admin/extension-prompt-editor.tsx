@@ -26,7 +26,7 @@ export function ExtensionPromptEditor({
         <p className="text-sm font-medium">AI test prompt (prompt.md)</p>
         <p className="text-xs text-muted-foreground">Markdown · used by browser agent</p>
       </div>
-      <Tabs defaultValue="edit" className="w-full">
+      <Tabs defaultValue="preview" className="w-full">
         <TabsList>
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
