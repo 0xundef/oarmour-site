@@ -61,9 +61,14 @@ const buildPendingDir = (bucketRoot: string, extensionId: string) => {
 const resolveReusableAnalyzerSourceDir = (extensionId: string, version: string | null | undefined) => {
     const analyzerRoot = getExtensionAnalyzerRoot()
     const extensionRoot = path.join(analyzerRoot, extensionId)
-    const preferred = path.join(extensionRoot, toPathSegment(version, 'unknown'))
-    if (fs.existsSync(preferred) && !!findManifestPath(preferred)) {
-        return preferred
+    const versionSegment = version?.trim() || ''
+    if (versionSegment) {
+        const preferred = path.join(extensionRoot, toPathSegment(versionSegment, 'unknown'))
+        if (fs.existsSync(preferred) && !!findManifestPath(preferred)) {
+            return preferred
+        }
+        // Pending/new target version must be downloaded; do not scan an older on-disk tree.
+        return null
     }
     if (!fs.existsSync(extensionRoot)) return null
     let entries: fs.Dirent[] = []
@@ -464,7 +469,7 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
             logInfo('[analysis] runLookupForExtension:reusedExtractedSource', {
                 extensionId,
                 sourceDir: reusableSourceDir,
-                version: ext?.version ?? null,
+                targetVersion,
                 analysisId: analysis.id,
             })
             await runLookupFromSource(dbId, extensionId, analysis.id, reusableSourceDir)
