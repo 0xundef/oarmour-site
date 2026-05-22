@@ -263,3 +263,12 @@ export function buildWorkbenchCheckItems(params: {
       detectedAt: item.source === 'static' ? staticAt : aiAt,
     }))
 }
+
+export function countHighCriticalWorkbenchFindings(params: {
+  staticPayload: StaticLatestPayload | null
+  aiPayload: AiTestingLatestPayload | null
+}): number {
+  return buildWorkbenchCheckItems(params).filter(
+    (item) => item.severity === 'CRITICAL' || item.severity === 'HIGH',
+  ).length
+}

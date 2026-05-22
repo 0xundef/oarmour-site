@@ -6,6 +6,8 @@ export interface NavItem {
   disabled?: boolean;
   external?: boolean;
   icon?: keyof typeof Icons;
+  /** Count of HIGH + CRITICAL workbench findings for subscribed extension rows */
+  highCriticalCount?: number;
   label?: string;
   description?: string;
   tree?: boolean;

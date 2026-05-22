@@ -2,6 +2,7 @@ import SidebarClient from "./sidebar-client";
 import { navItems } from "@/constants/data";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { countHighCriticalFindingsForSubscribed } from "@/lib/subscribed-finding-count";
 
 export default async function Sidebar() {
   const user = await getCurrentUser();
@@ -9,7 +10,7 @@ export default async function Sidebar() {
   const notificationSubscriptionModel = (prisma as unknown as {
     notificationSubscription?: {
       findMany: (...args: unknown[]) => Promise<Array<{
-        extension: { storeId: string; name: string }
+        extension: { storeId: string; name: string; version: string | null }
       }>>
     }
   }).notificationSubscription
@@ -31,7 +32,7 @@ export default async function Sidebar() {
         orderBy: { createdAt: "desc" },
         select: {
           extension: {
-            select: { storeId: true, name: true },
+            select: { storeId: true, name: true, version: true },
           },
         },
       })
@@ -46,11 +47,17 @@ export default async function Sidebar() {
     tree: true,
     items:
       subscribedChildren.length > 0
-        ? subscribedChildren.map((item) => ({
-            title: item.extension.name || item.extension.storeId,
-            href: `/dashboard/subscribed/${encodeURIComponent(item.extension.storeId)}`,
-            icon: "check",
-          }))
+        ? await Promise.all(
+            subscribedChildren.map(async (item) => ({
+              title: item.extension.name || item.extension.storeId,
+              href: `/dashboard/subscribed/${encodeURIComponent(item.extension.storeId)}`,
+              icon: "check" as const,
+              highCriticalCount: await countHighCriticalFindingsForSubscribed(
+                item.extension.storeId,
+                item.extension.version,
+              ),
+            })),
+          )
         : [
             {
               title: "No subscriptions",

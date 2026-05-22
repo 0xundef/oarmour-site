@@ -8,6 +8,49 @@ import { cn } from "@/lib/utils";
 import { NavItem } from "@/types";
 import { Dispatch, SetStateAction, useState } from "react";
 
+function SubscribedStatusIcon({
+  count,
+  compact,
+}: {
+  count: number;
+  compact?: boolean;
+}) {
+  const dotClass = compact ? "h-3.5 w-3.5" : "h-4 w-4";
+
+  if (count > 0) {
+    const label = count > 99 ? "99+" : String(count);
+    return (
+      <span
+        className={cn(
+          "mr-2 flex shrink-0 items-center justify-center rounded-full bg-red-500 font-semibold leading-none text-white",
+          compact ? "min-w-3.5 px-0.5 text-[8px]" : "min-w-4 px-0.5 text-[9px]",
+          dotClass,
+        )}
+        aria-label={`${count} high or critical finding${count === 1 ? "" : "s"}`}
+        title={`${count} high or critical finding${count === 1 ? "" : "s"}`}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn("mr-2 shrink-0 rounded-full bg-emerald-500", dotClass)}
+      aria-label="No high or critical findings"
+      title="No high or critical findings"
+    />
+  );
+}
+
+function renderSubscribedChildLeading(child: NavItem, compact?: boolean) {
+  if (child.highCriticalCount != null) {
+    return <SubscribedStatusIcon count={child.highCriticalCount} compact={compact} />;
+  }
+  const ChildIcon = Icons[child.icon || "arrowRight"];
+  return <ChildIcon className={cn(compact ? "h-4 w-4" : "mr-2 h-4 w-4", compact && "h-3.5 w-3.5")} />;
+}
+
 interface DashboardNavProps {
   items: NavItem[];
   setOpen?: Dispatch<SetStateAction<boolean>>;
@@ -99,7 +142,6 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
               ) : (
                 <div className="space-y-1">
                   {item.items?.map((child) => {
-                    const ChildIcon = Icons[child.icon || "arrowRight"];
                     return child.href ? (
                       <Link
                         key={child.href}
@@ -120,7 +162,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                           )}
                           title={child.title}
                         >
-                          <ChildIcon className="h-4 w-4" />
+                          {renderSubscribedChildLeading(child, true)}
                         </span>
                       </Link>
                     ) : null;
@@ -147,7 +189,6 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                 )}
               >
                 {item.items?.map((child) => {
-                  const ChildIcon = Icons[child.icon || "arrowRight"];
                   return child.href ? (
                     <Link
                       key={child.href}
@@ -168,7 +209,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
                           child.disabled && "opacity-80"
                         )}
                       >
-                        <ChildIcon className={cn("mr-2 h-4 w-4", treeMode && "h-3.5 w-3.5 text-emerald-500")} />
+                        {renderSubscribedChildLeading(child, treeMode)}
                         {child.title}
                       </span>
                     </Link>
