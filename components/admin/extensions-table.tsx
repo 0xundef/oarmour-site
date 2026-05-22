@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Play, Trash2 } from "lucide-react";
+import { Copy, Pencil, Play, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -86,6 +86,18 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     Record<string, AiTestingStatusEntry>
   >({});
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
+
+  const copyStoreId = async (storeId: string) => {
+    try {
+      await navigator.clipboard.writeText(storeId);
+      toast({ description: "Extension ID copied to clipboard" });
+    } catch {
+      toast({
+        variant: "destructive",
+        description: "Copy failed. Please allow clipboard access.",
+      });
+    }
+  };
 
   useEffect(() => {
     setRows(extensions);
@@ -380,7 +392,22 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
             ) : (
               rows.map((ext) => (
                 <TableRow key={ext.id}>
-                  <TableCell className="truncate px-4">{ext.name}</TableCell>
+                  <TableCell className="px-4">
+                    <div className="flex min-w-0 items-center gap-0.5">
+                      <span className="truncate">{ext.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        title="Copy Extension ID"
+                        aria-label={`Copy extension ID for ${ext.name}`}
+                        onClick={() => void copyStoreId(ext.storeId)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="w-28 whitespace-nowrap px-4">{ext.version || "N/A"}</TableCell>
                   <TableCell className="w-48 whitespace-nowrap px-4 text-muted-foreground">
                     {formatLastUpdate(ext.updatedAt)}
