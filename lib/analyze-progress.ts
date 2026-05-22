@@ -67,6 +67,10 @@ export function setAnalyzeDownloadProgress(extensionId: string, bytesReceived: n
   })
 }
 
+export function clearAnalyzeProgress(extensionId: string) {
+  progressStore.delete(extensionId)
+}
+
 export function getAnalyzeProgress(extensionId: string) {
   const current = progressStore.get(extensionId)
   if (!current) return null

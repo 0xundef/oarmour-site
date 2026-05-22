@@ -1,6 +1,7 @@
 import 'server-only'
 import fs from 'fs'
 import path from 'path'
+import { clearAnalyzeProgress } from '@/lib/analyze-progress'
 import { prisma } from '@/lib/prisma'
 import {
   EXTENSION_SIDE_DATA_DIRNAME,
@@ -204,5 +205,110 @@ export async function deleteExtensionVersion(params: {
     deletedVersion: version,
     nextGlobalVersion: nextPointers?.version?.trim() || null,
     nextPendingVersion: nextPointers?.pendingVersion?.trim() || null,
+  }
+}
+
+/** Remove `_pending-*` scratch dirs under chrome-extension-analyzer/<storeId>/ only. */
+export function removeAnalyzerPendingScratchDirs(storeId: string): string[] {
+  const artifactRoot = path.join(getExtensionAnalyzerRoot(), storeId)
+  if (!fs.existsSync(artifactRoot)) return []
+  const removed: string[] = []
+  for (const entry of fs.readdirSync(artifactRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('_pending-')) continue
+    const dirPath = path.join(artifactRoot, entry.name)
+    rmDirIfExists(dirPath)
+    removed.push(dirPath)
+  }
+  return removed
+}
+
+export type ClearPendingHalfStateResult = {
+  storeId: string
+  clearedPendingVersion: string | null
+  detectedVersion: string | null
+  deletedScanJobs: number
+  deletedInFlightAnalysisRows: number
+  removedDiskPaths: string[]
+  nextPendingVersion: string | null
+}
+
+/**
+ * Drops incomplete pending-target work for one extension. Never removes a COMPLETED
+ * detected version's artifacts when pending differs from detected.
+ */
+export async function clearExtensionPendingHalfState(params: {
+  extensionId: string
+  storeId: string
+}): Promise<ClearPendingHalfStateResult> {
+  const ext = await prisma.globalExtension.findUnique({
+    where: { id: params.extensionId },
+    select: { version: true, pendingVersion: true, storeId: true },
+  })
+  if (!ext) {
+    throw new Error('Extension not found')
+  }
+  if (ext.storeId !== params.storeId) {
+    throw new Error('storeId does not match extension')
+  }
+
+  const detected = ext.version?.trim() || null
+  const pending = ext.pendingVersion?.trim() || null
+  const removedDiskPaths: string[] = []
+
+  if (pending && pending !== detected) {
+    await deleteExtensionVersion({
+      extensionId: params.extensionId,
+      storeId: params.storeId,
+      version: pending,
+    })
+    removedDiskPaths.push(
+      getExtensionSidecarRoot(params.storeId, pending),
+      getExtensionArtifactRoot(params.storeId, pending),
+    )
+  }
+
+  const { deletedScanJobs, deletedInFlightAnalysisRows } = await prisma.$transaction(async (tx) => {
+    const scanResult = await tx.scanJob.deleteMany({
+      where: {
+        targetType: 'EXTENSION',
+        targetId: params.extensionId,
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+    })
+
+    const analysisResult = await tx.extensionAnalysisResult.deleteMany({
+      where: {
+        extensionId: params.extensionId,
+        status: { in: ['PENDING', 'RUNNING', 'FAILED'] },
+      },
+    })
+
+    await tx.globalExtension.update({
+      where: { id: params.extensionId },
+      data: { pendingVersion: null, updatedAt: new Date() },
+    })
+
+    return {
+      deletedScanJobs: scanResult.count,
+      deletedInFlightAnalysisRows: analysisResult.count,
+    }
+  })
+
+  removedDiskPaths.push(...removeAnalyzerPendingScratchDirs(params.storeId))
+  clearAnalyzeProgress(params.storeId)
+
+  const next = await prisma.globalExtension.findUnique({
+    where: { id: params.extensionId },
+    select: { pendingVersion: true },
+  })
+
+  return {
+    storeId: params.storeId,
+    clearedPendingVersion: pending,
+    detectedVersion: detected,
+    deletedScanJobs,
+    deletedInFlightAnalysisRows,
+    removedDiskPaths,
+    nextPendingVersion: next?.pendingVersion?.trim() || null,
   }
 }

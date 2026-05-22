@@ -70,6 +70,10 @@ function formatVersionCell(value?: string | null) {
   return value?.trim() ? value.trim() : "N/A";
 }
 
+function hasPendingHalfState(ext: ExtRow) {
+  return Boolean(ext.pendingVersion?.trim())
+}
+
 function formatLastUpdate(iso?: string | null) {
   if (!iso) return "N/A";
   const date = new Date(iso);
@@ -337,6 +341,45 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
+  const clearPendingHalfState = (ext: ExtRow) => {
+    if (!hasPendingHalfState(ext)) {
+      toast({ description: "No pending half-state to clear for this extension." });
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/admin/extensions/${encodeURIComponent(ext.id)}/clear-pending`, {
+          method: "POST",
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const message = typeof payload?.error === "string" ? payload.error : "Clear pending failed";
+          throw new Error(message);
+        }
+        const cleared = typeof payload?.clearedPendingVersion === "string" ? payload.clearedPendingVersion : null;
+        toast({
+          description: cleared
+            ? `Cleared pending ${cleared} (DB queue, in-flight analysis, and scratch files). Detected version unchanged.`
+            : "Cleared in-flight jobs and scratch files. Pending pointer reset.",
+        });
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === ext.id
+              ? {
+                  ...r,
+                  pendingVersion: null,
+                }
+              : r,
+          ),
+        );
+        router.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Clear pending failed";
+        toast({ variant: "destructive", description: message });
+      }
+    });
+  };
+
   const runImmediateCheck = (ext: ExtRow) => {
     if (!ext.isMonitored) {
       toast({ variant: "destructive", description: "Monitoring is not enabled for this extension. Enable it first." });
@@ -470,6 +513,18 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         onTriggered={handleAiTestingTriggered}
                         disabled={pending}
                       />
+                      {hasPendingHalfState(ext) ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => clearPendingHalfState(ext)}
+                          aria-label="Clear pending half-state"
+                          title="Remove pending version, in-flight scan jobs, failed analysis rows, and _pending-* scratch dirs. Does not delete the detected (completed) version."
+                        >
+                          Clear pending
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
                         size="sm"
