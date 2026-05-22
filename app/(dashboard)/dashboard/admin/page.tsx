@@ -52,7 +52,7 @@ export default async function AdminPage({
     });
     title = "Users";
     description = "Review registered users, roles, and submission activity.";
-    content = <UsersTable users={users} />;
+    content = <UsersTable users={users} currentAdminId={user.id} />;
   }
 
   if (section === "audit") {
