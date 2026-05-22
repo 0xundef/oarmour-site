@@ -15,6 +15,7 @@ export type WorkbenchCheckItem = {
 }
 
 export type StaticLatestPayload = {
+  extensionVersion?: string | null
   addedDomains?: string[]
   topDomainSignals?: Array<{
     topDomainSignalId: string | null

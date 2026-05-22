@@ -17,14 +17,16 @@ export default async function SubscribedExtensionPage({
   const storeId = decodeURIComponent(rawExtensionId);
   const extension = await prisma.globalExtension.findFirst({
     where: { storeId },
-    select: { name: true },
+    select: { name: true, version: true },
   });
   const extensionName = extension?.name?.trim() || storeId;
+  const extensionVersion = extension?.version?.trim() || null;
 
   return (
     <SubscribedDetectionWorkbench
       storeId={storeId}
       extensionName={extensionName}
+      extensionVersion={extensionVersion}
     />
   );
 }

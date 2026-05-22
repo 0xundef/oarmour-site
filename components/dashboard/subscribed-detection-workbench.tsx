@@ -28,14 +28,30 @@ function categoryBadgeClass() {
   return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
 }
 
+/** Normalize manifest DB version vs unpacked dir suffix (e.g. 2.68.0 vs 2.68.0_0). */
+function normalizeExtensionVersion(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim()
+  if (!trimmed) return ""
+  return trimmed.replace(/_0+$/, "")
+}
+
+function versionsAligned(staticVersion: string, aiVersion: string): boolean {
+  const a = normalizeExtensionVersion(staticVersion)
+  const b = normalizeExtensionVersion(aiVersion)
+  return a.length > 0 && a === b
+}
+
 export function SubscribedDetectionWorkbench({
   storeId,
   extensionName,
+  extensionVersion: extensionVersionHint,
 }: {
   storeId: string
   extensionName: string
+  extensionVersion?: string | null
 }) {
   const [items, setItems] = useState<WorkbenchCheckItem[]>([])
+  const [alignedVersion, setAlignedVersion] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [activeId, setActiveId] = useState<string>("")
@@ -48,28 +64,45 @@ export function SubscribedDetectionWorkbench({
     }
     setLoading(true)
     setLoadError("")
+    setAlignedVersion(null)
     let staticPayload: StaticLatestPayload | null = null
     let aiPayload: AiTestingLatestPayload | null = null
 
     try {
-      const [staticRes, aiRes] = await Promise.all([
-        fetch(`/api/extensions/${encodeURIComponent(storeId)}/latest`, { cache: "no-store" }),
-        fetch(`/api/ai-testing/${encodeURIComponent(storeId)}/latest`, { cache: "no-store" }),
-      ])
+      const staticRes = await fetch(`/api/extensions/${encodeURIComponent(storeId)}/latest`, {
+        cache: "no-store",
+      })
 
       if (staticRes.ok) {
         staticPayload = (await staticRes.json()) as StaticLatestPayload
       }
-      if (aiRes.ok) {
-        aiPayload = (await aiRes.json()) as AiTestingLatestPayload
+
+      const staticVersion =
+        (typeof staticPayload?.extensionVersion === "string" && staticPayload.extensionVersion.trim()) ||
+        extensionVersionHint?.trim() ||
+        ""
+
+      if (staticVersion) {
+        const aiUrl = `/api/ai-testing/${encodeURIComponent(storeId)}/latest?version=${encodeURIComponent(staticVersion)}`
+        const aiRes = await fetch(aiUrl, { cache: "no-store" })
+        if (aiRes.ok) {
+          const candidate = (await aiRes.json()) as AiTestingLatestPayload
+          if (versionsAligned(staticVersion, candidate.version ?? "")) {
+            aiPayload = candidate
+          }
+        }
       }
 
-      if (!staticRes.ok && !aiRes.ok) {
+      if (!staticRes.ok && !staticPayload) {
         setLoadError("No static analysis or AI testing data available yet.")
         setItems([])
         setActiveId("")
         return
       }
+
+      const versionLabel =
+        staticVersion && aiPayload ? normalizeExtensionVersion(staticVersion) : null
+      setAlignedVersion(versionLabel)
 
       const built = buildWorkbenchCheckItems({ staticPayload, aiPayload })
       setItems(built)
@@ -84,7 +117,7 @@ export function SubscribedDetectionWorkbench({
     } finally {
       setLoading(false)
     }
-  }, [storeId])
+  }, [storeId, extensionVersionHint])
 
   useEffect(() => {
     load()
@@ -110,7 +143,11 @@ export function SubscribedDetectionWorkbench({
               <div className="shrink-0 border-b p-3">
                 <div className="text-base font-semibold leading-snug">{extensionName}</div>
                 <div className="text-xs text-muted-foreground">
-                  {loading ? "Loading…" : `${items.length} finding${items.length === 1 ? "" : "s"}`}
+                  {loading
+                    ? "Loading…"
+                    : alignedVersion
+                      ? `${items.length} finding${items.length === 1 ? "" : "s"} · version ${alignedVersion}`
+                      : `${items.length} finding${items.length === 1 ? "" : "s"}`}
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">

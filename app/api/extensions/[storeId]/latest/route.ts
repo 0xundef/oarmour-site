@@ -189,6 +189,7 @@ export async function GET(
       diff_domains: addedDomains.length,
     })
     return NextResponse.json({
+      extensionVersion: versionSegment || null,
       status: latest.status,
       filesScanned: latest.filesScanned,
       totalDomains: latestDomains.length,
