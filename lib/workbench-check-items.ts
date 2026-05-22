@@ -33,6 +33,19 @@ export type StaticLatestPayload = {
   }
 }
 
+/** Normalize manifest DB version vs unpacked dir suffix (e.g. 2.68.0 vs 2.68.0_0). */
+export function normalizeExtensionVersion(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed || trimmed === 'N/A') return ''
+  return trimmed.replace(/_0+$/, '')
+}
+
+export function versionsAligned(staticVersion: string, aiVersion: string): boolean {
+  const a = normalizeExtensionVersion(staticVersion)
+  const b = normalizeExtensionVersion(aiVersion)
+  return a.length > 0 && a === b
+}
+
 function severityRank(s: WorkbenchCheckSeverity): number {
   if (s === 'CRITICAL') return 0
   if (s === 'HIGH') return 1

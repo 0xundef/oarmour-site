@@ -18,6 +18,12 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
 import { buildDashboardDownloadUrl, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
+import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
+import {
+  normalizeExtensionVersion,
+  resolveAiTestedAt,
+  versionsAligned,
+} from "@/lib/workbench-check-items"
 
 type ThreatAlert = {
   id: string
@@ -267,6 +273,7 @@ export function ThreatAlerts() {
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
   const [details, setDetails] = useState<{
+    staticAnalyzedAt?: string | null
     addedDomains: string[]
     urls: string[]
     filesScanned: number
@@ -293,6 +300,7 @@ export function ThreatAlerts() {
     }
   } | null>(null)
   const [aiTestingSummary, setAiTestingSummary] = useState<AiTestingSummary | null>(null)
+  const [aiTestingPayload, setAiTestingPayload] = useState<AiTestingLatestPayload | null>(null)
   const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(false)
   const aiTestingSummaryAbortRef = useRef<AbortController | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
@@ -507,6 +515,7 @@ export function ThreatAlerts() {
     const loadAiTestingSummary = async () => {
       if (!selected || !open) {
         setAiTestingSummary(null)
+        setAiTestingPayload(null)
         setAiTestingSummaryLoading(false)
         return
       }
@@ -518,21 +527,36 @@ export function ThreatAlerts() {
       setAiTestingSummaryLoading(true)
       try {
         const extId = selected.extensionId
-        const res = await fetch(`/api/ai-testing/${encodeURIComponent(extId)}/latest`, {
+        const staticVersion = normalizeExtensionVersion(selected.version)
+        const aiUrl =
+          staticVersion.length > 0
+            ? `/api/ai-testing/${encodeURIComponent(extId)}/latest?version=${encodeURIComponent(staticVersion)}`
+            : `/api/ai-testing/${encodeURIComponent(extId)}/latest`
+        const res = await fetch(aiUrl, {
           signal: controller.signal,
           cache: 'no-store',
         })
         if (aiTestingSummaryAbortRef.current !== controller || selected.extensionId !== extId) return
         if (!res.ok) {
           setAiTestingSummary(buildAiTestingSummary(null))
+          setAiTestingPayload(null)
           return
         }
         const json = (await res.json()) as AiTestingLatestPayload
-        setAiTestingSummary(buildAiTestingSummary(json))
+        const aligned =
+          staticVersion.length > 0 && versionsAligned(staticVersion, json.version ?? '')
+        if (aligned) {
+          setAiTestingPayload(json)
+          setAiTestingSummary(buildAiTestingSummary(json))
+        } else {
+          setAiTestingPayload(null)
+          setAiTestingSummary(buildAiTestingSummary(null))
+        }
       } catch (e) {
         if (isAbortError(e)) return
         if (aiTestingSummaryAbortRef.current === controller) {
           setAiTestingSummary(buildAiTestingSummary(null))
+          setAiTestingPayload(null)
         }
       } finally {
         if (aiTestingSummaryAbortRef.current === controller) {
@@ -665,6 +689,9 @@ export function ThreatAlerts() {
       ...(details?.addedDomains || []),
     ]),
   )
+
+  const staticScanLabel = formatFindingRunLabel('static', details?.staticAnalyzedAt)
+  const aiTestLabel = formatFindingRunLabel('ai', resolveAiTestedAt(aiTestingPayload))
 
   const filteredAddedDomains = prioritizedDomains
     .slice(0, 10)
@@ -879,6 +906,7 @@ export function ThreatAlerts() {
                     <div className="text-muted-foreground">Loading...</div>
                   ) : (
                     <>
+                      <div className="mb-1">{staticScanLabel}</div>
                       <div className="mb-1">Total: {details.totalDomains}</div>
                       <div className="mb-1">New since last analysis: {(details.addedDomains || []).length}</div>
                       <div className="mb-1">Files scanned (static): {details.filesScanned}</div>
@@ -914,6 +942,7 @@ export function ThreatAlerts() {
                     <div className="text-muted-foreground">Loading...</div>
                   ) : (
                     <>
+                      <div className="mb-1">{aiTestLabel}</div>
                       <div className="mb-1">
                         Run: {aiTestingSummary?.hasRun ? aiTestingSummary.runId : '—'}
                       </div>

@@ -9,6 +9,8 @@ import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
   buildWorkbenchCheckItems,
+  normalizeExtensionVersion,
+  versionsAligned,
   type StaticLatestPayload,
   type WorkbenchCheckItem,
   type WorkbenchCheckSeverity,
@@ -27,19 +29,6 @@ function sourceBadgeClass(source: WorkbenchCheckItem["source"]) {
 
 function categoryBadgeClass() {
   return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
-}
-
-/** Normalize manifest DB version vs unpacked dir suffix (e.g. 2.68.0 vs 2.68.0_0). */
-function normalizeExtensionVersion(value: string | null | undefined): string {
-  const trimmed = (value ?? "").trim()
-  if (!trimmed) return ""
-  return trimmed.replace(/_0+$/, "")
-}
-
-function versionsAligned(staticVersion: string, aiVersion: string): boolean {
-  const a = normalizeExtensionVersion(staticVersion)
-  const b = normalizeExtensionVersion(aiVersion)
-  return a.length > 0 && a === b
 }
 
 export function SubscribedDetectionWorkbench({
