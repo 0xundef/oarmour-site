@@ -11,6 +11,9 @@ export type AiTestingLatestAnalysis = {
   runtimeDomains?: string[]
   novelDomains?: string[]
   networkRequestCount?: number | null
+  networkCapturedAt?: string | Date | null
+  createdAt?: string | Date | null
+  updatedAt?: string | Date | null
   domainEnrichments?: AiTestingDomainEnrichment[]
 }
 
@@ -19,6 +22,7 @@ export type AiTestingLatestPayload = {
   network?: { requestCount?: number } | null
   aiAnalysis?: AiTestingLatestAnalysis | null
   status?: string | null
+  statusTime?: string | null
   runId?: string
   version?: string
 }

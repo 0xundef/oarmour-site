@@ -142,7 +142,16 @@ export async function GET(
         version: versionSegment,
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, domains: true, ips: true, urls: true, filesScanned: true, status: true, version: true },
+      select: {
+        id: true,
+        domains: true,
+        ips: true,
+        urls: true,
+        filesScanned: true,
+        status: true,
+        version: true,
+        updatedAt: true,
+      },
     })
 
     if (!latest) {
@@ -214,6 +223,7 @@ export async function GET(
     return NextResponse.json({
       extensionVersion: versionSegment,
       analysisVersion: latest.version,
+      staticAnalyzedAt: latest.updatedAt.toISOString(),
       status: latest.status,
       filesScanned: latest.filesScanned,
       totalDomains: latestDomains.length,

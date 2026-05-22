@@ -12,10 +12,13 @@ export type WorkbenchCheckItem = {
   summary: string
   conditions: string[]
   impact: string
+  /** ISO timestamp of the static scan or AI test batch that produced this finding. */
+  detectedAt: string | null
 }
 
 export type StaticLatestPayload = {
   extensionVersion?: string | null
+  staticAnalyzedAt?: string | null
   addedDomains?: string[]
   topDomainSignals?: Array<{
     topDomainSignalId: string | null
@@ -55,6 +58,24 @@ function staticDomainFileLabel(sourceFiles?: string[]): string {
   return `${files[0]!} (+${files.length - 1} files)`
 }
 
+function toIsoString(value: string | Date | null | undefined): string | null {
+  if (value == null) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null
+}
+
+export function resolveAiTestedAt(payload: AiTestingLatestPayload | null): string | null {
+  if (!payload) return null
+  const ai = payload.aiAnalysis
+  return (
+    toIsoString(ai?.updatedAt) ??
+    toIsoString(ai?.networkCapturedAt) ??
+    (typeof payload.statusTime === 'string' && payload.statusTime.trim()
+      ? toIsoString(payload.statusTime)
+      : null)
+  )
+}
+
 function staticDomainProvenanceSummary(sourceFiles?: string[]): string {
   const files = (sourceFiles ?? []).filter((f) => f && f.trim())
   if (files.length === 0) return ''
@@ -62,11 +83,13 @@ function staticDomainProvenanceSummary(sourceFiles?: string[]): string {
   return ` Domain URL/host references traced to: ${files.slice(0, 6).join(', ')} (+${files.length - 6} more).`
 }
 
+type WorkbenchCheckItemDraft = Omit<WorkbenchCheckItem, 'detectedAt'>
+
 export function buildWorkbenchCheckItems(params: {
   staticPayload: StaticLatestPayload | null
   aiPayload: AiTestingLatestPayload | null
 }): WorkbenchCheckItem[] {
-  const items: WorkbenchCheckItem[] = []
+  const items: WorkbenchCheckItemDraft[] = []
   const { staticPayload, aiPayload } = params
 
   if (staticPayload?.manifestPermissions) {
@@ -213,11 +236,17 @@ export function buildWorkbenchCheckItems(params: {
     })
   }
 
-  items.sort((a, b) => {
-    const d = severityRank(a.severity) - severityRank(b.severity)
-    if (d !== 0) return d
-    return a.id.localeCompare(b.id)
-  })
+  const staticAt = staticPayload?.staticAnalyzedAt?.trim() || null
+  const aiAt = resolveAiTestedAt(aiPayload)
 
   return items
+    .sort((a, b) => {
+      const d = severityRank(a.severity) - severityRank(b.severity)
+      if (d !== 0) return d
+      return a.id.localeCompare(b.id)
+    })
+    .map((item) => ({
+      ...item,
+      detectedAt: item.source === 'static' ? staticAt : aiAt,
+    }))
 }

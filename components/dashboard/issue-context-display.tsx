@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 function Label({ children }: { children: ReactNode }) {
@@ -25,6 +26,10 @@ export function IssueContextDisplay({ issue }: { issue: WorkbenchCheckItem }) {
         <Label>Source</Label> {issue.source}
         <span className="mx-1.5 text-muted-foreground/50">·</span>
         <Label>Category</Label> {issue.category}
+      </p>
+
+      <p className="text-muted-foreground">
+        <Label>Scan batch</Label> {formatFindingRunLabel(issue.source, issue.detectedAt)}
       </p>
 
       <p className="text-muted-foreground">

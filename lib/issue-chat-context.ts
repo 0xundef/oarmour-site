@@ -1,3 +1,4 @@
+import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 export type IssueChatContext = {
@@ -9,6 +10,7 @@ export type IssueChatContext = {
   summary: string
   conditions: string[]
   impact: string
+  detectedAt: string | null
 }
 
 export function toIssueChatContext(issue: WorkbenchCheckItem): IssueChatContext {
@@ -21,6 +23,7 @@ export function toIssueChatContext(issue: WorkbenchCheckItem): IssueChatContext 
     summary: issue.summary,
     conditions: issue.conditions,
     impact: issue.impact,
+    detectedAt: issue.detectedAt,
   }
 }
 
@@ -38,6 +41,7 @@ export function buildIssueChatSystem(issue: IssueChatContext): string {
     `- severity: ${issue.severity}`,
     `- title: ${issue.title}`,
     `- file: ${issue.file}`,
+    `- scan batch: ${formatFindingRunLabel(issue.source, issue.detectedAt)}`,
     `- summary: ${issue.summary}`,
     `- conditions: ${issue.conditions.join(" | ")}`,
     `- impact: ${issue.impact}`,
@@ -56,6 +60,7 @@ export function buildIssueDetailContextText(issue: WorkbenchCheckItem): string {
     "",
     `${issue.title}`,
     `${issue.severity} · ${issue.source} · ${issue.category}`,
+    formatFindingRunLabel(issue.source, issue.detectedAt),
     `File: ${issue.file}`,
     "",
     "Summary",

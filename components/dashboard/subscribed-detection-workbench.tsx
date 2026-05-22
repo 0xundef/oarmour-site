@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
+import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
   buildWorkbenchCheckItems,
   type StaticLatestPayload,
@@ -181,7 +182,10 @@ export function SubscribedDetectionWorkbench({
                         </Badge>
                       </div>
                       <div className="mb-1 line-clamp-2 text-sm font-medium leading-snug">{item.title}</div>
-                      <div className="truncate text-xs text-muted-foreground" title={item.file}>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {formatFindingRunLabel(item.source, item.detectedAt)}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground/80" title={item.file}>
                         {item.file}
                       </div>
                     </button>

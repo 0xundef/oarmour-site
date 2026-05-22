@@ -46,6 +46,9 @@ export function parseWorkbenchCheckItem(raw: unknown): WorkbenchCheckItem | null
   ) {
     return null
   }
+  const detectedAt =
+    typeof o.detectedAt === "string" && o.detectedAt.trim() ? o.detectedAt.trim() : null
+
   return {
     id: o.id,
     source,
@@ -56,6 +59,7 @@ export function parseWorkbenchCheckItem(raw: unknown): WorkbenchCheckItem | null
     summary: o.summary,
     conditions: o.conditions,
     impact: o.impact,
+    detectedAt,
   }
 }
 
