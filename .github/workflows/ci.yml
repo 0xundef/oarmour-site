@@ -117,6 +117,12 @@ jobs:
             else
               sudo "$SUDO_PRESERVE_ENV" pm2 start npm --name oarmour-site -- run start
             fi
+            # Rotate ~/.pm2/logs daily; keep 7 archived files (~7 days).
+            sudo pm2 install pm2-logrotate >/dev/null 2>&1 || true
+            sudo pm2 set pm2-logrotate:retain 7
+            sudo pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
+            sudo pm2 set pm2-logrotate:max_size 10M
+            sudo pm2 set pm2-logrotate:compress true
             sudo "$SUDO_PRESERVE_ENV" pm2 save
           else
             pkill -f "next start" >/dev/null 2>&1 || true
