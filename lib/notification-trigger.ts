@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { sendMaliciousAlertEmail } from '@/lib/email'
+import { logError, logWarn } from '@/lib/app-logger'
 
 const NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 const notificationSubscriptionModel = (prisma as unknown as {
@@ -61,9 +62,13 @@ export async function triggerMaliciousAlertNotifications(
 
     const failed = results.filter((r) => !r.ok)
     if (failed.length > 0) {
-      console.warn(`[notifications] ${failed.length}/${results.length} emails failed`)
+      logWarn('[notifications] some emails failed', {
+        failed: failed.length,
+        total: results.length,
+        extensionId,
+      })
     } else {
-      console.warn(`[notifications] Sent ${results.length} alert emails for ${extensionId}`)
+      logWarn('[notifications] alert emails sent', { count: results.length, extensionId })
     }
     return {
       attempted: results.length,
@@ -73,7 +78,7 @@ export async function triggerMaliciousAlertNotifications(
       reason: 'sent' as const,
     }
   } catch (e) {
-    console.error('[notifications] Failed to trigger notifications:', e)
+    logError('[notifications] failed to trigger notifications', { error: e })
     return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'error' as const }
   }
 }

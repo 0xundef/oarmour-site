@@ -13,6 +13,7 @@ import {
   parseIssueChatScope,
   saveIssueInvestigationMessages,
 } from "@/lib/issue-investigation-chat"
+import { logError } from "@/lib/app-logger"
 
 export const runtime = "nodejs"
 
@@ -151,7 +152,7 @@ export async function POST(req: Request) {
           messages: updatedMessages,
         })
       } catch (e) {
-        console.error("[issues/chat] Failed to persist messages:", e)
+        logError("[issues/chat] failed to persist messages", { error: e })
       }
     },
   })

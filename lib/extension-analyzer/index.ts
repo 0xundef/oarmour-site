@@ -6,6 +6,7 @@ import { scanDirectory } from './scanner';
 import { buildApexDomainProvenanceList } from '@/lib/domain-provenance';
 import { AnalysisResult, AnalyzerOptions } from './types';
 import { getExtensionAnalyzerRoot } from '@/lib/extension-storage';
+import { logError, logInfo } from '@/lib/app-logger';
 
 export class ExtensionAnalyzer {
     private options: AnalyzerOptions;
@@ -29,15 +30,15 @@ export class ExtensionAnalyzer {
 
         try {
             // 1. Download
-            console.log(`Downloading extension ${extensionId}...`);
+            logInfo(`[analysis] downloading extension ${extensionId}`);
             const crxPath = await downloadExtension(extensionId, crxDir);
 
             // 2. Extract
-            console.log(`Extracting to ${sourceDir}...`);
+            logInfo(`[analysis] extracting extension ${extensionId}`, { sourceDir });
             await extractExtension(crxPath, sourceDir);
 
             // 3. Scan
-            console.log(`Scanning files...`);
+            logInfo(`[analysis] scanning extension ${extensionId}`);
             const scanResults = scanDirectory(sourceDir);
 
             const result: AnalysisResult = {
@@ -61,7 +62,7 @@ export class ExtensionAnalyzer {
                         fs.rmSync(tempDir, { recursive: true, force: true });
                     }
                 } catch (e) {
-                    console.error('Failed to cleanup temp directory:', e);
+                    logError('[analysis] failed to cleanup temp directory', { extensionId, error: e });
                 }
             }
         }

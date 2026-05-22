@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { normalizeApexDomain } from '@/lib/domain-normalize'
 import { getExtensionAnalysisDir } from '@/lib/extension-storage'
 import { prisma } from '@/lib/prisma'
+import { logWarn } from '@/lib/app-logger'
 
 export const runtime = 'nodejs'
 
@@ -210,7 +211,7 @@ export async function GET(
         sourceFiles: sourceFilesByApex[apexKey] ?? [],
       }
     })
-    console.warn('[analysis] latestRoute:domainDiff', {
+    logWarn('[analysis] latestRoute:domainDiff', {
       storeId,
       extensionVersion: versionSegment,
       latestAnalysisId: latest.id,

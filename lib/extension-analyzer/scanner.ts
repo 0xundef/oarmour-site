@@ -5,6 +5,7 @@ import {
     recordUrlOrHostObservation,
     type ProvenanceStore,
 } from '@/lib/domain-provenance';
+import { logWarn } from '@/lib/app-logger';
 
 const URL_REGEX = /(https?:\/\/[^\s/$.?#].[^\s"'`]*)/gi;
 
@@ -97,7 +98,7 @@ export function scanDirectory(dir: string): ScanResult {
                     scanFile(filePath, relativePath, results);
                 }
             } catch (e) {
-                console.warn(`Skipping file ${filePath}: ${e}`);
+                logWarn('[analysis] skipping file', { filePath, error: e });
             }
         }
     }

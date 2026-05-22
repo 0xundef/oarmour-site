@@ -2,6 +2,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { setAnalyzeDownloadProgress, setAnalyzeProgressStage } from '@/lib/analyze-progress';
+import { logError, logInfo } from '@/lib/app-logger';
 
 export async function downloadExtension(extensionId: string, outputDir: string, downloadUrl?: string): Promise<string> {
   const url = downloadUrl || `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=131.0.0.0&acceptformat=crx2,crx3&x=id%3D${extensionId}%26uc`;
@@ -11,7 +12,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  console.info('[analysis] downloadExtension:start', { extensionId, url, filePath });
+  logInfo('[analysis] downloadExtension:start', { extensionId, url, filePath });
   setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Starting download')
   const writer = fs.createWriteStream(filePath);
 
@@ -24,7 +25,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
       maxRedirects: 5,
       validateStatus: (status) => status >= 200 && status < 400,
     });
-    console.info('[analysis] downloadExtension:response', {
+    logInfo('[analysis] downloadExtension:response', {
       extensionId,
       status: response.status,
       contentType: response.headers['content-type'],
@@ -40,7 +41,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
       setAnalyzeDownloadProgress(extensionId, bytesWritten, Number.isFinite(totalBytes || NaN) ? totalBytes : null);
     });
     response.data.on('end', () => {
-      console.info('[analysis] downloadExtension:streamEnded', {
+      logInfo('[analysis] downloadExtension:streamEnded', {
         extensionId,
         filePath,
         bytesWritten,
@@ -51,7 +52,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
 
     return new Promise((resolve, reject) => {
       writer.on('finish', () => {
-        console.info('[analysis] downloadExtension:finished', { extensionId, filePath, bytesWritten });
+        logInfo('[analysis] downloadExtension:finished', { extensionId, filePath, bytesWritten });
         setAnalyzeProgressStage(extensionId, 'EXTRACTING', 65, 'Download complete, extracting package');
         resolve(filePath);
       });
@@ -63,7 +64,7 @@ export async function downloadExtension(extensionId: string, outputDir: string, 
         fs.unlinkSync(filePath);
     }
     setAnalyzeProgressStage(extensionId, 'FAILED', 100, 'Download failed');
-    console.error('[analysis] downloadExtension:failed', { extensionId, url, filePath, error });
+    logError('[analysis] downloadExtension:failed', { extensionId, url, filePath, error });
     throw new Error(`Failed to download extension: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

@@ -9,6 +9,7 @@ import {
   isAllowedPackageDownloadUrl,
   resolveAnalyzeInput,
 } from '@/lib/package-download-url';
+import { logError } from '@/lib/app-logger';
 
 export async function POST(req: NextRequest) {
   try {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
           submissionId = submission.id
         }
       } catch (e) {
-        console.error('Failed to record submission:', e);
+        logError('[analysis] failed to record submission', { error: e });
       }
     }
 
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       await ensurePendingAnalysis(targetExtension.id)
       setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
       void processExtension(extensionId, downloadUrl).catch((error) => {
-        console.error('Async custom URI analysis failed:', error);
+        logError('[analysis] async custom URI analysis failed', { error });
       });
       return NextResponse.json({
         success: true,
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
     await ensurePendingAnalysis(targetExtension.id)
 
     void processExtension(extensionId, downloadUrl).catch((error) => {
-      console.error('Async extension analysis failed:', error);
+      logError('[analysis] async extension analysis failed', { error });
     });
     setAnalyzeProgressStage(extensionId, 'DOWNLOADING', 1, 'Downloading package')
 
@@ -184,7 +185,7 @@ export async function POST(req: NextRequest) {
     }, { status: 202 });
 
   } catch (error) {
-    console.error('Analysis handler error:', error);
+    logError('[analysis] handler error', { error });
     return NextResponse.json({ 
         error: 'Failed to process extension',
         details: error instanceof Error ? error.message : String(error)

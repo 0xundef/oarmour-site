@@ -9,6 +9,7 @@ import { clientIpFromHeaders } from "@/lib/request-ip";
 import { recordLoginActivity, resolveUserIdForLoginLog } from "@/lib/record-login-activity";
 import { isUserDisabled, isUserDisabledByEmail } from "@/lib/user-account-status";
 import bcrypt from "bcryptjs";
+import { logError } from "@/lib/app-logger";
 
 const enableAdapter =
   process.env.NEXTAUTH_USE_ADAPTER === "1" ||
@@ -86,7 +87,7 @@ export const authOptions: NextAuthOptions = {
           await recordLoginActivity({ userId, ipAddress, provider });
         }
       } catch (e) {
-        console.error("[auth] Failed to record login activity:", e);
+        logError('[auth] failed to record login activity', { error: e });
       }
       return true;
     },

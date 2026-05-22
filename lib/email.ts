@@ -1,4 +1,5 @@
 import { createTransport, Transporter } from 'nodemailer'
+import { logError } from '@/lib/app-logger'
 
 let transporter: Transporter | null = null
 
@@ -179,7 +180,7 @@ export async function sendRegistrationVerificationEmail(
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error('[email] Failed to send registration verification email:', msg)
+    logError('[email] failed to send registration verification email', { error: msg })
     return { ok: false, error: msg }
   }
 }
@@ -212,7 +213,7 @@ export async function sendMaliciousAlertEmail(
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error('[email] Failed to send malicious alert:', msg)
+    logError('[email] failed to send malicious alert', { error: msg })
     return { ok: false, error: msg }
   }
 }

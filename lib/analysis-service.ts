@@ -34,25 +34,7 @@ import {
     derivePackageDownloadPrefixFromUrl,
     isAllowedPackageDownloadUrl,
 } from '@/lib/package-download-url';
-
-
-const nowIso = () => new Date().toISOString()
-
-const logInfo = (message: string, payload?: unknown) => {
-    if (typeof payload === 'undefined') {
-        console.info(`${nowIso()} ${message}`)
-        return
-    }
-    console.info(`${nowIso()} ${message}`, payload)
-}
-
-const logError = (message: string, payload?: unknown) => {
-    if (typeof payload === 'undefined') {
-        console.error(`${nowIso()} ${message}`)
-        return
-    }
-    console.error(`${nowIso()} ${message}`, payload)
-}
+import { logError, logInfo } from '@/lib/app-logger';
 
 const isDatabaseUnavailableError = (error: unknown) => {
     if (!error || typeof error !== 'object') return false
@@ -427,7 +409,7 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             riskLevel,
             summary,
             maliciousDomainsList,
-        ).catch((e) => console.error('[analysis] Failed to trigger notifications:', e))
+        ).catch((e) => logError('[analysis] Failed to trigger notifications', { error: e }))
     }
     setAnalyzeProgressStage(extensionId, 'COMPLETED', 100, 'Analysis completed')
     logInfo('[analysis] runLookupFromSource:completed', {

@@ -15,26 +15,9 @@ import {
   type DomainEnrichmentRow,
 } from '@/lib/domain-enrichment'
 import { getAiTestingRunRoot, getExtensionAnalysisDir } from '@/lib/extension-storage'
+import { logError, logInfo } from '@/lib/app-logger'
 
 const NETWORK_MISSING_ERROR = 'network.json missing or invalid'
-
-const nowIso = () => new Date().toISOString()
-
-const logInfo = (message: string, payload?: unknown) => {
-  if (typeof payload === 'undefined') {
-    console.info(`${nowIso()} ${message}`)
-    return
-  }
-  console.info(`${nowIso()} ${message}`, payload)
-}
-
-const logError = (message: string, payload?: unknown) => {
-  if (typeof payload === 'undefined') {
-    console.error(`${nowIso()} ${message}`)
-    return
-  }
-  console.error(`${nowIso()} ${message}`, payload)
-}
 
 const isDatabaseUnavailableError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false

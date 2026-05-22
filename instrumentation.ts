@@ -1,4 +1,5 @@
 import 'server-only'
+import { logInfo } from '@/lib/app-logger'
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
@@ -11,7 +12,7 @@ export async function register() {
     const { prisma } = await import('@/lib/prisma')
     await prisma.$queryRaw`SELECT 1`
   } catch (e) {
-    console.info('Background services disabled: database not reachable at startup.', e)
+    logInfo('[startup] background services disabled: database not reachable', { error: e })
     return
   }
   if (process.env.EXT_MONITOR_ENABLED !== '0' && !g.__extMonitorHandle) {
@@ -20,14 +21,14 @@ export async function register() {
     const { scheduleExtensionMonitor } = await import('@/lib/monitor/extensions-monitor')
     const handle = scheduleExtensionMonitor(minutes * 60 * 1000)
     g.__extMonitorHandle = handle
-    console.info('[monitor] background scheduler started', { periodMinutes: minutes })
+    logInfo('[monitor] background scheduler started', { periodMinutes: minutes })
   }
   if (process.env.EXT_LOOKUP_ENABLED !== '0' && !g.__extLookupHandle) {
     const seconds = Number(process.env.EXT_LOOKUP_PERIOD_SECONDS ?? '8')
     const { scheduleExtensionLookupService } = await import('@/lib/analysis-service')
     const handle = scheduleExtensionLookupService(seconds * 1000)
     g.__extLookupHandle = handle
-    console.info('[analysis] lookup scheduler started', { periodSeconds: seconds })
+    logInfo('[analysis] lookup scheduler started', { periodSeconds: seconds })
   }
   if (process.env.AI_ANALYSIS_ENABLED !== '0' && !g.__aiAnalysisHandle) {
     const seconds = Number(process.env.AI_ANALYSIS_POLL_SECONDS ?? '15')
@@ -36,7 +37,7 @@ export async function register() {
     const handle = scheduleAiAnalysisService(pollMs)
     if (handle) {
       g.__aiAnalysisHandle = handle
-      console.info('[ai-analysis] background scheduler started', { pollSeconds: seconds })
+      logInfo('[ai-analysis] background scheduler started', { pollSeconds: seconds })
     }
   }
 }

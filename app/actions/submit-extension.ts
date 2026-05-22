@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { processExtension } from "@/lib/analysis-service";
+import { logError } from "@/lib/app-logger";
 
 const submissionSchema = z.object({
   input: z.string().min(1, "Input is required"),
@@ -42,14 +43,17 @@ export async function submitExtension(formData: FormData) {
     if (idMatch) {
         extensionId = idMatch[1];
         processExtension(extensionId).catch(err => {
-            console.error(`Background analysis failed for submission ${submission.id}:`, err);
+            logError('[analysis] background analysis failed for submission', {
+              submissionId: submission.id,
+              error: err,
+            });
         });
     }
 
     revalidatePath("/dashboard");
     return { success: true };
   } catch (error) {
-    console.error("Submission error:", error);
+    logError('[analysis] submission error', { error });
     return { error: "Something went wrong" };
   }
 }

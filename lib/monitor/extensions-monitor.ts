@@ -14,6 +14,7 @@ import {
   resolveMonitorCompareVersion,
   setPendingVersion,
 } from '@/lib/extension-version-state'
+import { logError, logInfo } from '@/lib/app-logger'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
 const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
@@ -158,7 +159,7 @@ async function monitorExtensionsOnceWithDb(
       )
     }
   } catch (e) {
-    console.info('Monitor: failed to create monitor run record.', e)
+    logInfo('[monitor] failed to create monitor run record', { error: e })
   }
 
   let list: MonitorExtensionRow[] = []
@@ -184,7 +185,7 @@ async function monitorExtensionsOnceWithDb(
         aiBrowserTestingEnabled: false,
       }))
     } catch {
-      console.error('Monitor: extension query failed. Skipping monitoring.', e)
+      logError('[monitor] extension query failed; skipping monitoring', { error: e })
       if (runId) {
         try {
           if (monitorRunDelegate) {
@@ -210,14 +211,14 @@ async function monitorExtensionsOnceWithDb(
             )
           }
         } catch (updateError) {
-          console.info('Monitor: failed to update failed monitor run record.', updateError)
+          logInfo('[monitor] failed to update failed monitor run record', { error: updateError })
         }
       }
       return { checked: 0, updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> }
     }
   }
 
-  console.info('[monitor] run started', {
+  logInfo('[monitor] run started', {
     targetStoreId: targetStoreId ?? null,
     extensionCount: list.length,
     runId,
@@ -243,7 +244,7 @@ async function monitorExtensionsOnceWithDb(
           succeededCount += 1
           continue
         }
-        console.info('[monitor] new version (cdn prefix)', {
+        logInfo('[monitor] new version (cdn prefix)', {
           storeId: ext.storeId,
           from: compareVersion,
           to: nextVersion,
@@ -258,7 +259,7 @@ async function monitorExtensionsOnceWithDb(
               reason: 'monitor_new_version',
             })
           } catch (e) {
-            console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+            logError('[monitor] failed to enqueue AI testing', { storeId: ext.storeId, error: e })
           }
         }
         updated.push({ id: ext.id, storeId: ext.storeId, from: compareVersion, to: nextVersion, crxPath: downloadUrl })
@@ -269,7 +270,7 @@ async function monitorExtensionsOnceWithDb(
       const latest = await fetchStoreVersion(ext.storeId)
       if (!latest) continue
       if (cmpVersion(latest, compareVersion) > 0) {
-        console.info('[monitor] new version (chrome store)', {
+        logInfo('[monitor] new version (chrome store)', {
           storeId: ext.storeId,
           from: compareVersion,
           to: latest,
@@ -285,17 +286,17 @@ async function monitorExtensionsOnceWithDb(
                 reason: 'monitor_new_version',
               })
             } catch (e) {
-              console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
+              logError('[monitor] failed to enqueue AI testing', { storeId: ext.storeId, error: e })
             }
           }
         } catch (e) {
-          console.error('Failed to update DB for', ext.storeId, e)
+          logError('[monitor] failed to update DB', { storeId: ext.storeId, error: e })
         }
         updated.push({ id: ext.id, storeId: ext.storeId, from: compareVersion, to: latest })
       }
       succeededCount += 1
     } catch (e) {
-      console.error('Monitor check failed for', ext.storeId, e)
+      logError('[monitor] check failed', { storeId: ext.storeId, error: e })
       failedCount += 1
     }
   }
@@ -327,10 +328,10 @@ async function monitorExtensionsOnceWithDb(
         )
       }
     } catch (e) {
-      console.info('Monitor: failed to finalize monitor run record.', e)
+      logInfo('[monitor] failed to finalize monitor run record', { error: e })
     }
   }
-  console.info('[monitor] run finished', {
+  logInfo('[monitor] run finished', {
     targetStoreId: targetStoreId ?? null,
     checked: list.length,
     succeededCount,
@@ -361,7 +362,7 @@ export async function monitorExtensionsOnce(
         ) AS ok
       `
       if (!rows[0]?.ok) {
-        console.info('[monitor] skipped: another instance holds the advisory lock')
+        logInfo('[monitor] skipped: another instance holds the advisory lock')
         return {
           checked: 0,
           updated: [] as Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }>,
@@ -382,7 +383,7 @@ export function scheduleExtensionMonitor(periodMs: number) {
     try {
       await monitorExtensionsOnce()
     } catch (e) {
-      console.error('Monitor tick failed:', e)
+      logError('[monitor] tick failed', { error: e })
     } finally {
       running = false
     }
