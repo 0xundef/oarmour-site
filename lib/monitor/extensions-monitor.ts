@@ -10,6 +10,10 @@ import {
   getNextVersion,
   usesPrefixBasedVersionCheck,
 } from '@/lib/package-download-url'
+import {
+  resolveMonitorCompareVersion,
+  setPendingVersion,
+} from '@/lib/extension-version-state'
 
 /** Stable int4 pair for pg_try_advisory_xact_lock (oarmour extension monitor). */
 const EXTENSION_MONITOR_ADVISORY_KEY1 = 0x6f61726d
@@ -21,6 +25,7 @@ type MonitorExtensionRow = {
   id: string
   storeId: string
   version: string | null
+  pendingVersion: string | null
   packageDownloadPrefix: string | null
   packageDownloadSuffix: string | null
   aiBrowserTestingEnabled: boolean
@@ -94,18 +99,37 @@ async function loadMonitorExtensionList(
   db: DbClient,
   targetStoreId: string | undefined,
 ): Promise<MonitorExtensionRow[]> {
-  if (targetStoreId) {
+  try {
+    if (targetStoreId) {
+      return db.$queryRaw<MonitorExtensionRow[]>`
+        SELECT "id","storeId","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        FROM "GlobalExtension"
+        WHERE "storeId" = ${targetStoreId}
+      `
+    }
     return db.$queryRaw<MonitorExtensionRow[]>`
-      SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+      SELECT "id","storeId","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
       FROM "GlobalExtension"
-      WHERE "storeId" = ${targetStoreId}
+      WHERE "isMonitored" = true
     `
+  } catch {
+    type LegacyRow = Omit<MonitorExtensionRow, 'pendingVersion'>
+    let legacy: LegacyRow[]
+    if (targetStoreId) {
+      legacy = await db.$queryRaw<LegacyRow[]>`
+        SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        FROM "GlobalExtension"
+        WHERE "storeId" = ${targetStoreId}
+      `
+    } else {
+      legacy = await db.$queryRaw<LegacyRow[]>`
+        SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        FROM "GlobalExtension"
+        WHERE "isMonitored" = true
+      `
+    }
+    return legacy.map((row) => ({ ...row, pendingVersion: null }))
   }
-  return db.$queryRaw<MonitorExtensionRow[]>`
-    SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
-    FROM "GlobalExtension"
-    WHERE "isMonitored" = true
-  `
 }
 
 async function monitorExtensionsOnceWithDb(
@@ -154,6 +178,7 @@ async function monitorExtensionsOnceWithDb(
       }
       list = legacyList.map((item) => ({
         ...item,
+        pendingVersion: null,
         packageDownloadPrefix: null,
         packageDownloadSuffix: '.zip',
         aiBrowserTestingEnabled: false,
@@ -201,8 +226,9 @@ async function monitorExtensionsOnceWithDb(
   const updated: Array<{ id: string; storeId: string; from?: string | null; to: string; crxPath?: string }> = []
   for (const ext of list) {
     try {
+      const compareVersion = resolveMonitorCompareVersion(ext)
       if (usesPrefixBasedVersionCheck(ext.packageDownloadPrefix)) {
-        const nextVersion = getNextVersion(ext.version)
+        const nextVersion = getNextVersion(compareVersion)
         if (!nextVersion) {
           succeededCount += 1
           continue
@@ -219,7 +245,7 @@ async function monitorExtensionsOnceWithDb(
         }
         console.info('[monitor] new version (cdn prefix)', {
           storeId: ext.storeId,
-          from: ext.version,
+          from: compareVersion,
           to: nextVersion,
           downloadUrl,
         })
@@ -235,24 +261,21 @@ async function monitorExtensionsOnceWithDb(
             console.error('[monitor] Failed to enqueue AI testing for', ext.storeId, e)
           }
         }
-        updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: nextVersion, crxPath: downloadUrl })
+        updated.push({ id: ext.id, storeId: ext.storeId, from: compareVersion, to: nextVersion, crxPath: downloadUrl })
         succeededCount += 1
         continue
       }
 
       const latest = await fetchStoreVersion(ext.storeId)
       if (!latest) continue
-      if (cmpVersion(latest, ext.version) > 0) {
+      if (cmpVersion(latest, compareVersion) > 0) {
         console.info('[monitor] new version (chrome store)', {
           storeId: ext.storeId,
-          from: ext.version,
+          from: compareVersion,
           to: latest,
         })
         try {
-          await db.globalExtension.update({
-            where: { id: ext.id },
-            data: { version: latest, updatedAt: new Date() },
-          })
+          await setPendingVersion(ext.id, latest, db)
           await enqueueExtensionLookupJob(ext.id, db)
           if (ext.aiBrowserTestingEnabled) {
             try {
@@ -268,7 +291,7 @@ async function monitorExtensionsOnceWithDb(
         } catch (e) {
           console.error('Failed to update DB for', ext.storeId, e)
         }
-        updated.push({ id: ext.id, storeId: ext.storeId, from: ext.version, to: latest })
+        updated.push({ id: ext.id, storeId: ext.storeId, from: compareVersion, to: latest })
       }
       succeededCount += 1
     } catch (e) {

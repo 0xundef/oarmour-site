@@ -190,7 +190,8 @@ model GlobalExtension {
   platform    Platform @default(CHROME)
   
   // Metadata
-  version         String?
+  version         String?  // Latest COMPLETED static analysis version (detected)
+  pendingVersion  String?  // Target version queued for download/analysis
   publisher       String?  // New field
   developerEmail  String?
   officialWebsite String?

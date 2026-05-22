@@ -170,13 +170,24 @@ export async function deleteExtensionVersion(params: {
 
     const ext = await tx.globalExtension.findUnique({
       where: { id: params.extensionId },
-      select: { version: true },
+      select: { version: true, pendingVersion: true },
     })
+    const data: { version?: string | null; pendingVersion?: string | null; updatedAt: Date } = {
+      updatedAt: new Date(),
+    }
+    let needsPointerUpdate = false
     if (ext?.version?.trim() === version) {
-      const nextVersion = await resolveNextGlobalVersion(params.extensionId, version)
+      data.version = await resolveNextGlobalVersion(params.extensionId, version)
+      needsPointerUpdate = true
+    }
+    if (ext?.pendingVersion?.trim() === version) {
+      data.pendingVersion = null
+      needsPointerUpdate = true
+    }
+    if (needsPointerUpdate) {
       await tx.globalExtension.update({
         where: { id: params.extensionId },
-        data: { version: nextVersion, updatedAt: new Date() },
+        data,
       })
     }
   })
@@ -184,13 +195,14 @@ export async function deleteExtensionVersion(params: {
   rmDirIfExists(getExtensionSidecarRoot(params.storeId, version))
   rmDirIfExists(getExtensionArtifactRoot(params.storeId, version))
 
-  const nextGlobalVersion = await prisma.globalExtension.findUnique({
+  const nextPointers = await prisma.globalExtension.findUnique({
     where: { id: params.extensionId },
-    select: { version: true },
+    select: { version: true, pendingVersion: true },
   })
 
   return {
     deletedVersion: version,
-    nextGlobalVersion: nextGlobalVersion?.version?.trim() || null,
+    nextGlobalVersion: nextPointers?.version?.trim() || null,
+    nextPendingVersion: nextPointers?.pendingVersion?.trim() || null,
   }
 }

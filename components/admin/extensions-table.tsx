@@ -38,6 +38,7 @@ type ExtRow = {
   name: string;
   storeId: string;
   version: string | null;
+  pendingVersion?: string | null;
   updatedAt?: string | null;
   isMonitored?: boolean;
   aiBrowserTestingEnabled?: boolean;
@@ -58,10 +59,15 @@ type DeleteVersionTarget = {
 };
 
 function pickPreferredDeleteVersion(ext: ExtRow, versions: VersionListItem[]): string {
-  if (ext.version && versions.some((v) => v.version === ext.version)) {
-    return ext.version;
+  const preferred = ext.pendingVersion ?? ext.version;
+  if (preferred && versions.some((v) => v.version === preferred)) {
+    return preferred;
   }
   return versions[0]?.version ?? "";
+}
+
+function formatVersionCell(value?: string | null) {
+  return value?.trim() ? value.trim() : "N/A";
 }
 
 function formatLastUpdate(iso?: string | null) {
@@ -313,6 +319,12 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                       : r.version === version
                         ? null
                         : r.version,
+                  pendingVersion:
+                    typeof payload?.nextPendingVersion === "string"
+                      ? payload.nextPendingVersion
+                      : r.pendingVersion === version
+                        ? null
+                        : r.pendingVersion ?? null,
                 }
               : r,
           ),
@@ -365,13 +377,19 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           <colgroup>
             <col />
             <col className="w-28" />
+            <col className="w-28" />
             <col className="w-48" />
             <col className="w-[40rem]" />
           </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead className="px-4">Name</TableHead>
-              <TableHead className="w-28 px-4">Version</TableHead>
+              <TableHead className="w-28 px-4" title="Target version queued for download or analysis">
+                Pending
+              </TableHead>
+              <TableHead className="w-28 px-4" title="Latest version with completed static analysis">
+                Detected
+              </TableHead>
               <TableHead className="w-48 whitespace-nowrap px-4">Last Update</TableHead>
               <TableHead className="w-[40rem] whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
@@ -379,7 +397,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center">
+                <TableCell colSpan={5} className="text-center">
                   No extensions found.
                 </TableCell>
               </TableRow>
@@ -402,7 +420,20 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell className="w-28 whitespace-nowrap px-4">{ext.version || "N/A"}</TableCell>
+                  <TableCell
+                    className={`w-28 whitespace-nowrap px-4 ${
+                      ext.pendingVersion &&
+                      ext.version &&
+                      ext.pendingVersion.trim() !== ext.version.trim()
+                        ? "text-amber-700 dark:text-amber-400"
+                        : ""
+                    }`}
+                  >
+                    {formatVersionCell(ext.pendingVersion)}
+                  </TableCell>
+                  <TableCell className="w-28 whitespace-nowrap px-4">
+                    {formatVersionCell(ext.version)}
+                  </TableCell>
                   <TableCell className="w-48 whitespace-nowrap px-4 text-muted-foreground">
                     {formatLastUpdate(ext.updatedAt)}
                   </TableCell>
@@ -434,7 +465,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                       <AiTestingRunButton
                         storeId={ext.storeId}
                         extensionName={ext.name}
-                        version={ext.version}
+                        version={ext.pendingVersion ?? ext.version}
                         statusEntry={aiTestingStatusByStoreId[ext.storeId]}
                         onTriggered={handleAiTestingTriggered}
                         disabled={pending}

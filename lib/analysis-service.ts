@@ -19,6 +19,11 @@ import {
     vtSignalsForYoungestDomains,
 } from '@/lib/domain-enrichment';
 import { triggerMaliciousAlertNotifications } from '@/lib/notification-trigger';
+import {
+    promoteDetectedVersion,
+    resolveAnalysisTargetVersion,
+    setPendingVersion,
+} from '@/lib/extension-version-state';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
     getExtensionAnalysisDir,
@@ -402,12 +407,11 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
             updatedAt: new Date()
         }
     });
+    await promoteDetectedVersion(dbId, versionSegment)
     await prisma.globalExtension.update({
         where: { id: dbId },
-        data: {
-            riskLevel,
-        },
-    });
+        data: { riskLevel },
+    })
     {
         const ext = await prisma.globalExtension.findUnique({
             where: { id: dbId },
@@ -441,9 +445,12 @@ async function runLookupFromSource(dbId: string, extensionId: string, analysisId
 async function runLookupForExtension(dbId: string, extensionId: string) {
     const extRow = await prisma.globalExtension.findUnique({
         where: { id: dbId },
-        select: { version: true },
+        select: { version: true, pendingVersion: true },
     })
-    const targetVersion = extRow?.version?.trim() || null
+    const targetVersion = resolveAnalysisTargetVersion({
+        version: extRow?.version ?? null,
+        pendingVersion: extRow?.pendingVersion ?? null,
+    })
 
     const pendingAnalysis = await prisma.extensionAnalysisResult.findFirst({
         where: { extensionId: dbId, status: 'PENDING' },
@@ -469,7 +476,7 @@ async function runLookupForExtension(dbId: string, extensionId: string) {
     const pendingSourceDir = path.join(pendingDir, 'source');
     try {
         const ext = extRow
-        const reusableSourceDir = resolveReusableAnalyzerSourceDir(extensionId, ext?.version)
+        const reusableSourceDir = resolveReusableAnalyzerSourceDir(extensionId, targetVersion)
         if (reusableSourceDir) {
             setAnalyzeProgressStage(extensionId, 'ANALYZING', 75, 'Running lookup analysis')
             logInfo('[analysis] runLookupForExtension:reusedExtractedSource', {
@@ -735,7 +742,6 @@ export async function processExtension(extensionId: string, downloadUrl?: string
             where: { storeId: extensionId },
             update: {
                 name: resolvedName || extensionId,
-                version,
                 description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
                 updatedAt: new Date(),
@@ -744,13 +750,15 @@ export async function processExtension(extensionId: string, downloadUrl?: string
             create: {
                 storeId: extensionId,
                 name: resolvedName || extensionId,
-                version,
                 description: resolveLocalizedString(manifest.description, extensionRootDir, manifest),
                 publisher: publisher || null,
                 platform: 'CHROME',
                 ...firstPackageSource,
             }
         });
+        if (version) {
+            await setPendingVersion(extension.id, version)
+        }
         logInfo('[analysis] processExtension:upserted', {
             extensionId,
             dbId: extension.id,

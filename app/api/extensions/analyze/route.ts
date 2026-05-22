@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
           data: {
             extensionId: dbId,
             status: 'PENDING',
-            version: extension?.version?.trim() || null,
+            version:
+              (extension?.pendingVersion?.trim() ||
+                extension?.version?.trim() ||
+                null) ?? null,
           },
         })
       }
