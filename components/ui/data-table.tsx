@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { X } from "lucide-react";
 import { Input } from "./input";
 import { Button } from "./button";
 
@@ -72,31 +73,46 @@ export function DataTable<TData, TValue>({
   /* this can be used to get the selectedrows 
   console.log("value", table.getFilteredSelectedRowModel()); */
 
+  const searchValue = useGlobalFilter
+    ? ((table.getState().globalFilter as string) ?? "")
+    : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "");
+
+  const setSearchValue = (value: string) => {
+    if (useGlobalFilter) {
+      table.setGlobalFilter(value);
+    } else {
+      table.getColumn(searchKey)?.setFilterValue(value);
+    }
+  };
+
   return (
     <>
       <div className="flex items-center py-4">
-        <Input
-          placeholder={
-            searchPlaceholder ??
-            (useGlobalFilter
-              ? `Search ${filterKeys.join(" or ")}...`
-              : `Search ${searchKey}...`)
-          }
-          value={
-            useGlobalFilter
-              ? ((table.getState().globalFilter as string) ?? "")
-              : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")
-          }
-          onChange={(event) => {
-            const value = event.target.value;
-            if (useGlobalFilter) {
-              table.setGlobalFilter(value);
-            } else {
-              table.getColumn(searchKey)?.setFilterValue(value);
+        <div className="relative w-full md:max-w-sm">
+          <Input
+            placeholder={
+              searchPlaceholder ??
+              (useGlobalFilter
+                ? `Search ${filterKeys.join(" or ")}...`
+                : `Search ${searchKey}...`)
             }
-          }}
-          className="w-full md:max-w-sm"
-        />
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            className="w-full pr-9"
+          />
+          {searchValue ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+              onClick={() => setSearchValue("")}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="rounded-md border">
         <Table>
