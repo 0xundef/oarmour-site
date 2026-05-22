@@ -219,7 +219,24 @@ function IssueAiChatBoxInner({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {!shareMode ? (
-        <div className="flex shrink-0 items-center justify-end border-b px-3 py-1.5">
+        <div className="flex shrink-0 items-center justify-end gap-1 border-b px-3 py-1.5">
+          {listTab === "open" ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1 text-xs"
+                disabled={isBusy}
+                onClick={() => setDismissDialogOpen(true)}
+              >
+                <ShieldOffIcon className="size-3.5" />
+                Mark false positive
+                <ChevronDownIcon className="size-3 opacity-60" />
+              </Button>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+            </>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -253,6 +270,17 @@ function IssueAiChatBoxInner({
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
+          {listTab === "open" ? (
+            <FindingDismissDialog
+              open={dismissDialogOpen}
+              onOpenChange={setDismissDialogOpen}
+              storeId={storeId}
+              issue={issue}
+              extensionVersion={extensionVersion}
+              allowlistDomain={allowlistDomain}
+              onDismissed={onResolutionChange}
+            />
+          ) : null}
         </div>
       ) : (
         <IssueInvestigationShareHeader onCancel={exitShareMode} />
@@ -438,9 +466,15 @@ function IssueAiChatBoxInner({
 export function IssueAiChatBox({
   storeId,
   issue,
+  extensionVersion,
+  listTab = "open",
+  onResolutionChange,
 }: {
   storeId: string
   issue: WorkbenchCheckItem
+  extensionVersion?: string | null
+  listTab?: "open" | "closed"
+  onResolutionChange?: () => void
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [hydratedMessages, setHydratedMessages] = useState<UIMessage[] | null>(null)
@@ -504,6 +538,9 @@ export function IssueAiChatBox({
       issue={issue}
       initialMessages={hydratedMessages}
       loadError={loadError}
+      extensionVersion={extensionVersion}
+      listTab={listTab}
+      onResolutionChange={onResolutionChange ?? (() => {})}
     />
   )
 }
