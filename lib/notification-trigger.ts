@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { sendMaliciousAlertEmail } from '@/lib/email'
-import { logError, logWarn } from '@/lib/app-logger'
+import { logError, logInfo, logWarn } from '@/lib/app-logger'
 
 const NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
 const notificationSubscriptionModel = (prisma as unknown as {
@@ -68,7 +68,7 @@ export async function triggerMaliciousAlertNotifications(
         extensionId,
       })
     } else {
-      logWarn('[notifications] alert emails sent', { count: results.length, extensionId })
+      logInfo('[notifications] alert emails sent', { count: results.length, extensionId })
     }
     return {
       attempted: results.length,
