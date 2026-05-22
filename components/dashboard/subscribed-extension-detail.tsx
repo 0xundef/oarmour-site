@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSummary } from "@/lib/ai-testing-display"
+import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import { Link2, Maximize2, Minimize2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
@@ -291,7 +292,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
                       <div className="truncate">+ {domain}</div>
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="h-8 w-[86px] justify-center px-2 text-xl leading-none">
-                          {`${displayAgeDays}d`}
+                          {formatDomainAgeDisplay(displayAgeDays)}
                         </Badge>
                         <span className={`inline-block h-5 w-5 rounded-full ${isMalicious ? "bg-red-500" : "bg-green-500"}`} />
                       </div>

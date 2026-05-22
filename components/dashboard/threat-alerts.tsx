@@ -17,6 +17,7 @@ import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
 import { buildDashboardDownloadUrl, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
+import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 
 type ThreatAlert = {
   id: string
@@ -891,7 +892,7 @@ export function ThreatAlerts() {
                       <div className="min-w-0 truncate">+ {domain}</div>
                       <div className="flex items-center justify-start gap-2">
                         <Badge variant="secondary" className="h-5 w-[64px] justify-center px-2 text-[10px] leading-none">
-                          {`${displayAgeDays}d`}
+                          {formatDomainAgeDisplay(displayAgeDays)}
                         </Badge>
                         <span
                           className={`inline-block h-3 w-3 rounded-full ${isMalicious ? "bg-red-500" : "bg-green-500"}`}
