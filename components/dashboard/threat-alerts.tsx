@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useEffect, useMemo, useState, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { AiTestingAutoRefreshButton } from "@/components/ai-testing/ai-testing-auto-refresh-button"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
-import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { AiTestingNovelDomains } from "@/components/dashboard/ai-testing-novel-domains"
+import { useAiTestingDetailLoader } from "@/hooks/use-ai-testing-detail-loader"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
@@ -37,18 +38,6 @@ type ThreatAlert = {
 type LiveAnalyzeStatus = {
   stage: string
   progress: number
-}
-
-type AiTestingRecordingStep = {
-  time: string
-  thinking: string
-  image: string
-}
-
-type AiTestingResponse = {
-  records?: AiTestingRecordingStep[]
-  assetBaseUrl?: string
-  network?: AiTestingNetworkLog | null
 }
 
 function isAbortError(e: unknown): boolean {
@@ -302,11 +291,18 @@ export function ThreatAlerts() {
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
   const [aiDetailOpen, setAiDetailOpen] = useState(false)
   const [aiDetailFullscreen, setAiDetailFullscreen] = useState(false)
-  const [aiDetailLoading, setAiDetailLoading] = useState(false)
-  const [aiDetailError, setAiDetailError] = useState("")
-  const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
-  const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
-  const [aiDetailNetwork, setAiDetailNetwork] = useState<AiTestingNetworkLog | null>(null)
+  const [aiDetailAutoRefresh, setAiDetailAutoRefresh] = useState(false)
+  const {
+    loading: aiDetailLoading,
+    error: aiDetailError,
+    records: aiDetailRecords,
+    assetBaseUrl: aiDetailAssetBaseUrl,
+    network: aiDetailNetwork,
+  } = useAiTestingDetailLoader({
+    extensionId: selected?.extensionId ?? "",
+    open: aiDetailOpen,
+    autoRefresh: aiDetailAutoRefresh,
+  })
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -625,55 +621,6 @@ export function ThreatAlerts() {
     }
   }, [details, open])
 
-  useEffect(() => {
-    if (!aiDetailOpen || !selected?.extensionId) return
-    const loadAiDetail = async () => {
-      setAiDetailLoading(true)
-      setAiDetailError("")
-      try {
-        const url = `/api/ai-testing/${encodeURIComponent(selected.extensionId)}/latest`
-        const res = await fetch(url, { cache: "no-store" })
-        if (!res.ok) {
-          setAiDetailRecords([])
-          setAiDetailAssetBaseUrl("")
-          setAiDetailNetwork(null)
-          setAiDetailError("No AI testing record found for this extension.")
-          return
-        }
-        const json: AiTestingResponse = await res.json()
-        if (!Array.isArray(json.records)) {
-          setAiDetailRecords([])
-          setAiDetailAssetBaseUrl("")
-          setAiDetailError("AI testing record format is invalid.")
-          return
-        }
-        const parsed = json.records.flatMap((item): AiTestingRecordingStep[] => {
-          if (!item || typeof item !== "object") return []
-          const obj = item as Record<string, unknown>
-          const time = typeof obj.time === "string" ? obj.time : ""
-          const thinking = typeof obj.thinking === "string" ? obj.thinking : ""
-          const image = typeof obj.image === "string" ? obj.image : ""
-          if (!time || !thinking || !image) return []
-          return [{ time, thinking, image }]
-        })
-        setAiDetailRecords(parsed)
-        setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
-        setAiDetailNetwork(json.network ?? null)
-        if (parsed.length === 0) {
-          setAiDetailError("AI testing record is empty.")
-        }
-      } catch {
-        setAiDetailRecords([])
-        setAiDetailAssetBaseUrl("")
-        setAiDetailNetwork(null)
-        setAiDetailError("Failed to load AI testing record.")
-      } finally {
-        setAiDetailLoading(false)
-      }
-    }
-    loadAiDetail()
-  }, [aiDetailOpen, selected?.extensionId])
-
   const prioritizedDomains = Array.from(
     new Set([
       ...((details?.topDomainSignals || []).map((s) => s.domain)),
@@ -970,7 +917,10 @@ export function ThreatAlerts() {
           open={aiDetailOpen}
           onOpenChange={(nextOpen) => {
             setAiDetailOpen(nextOpen)
-            if (!nextOpen) setAiDetailFullscreen(false)
+            if (!nextOpen) {
+              setAiDetailFullscreen(false)
+              setAiDetailAutoRefresh(false)
+            }
           }}
         >
           <DialogContent
@@ -978,6 +928,11 @@ export function ThreatAlerts() {
               aiDetailFullscreen ? "h-[92vh] w-[96vw] max-w-[96vw]" : "max-h-[80vh] max-w-3xl"
             }`}
           >
+            <AiTestingAutoRefreshButton
+              enabled={aiDetailAutoRefresh}
+              onEnabledChange={setAiDetailAutoRefresh}
+              className="absolute right-28 top-3"
+            />
             <Button
               variant="ghost"
               size="icon"

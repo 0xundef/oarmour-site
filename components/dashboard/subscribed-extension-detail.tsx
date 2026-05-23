@@ -6,31 +6,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AiTestingAutoRefreshButton } from "@/components/ai-testing/ai-testing-auto-refresh-button"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { AiTestingNovelDomains } from "@/components/dashboard/ai-testing-novel-domains"
+import { useAiTestingDetailLoader } from "@/hooks/use-ai-testing-detail-loader"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
-import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import { Link2, Maximize2, Minimize2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-
-type AiTestingRecordingStep = {
-  time: string
-  thinking: string
-  image: string
-}
-
-type AiTestingResponse = {
-  records?: AiTestingRecordingStep[]
-  assetBaseUrl?: string
-  network?: AiTestingNetworkLog | null
-  aiAnalysis?: AiTestingLatestPayload['aiAnalysis']
-  status?: string | null
-  runId?: string
-  version?: string
-}
 
 type SubscribedExtensionDetailProps = {
   extensionId: string
@@ -83,11 +68,18 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
   const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(true)
   const [aiDetailOpen, setAiDetailOpen] = useState(false)
   const [aiDetailFullscreen, setAiDetailFullscreen] = useState(false)
-  const [aiDetailLoading, setAiDetailLoading] = useState(false)
-  const [aiDetailError, setAiDetailError] = useState("")
-  const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
-  const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
-  const [aiDetailNetwork, setAiDetailNetwork] = useState<AiTestingNetworkLog | null>(null)
+  const [aiDetailAutoRefresh, setAiDetailAutoRefresh] = useState(false)
+  const {
+    loading: aiDetailLoading,
+    error: aiDetailError,
+    records: aiDetailRecords,
+    assetBaseUrl: aiDetailAssetBaseUrl,
+    network: aiDetailNetwork,
+  } = useAiTestingDetailLoader({
+    extensionId: props.extensionId,
+    open: aiDetailOpen,
+    autoRefresh: aiDetailAutoRefresh,
+  })
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -196,54 +188,6 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
     load()
     return () => controller.abort()
   }, [details])
-
-  useEffect(() => {
-    if (!aiDetailOpen || !props.extensionId) return
-    const loadAiDetail = async () => {
-      setAiDetailLoading(true)
-      setAiDetailError("")
-      try {
-        const url = `/api/ai-testing/${encodeURIComponent(props.extensionId)}/latest`
-        const res = await fetch(url, { cache: "no-store" })
-        if (!res.ok) {
-          setAiDetailRecords([])
-          setAiDetailAssetBaseUrl("")
-          setAiDetailNetwork(null)
-          setAiDetailError("No AI testing record found for this extension.")
-          return
-        }
-        const json: AiTestingResponse = await res.json()
-        if (!Array.isArray(json.records)) {
-          setAiDetailRecords([])
-          setAiDetailAssetBaseUrl("")
-          setAiDetailNetwork(null)
-          setAiDetailError("AI testing record format is invalid.")
-          return
-        }
-        const parsed = json.records.flatMap((item): AiTestingRecordingStep[] => {
-          if (!item || typeof item !== "object") return []
-          const obj = item as Record<string, unknown>
-          const time = typeof obj.time === "string" ? obj.time : ""
-          const thinking = typeof obj.thinking === "string" ? obj.thinking : ""
-          const image = typeof obj.image === "string" ? obj.image : ""
-          if (!time || !thinking || !image) return []
-          return [{ time, thinking, image }]
-        })
-        setAiDetailRecords(parsed)
-        setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
-        setAiDetailNetwork(json.network ?? null)
-        if (parsed.length === 0) setAiDetailError("AI testing record is empty.")
-      } catch {
-        setAiDetailRecords([])
-        setAiDetailAssetBaseUrl("")
-        setAiDetailNetwork(null)
-        setAiDetailError("Failed to load AI testing record.")
-      } finally {
-        setAiDetailLoading(false)
-      }
-    }
-    loadAiDetail()
-  }, [aiDetailOpen, props.extensionId])
 
   const prioritizedDomains = Array.from(new Set([...(details?.topDomainSignals || []).map((s) => s.domain), ...(details?.addedDomains || [])]))
   const filteredAddedDomains = prioritizedDomains.slice(0, 10).flatMap((domain) => {
@@ -367,10 +311,18 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
         open={aiDetailOpen}
         onOpenChange={(nextOpen) => {
           setAiDetailOpen(nextOpen)
-          if (!nextOpen) setAiDetailFullscreen(false)
+          if (!nextOpen) {
+            setAiDetailFullscreen(false)
+            setAiDetailAutoRefresh(false)
+          }
         }}
       >
         <DialogContent className={`overflow-hidden ${aiDetailFullscreen ? "h-[92vh] w-[96vw] max-w-[96vw]" : "max-h-[80vh] max-w-3xl"}`}>
+          <AiTestingAutoRefreshButton
+            enabled={aiDetailAutoRefresh}
+            onEnabledChange={setAiDetailAutoRefresh}
+            className="absolute right-28 top-3"
+          />
           <Button variant="ghost" size="icon" type="button" className="absolute right-20 top-3 h-8 w-8" title="Copy share link" onClick={handleCopyAiShareLink}>
             <Link2 className="h-4 w-4" />
           </Button>
