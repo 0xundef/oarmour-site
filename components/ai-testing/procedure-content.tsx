@@ -51,7 +51,7 @@ function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {network.requests.length === 0
-            ? "No Fetch/XHR or WebSocket requests were captured for this run. Extension-only onboarding (chrome-extension://) and static assets are excluded; open an HTTPS test page or complete wallet flows that call RPC/API hosts to populate this table."
+            ? "No HTTP(S) requests were captured for this run (chrome-extension:// URLs are excluded). Open a page or flow that generates HTTPS traffic, then call capture_network_traffic again."
             : "No matching requests."}
         </p>
       ) : (
