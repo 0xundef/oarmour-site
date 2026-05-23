@@ -12,18 +12,15 @@ import { useEffect, useMemo, useState, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
 import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
-import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSummary } from "@/lib/ai-testing-display"
+import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
+import { AiTestingNovelDomains } from "@/components/dashboard/ai-testing-novel-domains"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
 import { buildDashboardDownloadUrl, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
-import {
-  normalizeExtensionVersion,
-  resolveAiTestedAt,
-  versionsAligned,
-} from "@/lib/workbench-check-items"
+import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 
 type ThreatAlert = {
   id: string
@@ -299,7 +296,6 @@ export function ThreatAlerts() {
       existingIconPaths: string[]
     }
   } | null>(null)
-  const [aiTestingSummary, setAiTestingSummary] = useState<AiTestingSummary | null>(null)
   const [aiTestingPayload, setAiTestingPayload] = useState<AiTestingLatestPayload | null>(null)
   const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(false)
   const aiTestingSummaryAbortRef = useRef<AbortController | null>(null)
@@ -514,7 +510,6 @@ export function ThreatAlerts() {
   useEffect(() => {
     const loadAiTestingSummary = async () => {
       if (!selected || !open) {
-        setAiTestingSummary(null)
         setAiTestingPayload(null)
         setAiTestingSummaryLoading(false)
         return
@@ -538,7 +533,6 @@ export function ThreatAlerts() {
         })
         if (aiTestingSummaryAbortRef.current !== controller || selected.extensionId !== extId) return
         if (!res.ok) {
-          setAiTestingSummary(buildAiTestingSummary(null))
           setAiTestingPayload(null)
           return
         }
@@ -547,15 +541,12 @@ export function ThreatAlerts() {
           staticVersion.length > 0 && versionsAligned(staticVersion, json.version ?? '')
         if (aligned) {
           setAiTestingPayload(json)
-          setAiTestingSummary(buildAiTestingSummary(json))
         } else {
           setAiTestingPayload(null)
-          setAiTestingSummary(buildAiTestingSummary(null))
         }
       } catch (e) {
         if (isAbortError(e)) return
         if (aiTestingSummaryAbortRef.current === controller) {
-          setAiTestingSummary(buildAiTestingSummary(null))
           setAiTestingPayload(null)
         }
       } finally {
@@ -691,7 +682,6 @@ export function ThreatAlerts() {
   )
 
   const staticScanLabel = formatFindingRunLabel('static', details?.staticAnalyzedAt)
-  const aiTestLabel = formatFindingRunLabel('ai', resolveAiTestedAt(aiTestingPayload))
 
   const filteredAddedDomains = prioritizedDomains
     .slice(0, 10)
@@ -862,7 +852,7 @@ export function ThreatAlerts() {
           data={data}
           columns={makeColumns((row) => {
             setDetails(null)
-            setAiTestingSummary(null)
+            setAiTestingPayload(null)
             setSelected(row)
             setOpen(true)
           }, liveStatusByExtensionId)}
@@ -938,24 +928,11 @@ export function ThreatAlerts() {
               <div className="pt-4">
                 <div className="text-sm font-medium">AI Testing</div>
                 <div className="text-xs text-muted-foreground">
-                  {aiTestingSummaryLoading ? (
-                    <div className="text-muted-foreground">Loading...</div>
-                  ) : (
-                    <>
-                      <div className="mb-1">{aiTestLabel}</div>
-                      <div className="mb-1">
-                        Run: {aiTestingSummary?.hasRun ? aiTestingSummary.runId : '—'}
-                      </div>
-                      <div className="mb-1">Recording steps: {aiTestingSummary?.recordingSteps ?? 0}</div>
-                      <div className="mb-1">Network requests: {aiTestingSummary?.networkRequestCount ?? 0}</div>
-                      <div className="mb-1">Runtime domains: {aiTestingSummary?.runtimeDomainCount ?? 0}</div>
-                      <div className="mb-1">Novel vs static: {aiTestingSummary?.novelDomainCount ?? 0}</div>
-                      <div className="mb-1">
-                        Malicious runtime domains: {aiTestingSummary?.maliciousSignalCount ?? 0}
-                      </div>
-                      <div className="mb-1">Verdict: {aiTestingSummary?.verdict ?? 'No AI testing run yet'}</div>
-                    </>
-                  )}
+                  <AiTestingNovelDomains
+                    payload={aiTestingPayload}
+                    loading={aiTestingSummaryLoading}
+                    size="compact"
+                  />
                 </div>
               </div>
               <div className="pt-4">

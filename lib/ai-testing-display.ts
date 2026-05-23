@@ -27,6 +27,53 @@ export type AiTestingLatestPayload = {
   version?: string
 }
 
+export type AiTestingNovelDomainRow = {
+  domain: string
+  createTime: string | null
+  isMalicious: boolean | null
+}
+
+export function enrichmentCreateTimeIso(value: string | Date | null | undefined): string | null {
+  if (!value) return null
+  if (typeof value === 'string') {
+    const d = new Date(value)
+    return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString()
+  return null
+}
+
+/** Runtime apex domains not present in the same-batch static domain set (not vs previous version). */
+export function listNovelRuntimeDomainSignals(
+  payload: AiTestingLatestPayload | null,
+  limit = 10,
+): AiTestingNovelDomainRow[] {
+  const ai = payload?.aiAnalysis
+  const novel = ai?.novelDomains ?? []
+  if (novel.length === 0) return []
+
+  const enrichByDomain = new Map(
+    (ai?.domainEnrichments ?? []).map((row) => {
+      const domain = row.domain?.trim()
+      return domain ? [domain.toLowerCase(), row] as const : null
+    }).filter((entry): entry is readonly [string, AiTestingDomainEnrichment] => entry !== null),
+  )
+
+  return novel
+    .map((d) => (typeof d === 'string' ? d.trim() : ''))
+    .filter((d) => d.length > 0)
+    .slice(0, limit)
+    .map((domain) => {
+      const enrichment = enrichByDomain.get(domain.toLowerCase())
+      return {
+        domain,
+        createTime: enrichmentCreateTimeIso(enrichment?.createdDate),
+        isMalicious:
+          typeof enrichment?.isMalicious === 'boolean' ? enrichment.isMalicious : null,
+      }
+    })
+}
+
 export type AiTestingSummary = {
   hasRun: boolean
   runId: string | null

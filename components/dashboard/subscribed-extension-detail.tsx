@@ -7,14 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
-import { buildAiTestingSummary, type AiTestingLatestPayload, type AiTestingSummary } from "@/lib/ai-testing-display"
+import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
+import { AiTestingNovelDomains } from "@/components/dashboard/ai-testing-novel-domains"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
-import {
-  normalizeExtensionVersion,
-  resolveAiTestedAt,
-  versionsAligned,
-} from "@/lib/workbench-check-items"
+import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
 import { Link2, Maximize2, Minimize2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
@@ -82,7 +79,6 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
     }
   } | null>(null)
   const [domainAgeDays, setDomainAgeDays] = useState<Record<string, number | null>>({})
-  const [aiTestingSummary, setAiTestingSummary] = useState<AiTestingSummary | null>(null)
   const [aiTestingPayload, setAiTestingPayload] = useState<AiTestingLatestPayload | null>(null)
   const [aiTestingSummaryLoading, setAiTestingSummaryLoading] = useState(true)
   const [aiDetailOpen, setAiDetailOpen] = useState(false)
@@ -131,7 +127,6 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
             : `/api/ai-testing/${encodeURIComponent(props.extensionId)}/latest`
         const res = await fetch(aiUrl, { cache: 'no-store' })
         if (!res.ok) {
-          setAiTestingSummary(buildAiTestingSummary(null))
           setAiTestingPayload(null)
           return
         }
@@ -140,13 +135,10 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
           staticVersion.length > 0 && versionsAligned(staticVersion, json.version ?? '')
         if (aligned) {
           setAiTestingPayload(json)
-          setAiTestingSummary(buildAiTestingSummary(json))
         } else {
           setAiTestingPayload(null)
-          setAiTestingSummary(buildAiTestingSummary(null))
         }
       } catch {
-        setAiTestingSummary(buildAiTestingSummary(null))
         setAiTestingPayload(null)
       } finally {
         setAiTestingSummaryLoading(false)
@@ -257,10 +249,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
     return [{ domain, signal, displayAgeDays }]
   })
 
-  const maliciousSignalCount = aiTestingSummary?.maliciousSignalCount ?? 0
-  const aiVerdict = aiTestingSummary?.verdict ?? 'No AI testing run yet'
   const staticScanLabel = formatFindingRunLabel('static', details?.staticAnalyzedAt)
-  const aiTestLabel = formatFindingRunLabel('ai', resolveAiTestedAt(aiTestingPayload))
 
   const handleCopyAiShareLink = async () => {
     try {
@@ -331,21 +320,12 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
 
             <div>
               <div className="text-3xl font-semibold">AI Testing</div>
-              <div className="text-2xl text-muted-foreground">
-                {aiTestingSummaryLoading ? (
-                  <div>Loading...</div>
-                ) : (
-                  <>
-                    <div>{aiTestLabel}</div>
-                    <div>Run: {aiTestingSummary?.hasRun ? aiTestingSummary.runId : '—'}</div>
-                    <div>Recording steps: {aiTestingSummary?.recordingSteps ?? 0}</div>
-                    <div>Network requests: {aiTestingSummary?.networkRequestCount ?? 0}</div>
-                    <div>Runtime domains: {aiTestingSummary?.runtimeDomainCount ?? 0}</div>
-                    <div>Novel vs static: {aiTestingSummary?.novelDomainCount ?? 0}</div>
-                    <div>Malicious runtime domains: {maliciousSignalCount}</div>
-                    <div>Verdict: {aiVerdict}</div>
-                  </>
-                )}
+              <div className="mt-2 space-y-1 text-2xl text-muted-foreground">
+                <AiTestingNovelDomains
+                  payload={aiTestingPayload}
+                  loading={aiTestingSummaryLoading}
+                  size="detail"
+                />
               </div>
             </div>
 
