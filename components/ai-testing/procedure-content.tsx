@@ -49,7 +49,11 @@ function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
       />
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No matching requests.</p>
+        <p className="text-sm text-muted-foreground">
+          {network.requests.length === 0
+            ? "No Fetch/XHR or WebSocket requests were captured for this run. Extension-only onboarding (chrome-extension://) and static assets are excluded; open an HTTPS test page or complete wallet flows that call RPC/API hosts to populate this table."
+            : "No matching requests."}
+        </p>
       ) : (
         <div className="max-h-72 overflow-auto rounded-md border">
           <table className="w-full text-left text-xs">
@@ -128,9 +132,7 @@ export function AiTestingProcedureContent(props: {
           </div>
         )
       })}
-      {network && network.requests.length > 0 ? (
-        <AiTestingNetworkPanel network={network} />
-      ) : null}
+      {network ? <AiTestingNetworkPanel network={network} /> : null}
     </div>
   )
 }
