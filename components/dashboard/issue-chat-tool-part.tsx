@@ -7,6 +7,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import type { LocateDomainInSourceResult } from "@/lib/domain-code-locator"
 import type { LookupDomainWhoisResult } from "@/lib/domain-whois-lookup"
+import type { FetchWebPageResult } from "@/lib/web-page-fetch"
 
 type ToolPart = Extract<UIMessage["parts"][number], { type: string }>
 
@@ -65,6 +66,34 @@ function LookupWhoisOutput({ output }: { output: LookupDomainWhoisResult }) {
   )
 }
 
+function FetchWebPageOutput({ output }: { output: FetchWebPageResult }) {
+  if (!output.ok) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Fetch failed for{" "}
+        <span className="font-mono text-foreground break-all">{output.url}</span>
+        {output.error ? `: ${output.error}` : "."}
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-2 text-xs">
+      <p className="text-muted-foreground break-all">
+        <span className="font-mono text-foreground">{output.finalUrl ?? output.url}</span>
+        {output.status != null ? ` · HTTP ${output.status}` : ""}
+        {output.contentType ? ` · ${output.contentType.split(";")[0]}` : ""}
+      </p>
+      {output.title ? <p className="font-medium text-foreground">{output.title}</p> : null}
+      {output.excerpt ? (
+        <pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-2 whitespace-pre-wrap break-words text-[11px] text-foreground">
+          {output.excerpt}
+        </pre>
+      ) : null}
+    </div>
+  )
+}
+
 function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) {
   if (output.occurrences.length === 0) {
     return (
@@ -116,18 +145,19 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
   if (!isToolUIPart(part)) return null
 
   if (part.state === "input-streaming" || part.state === "input-available") {
-    const domain =
-      part.input && typeof part.input === "object" && "domain" in (part.input as object)
-        ? String((part.input as { domain?: string }).domain)
-        : ""
-    const verb =
-      part.type === "tool-lookup_domain_whois"
-        ? "Looking up WHOIS"
-        : "Searching extension source"
+    const input =
+      part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : null
+    const domain = input?.domain != null ? String(input.domain) : ""
+    const url = input?.url != null ? String(input.url) : ""
+    let verb = "Running tool"
+    if (part.type === "tool-lookup_domain_whois") verb = "Looking up WHOIS"
+    else if (part.type === "tool-locate_domain_in_source") verb = "Searching extension source"
+    else if (part.type === "tool-fetch_web_page") verb = "Fetching page"
     return (
       <p className="text-xs text-muted-foreground">
         {verb}
         {domain ? ` for ${domain}` : ""}
+        {url ? ` ${url}` : ""}
         …
       </p>
     )
@@ -147,6 +177,10 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
 
   if (part.type === "tool-locate_domain_in_source") {
     return <LocateDomainOutput output={part.output as LocateDomainInSourceResult} />
+  }
+
+  if (part.type === "tool-fetch_web_page") {
+    return <FetchWebPageOutput output={part.output as FetchWebPageResult} />
   }
 
   return (

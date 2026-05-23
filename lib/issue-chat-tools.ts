@@ -2,6 +2,7 @@ import { tool } from "ai"
 import { z } from "zod"
 import { locateDomainInSource, parseFindingFilePath } from "@/lib/domain-code-locator"
 import { lookupDomainWhois } from "@/lib/domain-whois-lookup"
+import { fetchWebPage } from "@/lib/web-page-fetch"
 
 export function createIssueChatTools(ctx: {
   storeId: string
@@ -39,6 +40,14 @@ export function createIssueChatTools(ctx: {
           priorityFilePaths,
         })
       },
+    }),
+    fetch_web_page: tool({
+      description:
+        "Fetch a public HTTPS page and return its title plus a plain-text excerpt for factual checks (vendor docs, reputation pages, blocklists). Use only for URLs relevant to the finding. Call at most once per URL per investigation.",
+      inputSchema: z.object({
+        url: z.string().url().describe("Full HTTPS URL, e.g. https://example.com/path"),
+      }),
+      execute: async ({ url }) => fetchWebPage(url),
     }),
   }
 }
