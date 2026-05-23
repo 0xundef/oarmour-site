@@ -7,8 +7,6 @@ import {
   listNovelRuntimeDomainSignals,
   type AiTestingLatestPayload,
 } from "@/lib/ai-testing-display"
-import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
-import { resolveAiTestedAt } from "@/lib/workbench-check-items"
 
 type AiTestingNovelDomainsProps = {
   payload: AiTestingLatestPayload | null
@@ -103,14 +101,10 @@ export function AiTestingNovelDomains({
   }
   if (displayRows.length === 0) return null
 
-  const runLabel = formatFindingRunLabel("ai", resolveAiTestedAt(payload))
   const isDetail = size === "detail"
 
   return (
     <>
-      {runLabel ? (
-        <div className={isDetail ? "mb-1" : "mb-1 text-muted-foreground"}>{runLabel}</div>
-      ) : null}
       {displayRows.map(({ domain, isMalicious, displayAgeDays }) => {
         const malicious = isMalicious === true
         return (

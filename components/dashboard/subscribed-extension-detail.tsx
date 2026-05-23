@@ -87,6 +87,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
   const [aiDetailError, setAiDetailError] = useState("")
   const [aiDetailRecords, setAiDetailRecords] = useState<AiTestingRecordingStep[]>([])
   const [aiDetailAssetBaseUrl, setAiDetailAssetBaseUrl] = useState("")
+  const [aiDetailNetwork, setAiDetailNetwork] = useState<AiTestingNetworkLog | null>(null)
   const detailsAbortRef = useRef<AbortController | null>(null)
   const domainMetaAbortRef = useRef<AbortController | null>(null)
   const domainMetaRequestedRef = useRef<Set<string>>(new Set())
@@ -207,6 +208,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
         if (!res.ok) {
           setAiDetailRecords([])
           setAiDetailAssetBaseUrl("")
+          setAiDetailNetwork(null)
           setAiDetailError("No AI testing record found for this extension.")
           return
         }
@@ -214,6 +216,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
         if (!Array.isArray(json.records)) {
           setAiDetailRecords([])
           setAiDetailAssetBaseUrl("")
+          setAiDetailNetwork(null)
           setAiDetailError("AI testing record format is invalid.")
           return
         }
@@ -228,10 +231,12 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
         })
         setAiDetailRecords(parsed)
         setAiDetailAssetBaseUrl(typeof json.assetBaseUrl === "string" ? json.assetBaseUrl : "")
+        setAiDetailNetwork(json.network ?? null)
         if (parsed.length === 0) setAiDetailError("AI testing record is empty.")
       } catch {
         setAiDetailRecords([])
         setAiDetailAssetBaseUrl("")
+        setAiDetailNetwork(null)
         setAiDetailError("Failed to load AI testing record.")
       } finally {
         setAiDetailLoading(false)
@@ -283,7 +288,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
 
           <div className="mt-8 space-y-6">
             <div>
-              <div className="text-3xl font-semibold">Domains</div>
+              <div className="text-3xl font-semibold tracking-wide">STATIC</div>
               <div className="text-2xl text-muted-foreground">
                 {details === null ? (
                   <div>Loading...</div>
@@ -319,7 +324,17 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
             </div>
 
             <div>
-              <div className="text-3xl font-semibold">AI Testing</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-3xl font-semibold tracking-wide">DYNAMIC</div>
+                <Button
+                  variant="link"
+                  className="h-auto shrink-0 p-0 text-2xl text-blue-600 underline underline-offset-2 hover:text-blue-700"
+                  type="button"
+                  onClick={() => setAiDetailOpen(true)}
+                >
+                  See Details
+                </Button>
+              </div>
               <div className="mt-2 space-y-1 text-2xl text-muted-foreground">
                 <AiTestingNovelDomains
                   payload={aiTestingPayload}
@@ -370,8 +385,10 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
             {aiDetailFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           <DialogHeader>
-            <DialogTitle>AI Testing Procedure</DialogTitle>
-            <DialogDescription>Step-by-step automated testing record for {props.extensionName}.</DialogDescription>
+            <DialogTitle>DYNAMIC</DialogTitle>
+            <DialogDescription>
+              Automated browser steps and captured network traffic for {props.extensionName}.
+            </DialogDescription>
           </DialogHeader>
           <div className={`${aiDetailFullscreen ? "max-h-[78vh]" : "max-h-[64vh]"} overflow-y-auto pr-1`}>
             <AiTestingProcedureContent
@@ -380,6 +397,7 @@ export function SubscribedExtensionDetail(props: SubscribedExtensionDetailProps)
               loading={aiDetailLoading}
               error={aiDetailError}
               assetBaseUrl={aiDetailAssetBaseUrl}
+              network={aiDetailNetwork}
             />
           </div>
         </DialogContent>

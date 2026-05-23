@@ -890,7 +890,7 @@ export function ThreatAlerts() {
               <div className="text-sm">Last Update: {selected?.lastUpdate}</div>
               <div className="text-sm">Status: {selected?.analysisStatus}</div>
               <div className="pt-4">
-                <div className="text-sm font-medium">Domains</div>
+                <div className="text-sm font-semibold tracking-wide">STATIC</div>
                 <div className="text-xs text-muted-foreground">
                   {details === null ? (
                     <div className="text-muted-foreground">Loading...</div>
@@ -926,7 +926,17 @@ export function ThreatAlerts() {
                 </div>
               </div>
               <div className="pt-4">
-                <div className="text-sm font-medium">AI Testing</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold tracking-wide">DYNAMIC</div>
+                  <Button
+                    variant="link"
+                    className="h-auto shrink-0 p-0 text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700"
+                    type="button"
+                    onClick={() => setAiDetailOpen(true)}
+                  >
+                    See Details
+                  </Button>
+                </div>
                 <div className="text-xs text-muted-foreground">
                   <AiTestingNovelDomains
                     payload={aiTestingPayload}
@@ -989,9 +999,9 @@ export function ThreatAlerts() {
               {aiDetailFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
             <DialogHeader>
-              <DialogTitle>AI Testing Procedure</DialogTitle>
+              <DialogTitle>DYNAMIC</DialogTitle>
               <DialogDescription>
-                Step-by-step automated testing record for {selected?.extensionName || "the selected extension"}.
+                Automated browser steps and captured network traffic for {selected?.extensionName || "the selected extension"}.
               </DialogDescription>
             </DialogHeader>
             <div className={`${aiDetailFullscreen ? "max-h-[78vh]" : "max-h-[64vh]"} overflow-y-auto pr-1`}>
