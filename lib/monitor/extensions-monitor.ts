@@ -10,6 +10,7 @@ import {
   getNextVersion,
   usesPrefixBasedVersionCheck,
 } from '@/lib/package-download-url'
+import { recordPublisherVersionIfNew } from '@/lib/extension-publisher-versions'
 import {
   resolveMonitorCompareVersion,
   setPendingVersion,
@@ -25,6 +26,7 @@ type DbClient = PrismaClient | Prisma.TransactionClient
 type MonitorExtensionRow = {
   id: string
   storeId: string
+  name: string
   version: string | null
   pendingVersion: string | null
   packageDownloadPrefix: string | null
@@ -103,13 +105,13 @@ async function loadMonitorExtensionList(
   try {
     if (targetStoreId) {
       return db.$queryRaw<MonitorExtensionRow[]>`
-        SELECT "id","storeId","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        SELECT "id","storeId","name","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
         FROM "GlobalExtension"
         WHERE "storeId" = ${targetStoreId}
       `
     }
     return db.$queryRaw<MonitorExtensionRow[]>`
-      SELECT "id","storeId","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+      SELECT "id","storeId","name","version","pendingVersion","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
       FROM "GlobalExtension"
       WHERE "isMonitored" = true
     `
@@ -118,13 +120,13 @@ async function loadMonitorExtensionList(
     let legacy: LegacyRow[]
     if (targetStoreId) {
       legacy = await db.$queryRaw<LegacyRow[]>`
-        SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        SELECT "id","storeId","name","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
         FROM "GlobalExtension"
         WHERE "storeId" = ${targetStoreId}
       `
     } else {
       legacy = await db.$queryRaw<LegacyRow[]>`
-        SELECT "id","storeId","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
+        SELECT "id","storeId","name","version","packageDownloadPrefix","packageDownloadSuffix","aiBrowserTestingEnabled"
         FROM "GlobalExtension"
         WHERE "isMonitored" = true
       `
@@ -167,14 +169,18 @@ async function monitorExtensionsOnceWithDb(
     list = await loadMonitorExtensionList(db, targetStoreId)
   } catch (e) {
     try {
-      let legacyList: Array<{ id: string; storeId: string; version: string | null }>
+      let legacyList: Array<{ id: string; storeId: string; name: string; version: string | null }>
       if (targetStoreId) {
-        legacyList = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
-          SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
+        legacyList = await db.$queryRaw<
+          Array<{ id: string; storeId: string; name: string; version: string | null }>
+        >`
+          SELECT "id","storeId","name","version" FROM "GlobalExtension" WHERE "storeId" = ${targetStoreId}
         `
       } else {
-        legacyList = await db.$queryRaw<Array<{ id: string; storeId: string; version: string | null }>>`
-          SELECT "id","storeId","version" FROM "GlobalExtension" WHERE "isMonitored" = true
+        legacyList = await db.$queryRaw<
+          Array<{ id: string; storeId: string; name: string; version: string | null }>
+        >`
+          SELECT "id","storeId","name","version" FROM "GlobalExtension" WHERE "isMonitored" = true
         `
       }
       list = legacyList.map((item) => ({
@@ -250,6 +256,15 @@ async function monitorExtensionsOnceWithDb(
           to: nextVersion,
           downloadUrl,
         })
+        await recordPublisherVersionIfNew(
+          {
+            extensionId: ext.id,
+            storeId: ext.storeId,
+            version: nextVersion,
+            extensionName: ext.name,
+          },
+          db,
+        )
         await processExtension(ext.storeId, downloadUrl)
         if (ext.aiBrowserTestingEnabled) {
           try {
@@ -276,6 +291,15 @@ async function monitorExtensionsOnceWithDb(
           to: latest,
         })
         try {
+          await recordPublisherVersionIfNew(
+            {
+              extensionId: ext.id,
+              storeId: ext.storeId,
+              version: latest,
+              extensionName: ext.name,
+            },
+            db,
+          )
           await setPendingVersion(ext.id, latest, db)
           await enqueueExtensionLookupJob(ext.id, db)
           if (ext.aiBrowserTestingEnabled) {

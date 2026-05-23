@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Copy, Pencil, Play, Trash2 } from "lucide-react";
+import { Copy, History, Pencil, Play, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,6 +33,8 @@ type ExtRow = {
   version: string | null;
   pendingVersion?: string | null;
   updatedAt?: string | null;
+  /** Latest monitor-observed publisher version release time, if any. */
+  lastPublisherUpdateAt?: string | null;
   isMonitored?: boolean;
   aiBrowserTestingEnabled?: boolean;
   checkFrequencyMinutes?: number;
@@ -49,6 +51,12 @@ type VersionListItem = {
 
 type DeleteVersionTarget = {
   ext: ExtRow;
+};
+
+type PublisherReleaseRow = {
+  version: string;
+  publishedAt: string;
+  extensionName: string | null;
 };
 
 function pickPreferredDeleteVersion(ext: ExtRow, versions: VersionListItem[]): string {
@@ -88,6 +96,9 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [versionsByExtensionId, setVersionsByExtensionId] = useState<
     Record<string, VersionListItem[]>
   >({});
+  const [releasesTarget, setReleasesTarget] = useState<ExtRow | null>(null);
+  const [publisherReleases, setPublisherReleases] = useState<PublisherReleaseRow[]>([]);
+  const [releasesLoading, setReleasesLoading] = useState(false);
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   const copyStoreId = async (storeId: string) => {
@@ -343,6 +354,28 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
     });
   };
 
+  const openPublisherReleases = (ext: ExtRow) => {
+    setReleasesTarget(ext);
+    setPublisherReleases([]);
+    setReleasesLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/admin/extensions/${ext.id}/publisher-versions`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Failed to load release history");
+        const json = (await res.json()) as { releases?: PublisherReleaseRow[] };
+        setPublisherReleases(json.releases ?? []);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load release history";
+        toast({ variant: "destructive", description: message });
+        setReleasesTarget(null);
+      } finally {
+        setReleasesLoading(false);
+      }
+    })();
+  };
+
   const runImmediateCheck = (ext: ExtRow) => {
     if (!ext.isMonitored) {
       toast({ variant: "destructive", description: "Monitoring is not enabled for this extension. Enable it first." });
@@ -396,7 +429,12 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
               <TableHead className="w-28 px-4" title="Latest version with completed static analysis">
                 Detected
               </TableHead>
-              <TableHead className="w-48 whitespace-nowrap px-4">Last Update</TableHead>
+              <TableHead
+                className="w-48 whitespace-nowrap px-4"
+                title="When monitor last observed a new published version"
+              >
+                Last Release
+              </TableHead>
               <TableHead className="w-[40rem] whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
           </TableHeader>
@@ -440,8 +478,17 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                   <TableCell className="w-28 whitespace-nowrap px-4">
                     {formatVersionCell(ext.version)}
                   </TableCell>
-                  <TableCell className="w-48 whitespace-nowrap px-4 text-muted-foreground">
-                    {formatLastUpdate(ext.updatedAt)}
+                  <TableCell
+                    className="w-48 whitespace-nowrap px-4 text-muted-foreground"
+                    title={
+                      ext.lastPublisherUpdateAt
+                        ? "Monitor-observed publisher release time"
+                        : ext.updatedAt
+                          ? "No release log yet; showing extension record updated time"
+                          : undefined
+                    }
+                  >
+                    {formatLastUpdate(ext.lastPublisherUpdateAt ?? ext.updatedAt)}
                   </TableCell>
                   <TableCell className="w-[40rem] whitespace-nowrap px-4">
                     <div className="flex flex-nowrap items-center justify-start gap-2">
@@ -494,6 +541,17 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                         variant="outline"
                         size="sm"
                         disabled={pending}
+                        onClick={() => openPublisherReleases(ext)}
+                        aria-label="View publisher release history"
+                        title="Append-only log of versions first seen by monitor"
+                      >
+                        <History className="mr-1.5 h-3.5 w-3.5" />
+                        Releases
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pending}
                         onClick={() => openEditModal(ext)}
                         aria-label="Edit extension"
                         title="Edit name and AI test prompt"
@@ -519,6 +577,55 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog
+        open={!!releasesTarget}
+        onOpenChange={(open) => {
+          if (!open) setReleasesTarget(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Publisher release history</DialogTitle>
+            <DialogDescription>
+              {releasesTarget
+                ? `Versions first observed by monitor for "${releasesTarget.name}". Times are discovery time (≈ poll interval), not Chrome Web Store page dates.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {releasesLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : publisherReleases.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No releases recorded yet.</p>
+          ) : (
+            <div className="max-h-80 overflow-y-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Observed</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {publisherReleases.map((row) => (
+                    <TableRow key={row.version}>
+                      <TableCell className="font-mono text-sm">{row.version}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatLastUpdate(row.publishedAt)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReleasesTarget(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!deleteTarget}

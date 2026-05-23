@@ -222,6 +222,21 @@ model GlobalExtension {
   domainAllowlistEntries ExtensionDomainAllowlist[]
 }
 
+/// Append-only log: first time monitor observed each published (storeId, version).
+/// Not tied to analysis rows; survives version/analysis cleanup.
+model ExtensionPublisherVersion {
+  id            String   @id @default(uuid())
+  extensionId   String
+  storeId       String
+  extensionName String?
+  version       String
+  publishedAt   DateTime
+
+  @@unique([storeId, version])
+  @@index([storeId, publishedAt(sort: Desc)])
+  @@index([extensionId, publishedAt(sort: Desc)])
+}
+
 model FindingDismissal {
   id               String   @id @default(uuid())
   userId           String

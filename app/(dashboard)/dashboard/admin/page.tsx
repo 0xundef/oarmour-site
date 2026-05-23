@@ -7,6 +7,7 @@ import { UsersTable } from "@/components/admin/users-table";
 import { ExtensionsTable } from "@/components/admin/extensions-table";
 import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
 import { AiTestingMonitorDashboard } from "@/components/admin/ai-testing-monitor-dashboard";
+import { getLatestPublisherPublishedAtByStoreIds } from "@/lib/extension-publisher-versions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AdminSection = "users" | "audit" | "monitoring";
@@ -123,6 +124,13 @@ export default async function AdminPage({
         promptMarkdown: null,
       }))
     }
+    const storeIds = rawExtensions.map((e) => e.storeId);
+    let latestPublisherByStoreId: Record<string, string> = {};
+    try {
+      latestPublisherByStoreId = await getLatestPublisherPublishedAtByStoreIds(storeIds);
+    } catch {
+      latestPublisherByStoreId = {};
+    }
     const extensions = rawExtensions.map((e) => ({
       id: e.id,
       name: e.name,
@@ -136,6 +144,7 @@ export default async function AdminPage({
       checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
       promptMarkdown: e.promptMarkdown ?? undefined,
       updatedAt: e.updatedAt ? new Date(e.updatedAt).toISOString() : null,
+      lastPublisherUpdateAt: latestPublisherByStoreId[e.storeId] ?? null,
     }));
     title = "Monitoring";
     description = "Manage extension monitoring and monitor service health in one place.";
