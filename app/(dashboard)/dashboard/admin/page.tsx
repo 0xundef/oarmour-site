@@ -6,6 +6,7 @@ import { LoginActivitiesTable } from "@/components/admin/login-activities-table"
 import { UsersTable } from "@/components/admin/users-table";
 import { ExtensionsTable } from "@/components/admin/extensions-table";
 import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
+import { AiTestingMonitorDashboard } from "@/components/admin/ai-testing-monitor-dashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AdminSection = "users" | "audit" | "monitoring";
@@ -143,10 +144,14 @@ export default async function AdminPage({
       <Tabs key="monitoring-tabs" defaultValue={defaultTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="extensions">Extension Management</TabsTrigger>
+          <TabsTrigger value="ai-testing">AI testing</TabsTrigger>
           <TabsTrigger value="service-health">Service Health</TabsTrigger>
         </TabsList>
         <TabsContent value="extensions" className="space-y-4">
           <ExtensionsTable extensions={extensions} />
+        </TabsContent>
+        <TabsContent value="ai-testing" className="space-y-4">
+          <AiTestingMonitorDashboard extensions={extensions} />
         </TabsContent>
         <TabsContent value="service-health" className="space-y-4">
           <MonitorJobsDashboard />

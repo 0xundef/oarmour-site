@@ -139,3 +139,7 @@ export function enqueueAgentBrowserTestTask(input: {
 export function readAgentStatuses() {
   return readJsonArray<AgentStatusEntry>(getAgentStatusPath())
 }
+
+export function readAgentIncomingQueue() {
+  return readJsonArray<AgentQueueEntry>(getAgentIncomingQueuePath())
+}

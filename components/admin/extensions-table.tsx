@@ -24,14 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AiTestingRunButton } from "@/components/ai-testing/ai-testing-run-button";
-import {
-  loadAiTestingStatusMap,
-  mergeAiTestingStatusMaps,
-  type AiTestingStatusEntry,
-} from "@/lib/ai-testing-status-client";
 import { ExtensionPromptEditor } from "@/components/admin/extension-prompt-editor";
-import { Separator } from "@/components/ui/separator";
 
 type ExtRow = {
   id: string;
@@ -95,9 +88,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [versionsByExtensionId, setVersionsByExtensionId] = useState<
     Record<string, VersionListItem[]>
   >({});
-  const [aiTestingStatusByStoreId, setAiTestingStatusByStoreId] = useState<
-    Record<string, AiTestingStatusEntry>
-  >({});
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
 
   const copyStoreId = async (storeId: string) => {
@@ -145,33 +135,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
       cancelled = true;
     };
   }, [extensions]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = async () => {
-      try {
-        const next = await loadAiTestingStatusMap();
-        if (!cancelled) {
-          setAiTestingStatusByStoreId((prev) => mergeAiTestingStatusMaps(prev, next));
-        }
-      } catch {
-        // ignore — button state may be stale until next poll
-      }
-    };
-    void refresh();
-    const interval = setInterval(() => void refresh(), 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const handleAiTestingTriggered = (storeId: string) => {
-    setAiTestingStatusByStoreId((prev) => ({
-      ...prev,
-      [storeId]: { agentStatus: "pending", analysisStatus: null, analysisError: null },
-    }));
-  };
 
   const toggleAiBrowserTesting = (id: string, enabled: boolean) => {
     startTransition(async () => {
@@ -504,15 +467,6 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                           />
                         </span>
                       </div>
-                      <Separator orientation="vertical" className="h-6" />
-                      <AiTestingRunButton
-                        storeId={ext.storeId}
-                        extensionName={ext.name}
-                        version={ext.pendingVersion ?? ext.version}
-                        statusEntry={aiTestingStatusByStoreId[ext.storeId]}
-                        onTriggered={handleAiTestingTriggered}
-                        disabled={pending}
-                      />
                       {hasPendingHalfState(ext) ? (
                         <Button
                           variant="outline"
