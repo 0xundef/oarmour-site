@@ -114,10 +114,6 @@ export function getAgentQueueRoot() {
   return configured ? path.resolve(configured) : path.join(getExtensionStorageBaseDir(), AGENT_QUEUE_DIR)
 }
 
-export function getAgentIncomingQueuePath() {
-  return path.join(getAgentQueueRoot(), 'incoming_queue.json')
-}
-
 export function getAgentStatusPath() {
   return path.join(getAgentQueueRoot(), 'status.json')
 }

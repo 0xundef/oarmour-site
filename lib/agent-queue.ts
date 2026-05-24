@@ -1,9 +1,9 @@
 import fs from 'fs'
 import path from 'path'
+import { enqueueBrowserAgentTask } from '@/lib/browser-agent-task-queue'
 import {
   getAgentCliConfigTemplatePath,
   getAgentDefaultPromptPath,
-  getAgentIncomingQueuePath,
   getAgentStatusPath,
   getExtensionArtifactRoot,
   hasResolvableAgentPrompt,
@@ -40,19 +40,6 @@ function readJsonArray<T>(filePath: string): T[] {
   return Array.isArray(parsed) ? (parsed as T[]) : []
 }
 
-function writeJsonAtomic(filePath: string, data: unknown) {
-  const dir = path.dirname(filePath)
-  fs.mkdirSync(dir, { recursive: true })
-  const tmpPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`)
-  fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  fs.renameSync(tmpPath, filePath)
-}
-
-function buildRunId(storeId: string, version: string) {
-  const safeVersion = version.replace(/[^a-zA-Z0-9._-]+/g, '_')
-  return `${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${storeId.slice(0, 8)}-${safeVersion}`
-}
-
 const BUNDLED_DEFAULT_PROMPT_REL = ['lib', 'agent-queue', 'default-extension-test-prompt.md'] as const
 const BUNDLED_CLI_CONFIG_TEMPLATE_REL = ['lib', 'agent-queue', 'cli_config_template.json'] as const
 
@@ -76,7 +63,7 @@ export function syncAgentQueueCliConfigTemplateFromBundled(): void {
   fs.copyFileSync(src, dest)
 }
 
-export function enqueueAgentBrowserTestTask(input: {
+export async function enqueueAgentBrowserTestTask(input: {
   storeId: string
   name?: string | null
   version: string | null | undefined
@@ -95,44 +82,26 @@ export function enqueueAgentBrowserTestTask(input: {
     return { queued: false as const, reason: 'missing_prompt' as const }
   }
 
-  const queuePath = getAgentIncomingQueuePath()
-  const queue = readJsonArray<AgentQueueEntry>(queuePath)
-  const statuses = readJsonArray<AgentStatusEntry>(getAgentStatusPath())
-  const hasActiveStatus = statuses.some(
-    (item) =>
-      item.id === input.storeId &&
-      item.version === input.version &&
-      (item.status === 'pending' || item.status === 'running'),
-  )
-  const hasActiveQueue = queue.some((queueEntry) => {
-    if (queueEntry.id !== input.storeId || queueEntry.version !== input.version) return false
-    const status = statuses.find(
-      (item) =>
-        item.id === queueEntry.id &&
-        item.version === queueEntry.version &&
-        (item.runId === queueEntry.runId || item.index === queueEntry.index),
-    )
-    return !status || status.status === 'pending' || status.status === 'running'
+  const result = await enqueueBrowserAgentTask({
+    storeId: input.storeId,
+    name: input.name,
+    version: input.version,
+    reason: input.reason,
   })
-
-  if (hasActiveStatus || hasActiveQueue) {
-    return { queued: false as const, reason: 'already_queued' as const }
+  if (!result.queued) {
+    return result
   }
 
-  const runId = buildRunId(input.storeId, input.version)
   const entry: AgentQueueEntry = {
     id: input.storeId,
     name: input.name ?? undefined,
     version: input.version,
     index: Date.now(),
-    runId,
+    runId: result.sessionId,
     artifactRoot: getExtensionArtifactRoot(input.storeId, input.version),
     reason: input.reason,
     incoming_time: new Date().toISOString(),
   }
-
-  queue.push(entry)
-  writeJsonAtomic(queuePath, queue)
   return { queued: true as const, entry }
 }
 

@@ -237,6 +237,34 @@ model ExtensionPublisherVersion {
   @@index([extensionId, publishedAt(sort: Desc)])
 }
 
+enum BrowserAgentTaskStatus {
+  QUEUED
+  DISPATCHED
+  RUNNING
+  COMPLETE
+  ERROR
+  CANCELLED
+}
+
+/// OArmour-owned dispatch queue for browser agent AI test runs.
+model BrowserAgentTask {
+  id            String                 @id @default(uuid())
+  sessionId     String                 @unique
+  storeId       String
+  version       String
+  extensionName String?
+  reason        String
+  status        BrowserAgentTaskStatus @default(QUEUED)
+  error         String?                @db.Text
+  dispatchedAt  DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([status, createdAt])
+  @@index([storeId, version])
+}
+
 model FindingDismissal {
   id               String   @id @default(uuid())
   userId           String

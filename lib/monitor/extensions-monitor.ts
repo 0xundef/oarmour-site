@@ -268,7 +268,7 @@ async function monitorExtensionsOnceWithDb(
         await processExtension(ext.storeId, downloadUrl)
         if (ext.aiBrowserTestingEnabled) {
           try {
-            enqueueAgentBrowserTestTask({
+            await enqueueAgentBrowserTestTask({
               storeId: ext.storeId,
               version: nextVersion,
               reason: 'monitor_new_version',
@@ -304,7 +304,7 @@ async function monitorExtensionsOnceWithDb(
           await enqueueExtensionLookupJob(ext.id, db)
           if (ext.aiBrowserTestingEnabled) {
             try {
-              enqueueAgentBrowserTestTask({
+              await enqueueAgentBrowserTestTask({
                 storeId: ext.storeId,
                 version: latest,
                 reason: 'monitor_new_version',
