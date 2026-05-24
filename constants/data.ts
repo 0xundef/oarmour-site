@@ -2,10 +2,10 @@ import { NavItem } from "@/types";
 
 export const navItems: NavItem[] = [
   {
-    title: "Web Extension",
+    title: "Extensions",
     href: "/dashboard/extension",
     icon: "webExtension",
-    label: "Web Extension",
+    label: "Extensions",
   },
   {
     title: "Billing",
