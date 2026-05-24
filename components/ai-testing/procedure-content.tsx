@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { AiTestingNetworkLog } from "@/lib/ai-testing-network"
+import { normalizeAiTestingImageRelativePath } from "@/lib/ai-testing-asset-path"
 
 type AiTestingRecordingStep = {
   time: string
@@ -113,7 +114,7 @@ export function AiTestingProcedureContent(props: {
   return (
     <div className="space-y-4">
       {records.map((step, idx) => {
-        const imageName = step.image.replace(/^\/+/, "")
+        const imageName = normalizeAiTestingImageRelativePath(step.image)
         const imagePath = assetBaseUrl
           ? `${assetBaseUrl}/${imageName.split("/").map(encodeURIComponent).join("/")}`
           : `/ai_testing/${extensionId}/${imageName}`

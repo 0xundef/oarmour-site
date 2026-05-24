@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { NextResponse } from 'next/server'
+import { normalizeAiTestingImageRelativePath } from '@/lib/ai-testing-asset-path'
 import { getAiTestingRunRoot } from '@/lib/extension-storage'
 
 export const runtime = 'nodejs'
@@ -25,9 +26,18 @@ export async function GET(
   }
 
   const runRoot = getAiTestingRunRoot(storeId, version, runId)
-  const filePath = path.resolve(runRoot, ...relativePath)
   const normalizedRoot = `${path.resolve(runRoot)}${path.sep}`
-  if (!filePath.startsWith(normalizedRoot) || !fs.existsSync(filePath)) {
+  const relativeImage = normalizeAiTestingImageRelativePath(relativePath.join('/'))
+  const segments = relativeImage.split('/').filter(Boolean)
+
+  const candidates = [
+    path.resolve(runRoot, ...segments),
+    path.resolve(runRoot, path.basename(relativeImage)),
+  ]
+  const filePath = candidates.find(
+    (candidate) => candidate.startsWith(normalizedRoot) && fs.existsSync(candidate),
+  )
+  if (!filePath) {
     return NextResponse.json({ error: 'Asset not found' }, { status: 404 })
   }
 
