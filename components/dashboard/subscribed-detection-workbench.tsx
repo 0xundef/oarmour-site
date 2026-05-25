@@ -137,8 +137,8 @@ export function SubscribedDetectionWorkbench({
         return
       }
 
-      const versionLabel =
-        staticVersion && aiPayload ? normalizeExtensionVersion(staticVersion) : null
+      // Version follows static analysis; AI findings merge only when aiPayload is version-aligned.
+      const versionLabel = staticVersion ? normalizeExtensionVersion(staticVersion) : null
       setAlignedVersion(versionLabel)
 
       const built = buildWorkbenchCheckItems({ staticPayload, aiPayload })
