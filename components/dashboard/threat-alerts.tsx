@@ -8,7 +8,7 @@ import { Copy, Bell, Download, Maximize2, Minimize2, Link2, ShieldCheck, ShieldA
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef, useCallback } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { AiTestingAutoRefreshButton } from "@/components/ai-testing/ai-testing-auto-refresh-button"
 import { AiTestingProcedureContent } from "@/components/ai-testing/procedure-content"
@@ -21,6 +21,7 @@ import { useSearchParams } from "next/navigation"
 import { buildDashboardDownloadUrl } from "@/lib/package-download-url"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
+import { dispatchSubscriptionsNavRefresh } from "@/lib/subscriptions-nav-events"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 
 type ThreatAlert = {
@@ -62,6 +63,30 @@ const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
   const [subscribed, setSubscribed] = useState(false)
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true)
+
+  const loadSubscriptionState = useCallback(async () => {
+    setSubscriptionLoading(true)
+    try {
+      const qs = new URLSearchParams({ extensionId })
+      const res = await fetch(`/api/notifications/subscribe?${qs.toString()}`, {
+        cache: "no-store",
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { subscribed?: boolean; degraded?: boolean }
+      if (!data.degraded && typeof data.subscribed === "boolean") {
+        setSubscribed(data.subscribed)
+      }
+    } catch {
+      // Non-fatal; bell stays unsubscribed styling.
+    } finally {
+      setSubscriptionLoading(false)
+    }
+  }, [extensionId])
+
+  useEffect(() => {
+    void loadSubscriptionState()
+  }, [loadSubscriptionState])
 
   const handleCopy = async () => {
     try {
@@ -97,11 +122,13 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
       if (typeof data.subscribed === 'boolean') {
         setSubscribed(data.subscribed)
         toast({ description: data.subscribed ? 'Subscribed to alert events' : 'Unsubscribed from alerts' })
+        dispatchSubscriptionsNavRefresh()
         return
       }
       if (typeof data.unsubscribed === 'boolean') {
         setSubscribed(!data.unsubscribed)
         toast({ description: data.unsubscribed ? 'Unsubscribed from alerts' : 'Subscribed to alert events' })
+        dispatchSubscriptionsNavRefresh()
         return
       }
       toast({ description: 'Failed to update subscription', variant: 'destructive' })
@@ -119,6 +146,7 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         variant={subscribed ? 'default' : 'ghost'}
         size="icon"
         onClick={handleSubscribe}
+        disabled={subscriptionLoading}
         title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe to alert events'}
         className={subscribed ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
         aria-label={subscribed ? 'Subscribed to alert events' : 'Not subscribed to alert events'}

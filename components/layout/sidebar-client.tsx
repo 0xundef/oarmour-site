@@ -2,9 +2,13 @@
 
 import { DashboardNav } from "@/components/dashboard-nav";
 import { cn } from "@/lib/utils";
+import {
+  patchNavItemsWithSubscribedChildren,
+  SUBSCRIPTIONS_NAV_REFRESH_EVENT,
+} from "@/lib/subscriptions-nav-events";
 import { NavItem } from "@/types";
 import { ChevronLeft } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { UserNav } from "./user-nav";
 
@@ -12,8 +16,33 @@ interface SidebarClientProps {
   items: NavItem[];
 }
 
-export default function SidebarClient({ items }: SidebarClientProps) {
+export default function SidebarClient({ items: initialItems }: SidebarClientProps) {
   const [isMinimized, setIsMinimized] = useState(false);
+  const [items, setItems] = useState(initialItems);
+
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
+
+  const refreshSubscribedNav = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications/subscriptions", { cache: "no-store" });
+      if (!res.ok) return
+      const data = (await res.json()) as { items?: NavItem[] }
+      if (!Array.isArray(data.items)) return
+      setItems((prev) => patchNavItemsWithSubscribedChildren(prev, data.items!))
+    } catch {
+      // Keep current sidebar if refresh fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      void refreshSubscribedNav()
+    }
+    window.addEventListener(SUBSCRIPTIONS_NAV_REFRESH_EVENT, handler)
+    return () => window.removeEventListener(SUBSCRIPTIONS_NAV_REFRESH_EVENT, handler)
+  }, [refreshSubscribedNav])
 
   const toggleSidebar = () => {
     setIsMinimized(!isMinimized);
