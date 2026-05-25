@@ -5,7 +5,6 @@ import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
 import {
   ArrowUpIcon,
-  ChevronDownIcon,
   Link2Icon,
   MoreHorizontal,
   ShieldOffIcon,
@@ -13,7 +12,6 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { FindingDismissDialog } from "@/components/dashboard/finding-dismiss-dialog"
-import { Separator } from "@/components/ui/separator"
 import { domainFromMaliciousFindingIssueId } from "@/lib/finding-resolution"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
@@ -220,23 +218,6 @@ function IssueAiChatBoxInner({
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {!shareMode ? (
         <div className="flex shrink-0 items-center justify-end gap-1 border-b px-3 py-1.5">
-          {listTab === "open" ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 gap-1 text-xs"
-                disabled={isBusy}
-                onClick={() => setDismissDialogOpen(true)}
-              >
-                <ShieldOffIcon className="size-3.5" />
-                Mark false positive
-                <ChevronDownIcon className="size-3 opacity-60" />
-              </Button>
-              <Separator orientation="vertical" className="mx-1 h-6" />
-            </>
-          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -250,6 +231,16 @@ function IssueAiChatBoxInner({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+              {listTab === "open" ? (
+                <DropdownMenuItem
+                  className="gap-2 text-xs"
+                  disabled={isBusy}
+                  onClick={() => setDismissDialogOpen(true)}
+                >
+                  <ShieldOffIcon className="size-3.5" />
+                  Mark false positive
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 className="gap-2 text-xs"
                 disabled={isBusy || messages.length === 0}
