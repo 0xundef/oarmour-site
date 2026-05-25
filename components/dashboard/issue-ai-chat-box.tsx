@@ -42,7 +42,10 @@ import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
-import { IssueChatToolPart } from "@/components/dashboard/issue-chat-tool-part"
+import {
+  IssueChatToolPart,
+  type IssueChatToolPartActions,
+} from "@/components/dashboard/issue-chat-tool-part"
 import {
   IssueInvestigationShareFooter,
   IssueInvestigationShareHeader,
@@ -130,6 +133,17 @@ function IssueAiChatBoxInner({
   const [clearActionError, setClearActionError] = useState("")
 
   const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
+
+  const toolPartActions = useMemo<IssueChatToolPartActions>(
+    () => ({
+      storeId,
+      issueId: issue.id,
+      extensionVersion,
+      findingIsActive,
+      onResolutionChange,
+    }),
+    [storeId, issue.id, extensionVersion, findingIsActive, onResolutionChange],
+  )
 
   const transport = useMemo(
     () =>
@@ -331,6 +345,7 @@ function IssueAiChatBoxInner({
                           <IssueChatToolPart
                             key={`${message.id}-tool-${partIndex}`}
                             part={part}
+                            actions={toolPartActions}
                           />
                         )
                       }

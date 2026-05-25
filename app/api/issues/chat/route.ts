@@ -127,7 +127,11 @@ export async function POST(req: Request) {
     )
   }
 
-  const tools = createIssueChatTools({ storeId: scope.storeId, findingFile: issue.file })
+  const tools = createIssueChatTools({
+    storeId: scope.storeId,
+    issueId: issue.id,
+    findingFile: issue.file,
+  })
   const providerOptions = resolveInvestigationProviderOptions(investigation.modelId)
   const thinkingDisabled = providerOptions.deepseek.thinking?.type === "disabled"
 

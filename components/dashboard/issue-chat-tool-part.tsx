@@ -8,10 +8,23 @@ import { cn } from "@/lib/utils"
 import type { LocateDomainInSourceResult } from "@/lib/domain-code-locator"
 import type { LookupDomainWhoisResult } from "@/lib/domain-whois-lookup"
 import type { FetchWebPageResult } from "@/lib/web-page-fetch"
+import type {
+  AllowlistProposalOutput,
+  DismissProposalOutput,
+} from "@/lib/issue-chat-tool-proposals"
+import {
+  AllowlistProposalActions,
+  DismissProposalActions,
+  type IssueChatToolPartActions,
+} from "@/components/dashboard/issue-chat-tool-proposal-actions"
+
+export type { IssueChatToolPartActions }
 
 type ToolPart = Extract<UIMessage["parts"][number], { type: string }>
 
 function formatToolLabel(part: ToolPart): string {
+  if (part.type === "tool-propose_add_allowlist") return "Add to allowlist"
+  if (part.type === "tool-propose_dismiss_finding") return "Mark false positive"
   if (part.type === "dynamic-tool" && "toolName" in part) {
     return String(part.toolName).replace(/_/g, " ")
   }
@@ -141,7 +154,13 @@ function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) 
   )
 }
 
-function ToolOutputBody({ part }: { part: ToolPart }) {
+function ToolOutputBody({
+  part,
+  actions,
+}: {
+  part: ToolPart
+  actions?: IssueChatToolPartActions
+}) {
   if (!isToolUIPart(part)) return null
 
   if (part.state === "input-streaming" || part.state === "input-available") {
@@ -153,6 +172,8 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
     if (part.type === "tool-lookup_domain_whois") verb = "Looking up WHOIS"
     else if (part.type === "tool-locate_domain_in_source") verb = "Searching extension source"
     else if (part.type === "tool-fetch_web_page") verb = "Fetching page"
+    else if (part.type === "tool-propose_add_allowlist") verb = "Preparing allowlist suggestion"
+    else if (part.type === "tool-propose_dismiss_finding") verb = "Preparing false positive suggestion"
     return (
       <p className="text-xs text-muted-foreground">
         {verb}
@@ -183,6 +204,20 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
     return <FetchWebPageOutput output={part.output as FetchWebPageResult} />
   }
 
+  if (part.type === "tool-propose_add_allowlist") {
+    const output = part.output as AllowlistProposalOutput
+    if (output.kind === "allowlist_proposal") {
+      return <AllowlistProposalActions output={output} actions={actions} />
+    }
+  }
+
+  if (part.type === "tool-propose_dismiss_finding") {
+    const output = part.output as DismissProposalOutput
+    if (output.kind === "dismiss_proposal") {
+      return <DismissProposalActions output={output} actions={actions} />
+    }
+  }
+
   return (
     <pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-2 text-[11px] whitespace-pre-wrap">
       {JSON.stringify(part.output, null, 2)}
@@ -190,9 +225,18 @@ function ToolOutputBody({ part }: { part: ToolPart }) {
   )
 }
 
-export function IssueChatToolPart({ part }: { part: ToolPart }) {
+export function IssueChatToolPart({
+  part,
+  actions,
+}: {
+  part: ToolPart
+  actions?: IssueChatToolPartActions
+}) {
   const [open, setOpen] = useState(true)
   if (!isToolUIPart(part)) return null
+
+  const isProposal =
+    part.type === "tool-propose_add_allowlist" || part.type === "tool-propose_dismiss_finding"
 
   const busy =
     part.state === "input-streaming" ||
@@ -200,20 +244,25 @@ export function IssueChatToolPart({ part }: { part: ToolPart }) {
     part.state === "approval-requested"
 
   return (
-    <div className="my-2 w-full max-w-full rounded-lg border border-dashed border-muted-foreground/25 bg-muted/20">
+    <div
+      className={cn(
+        "my-2 w-full max-w-full rounded-lg border bg-muted/20",
+        isProposal ? "border-primary/30 border-solid" : "border-dashed border-muted-foreground/25",
+      )}
+    >
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:text-foreground"
         onClick={() => setOpen((value) => !value)}
       >
         <CodeIcon className="size-3.5 shrink-0" />
-        <span className="flex-1 capitalize">{formatToolLabel(part)}</span>
+        <span className="flex-1">{formatToolLabel(part)}</span>
         {busy ? <span className="text-[10px]">Running…</span> : null}
         <ChevronDownIcon className={cn("size-3.5 transition-transform", open && "rotate-180")} />
       </button>
       {open ? (
         <div className="border-t px-3 py-2">
-          <ToolOutputBody part={part} />
+          <ToolOutputBody part={part} actions={actions} />
         </div>
       ) : null}
     </div>
