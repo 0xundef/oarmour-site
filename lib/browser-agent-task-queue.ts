@@ -10,7 +10,8 @@ import {
 
 function buildSessionId(storeId: string, version: string) {
   const safeVersion = version.replace(/[^a-zA-Z0-9._-]+/g, '_')
-  return `${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${storeId.slice(0, 8)}-${safeVersion}`
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/[TZ]/g, '').slice(0, 14)
+  return `${stamp}-${storeId.slice(0, 8)}-${safeVersion}`
 }
 
 const ACTIVE_DB_STATUSES: BrowserAgentTaskStatus[] = ['QUEUED', 'DISPATCHED', 'RUNNING']
