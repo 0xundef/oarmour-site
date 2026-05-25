@@ -6,6 +6,7 @@ import {
   getInvestigationLanguageModel,
   resolveInvestigationProviderOptions,
 } from "@/lib/investigation-chat-model"
+import { resolveOpenAiChatboxModelId } from "@/lib/openai-chatbox-config"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import {
   deleteIssueInvestigationChat,
@@ -102,7 +103,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const investigation = getInvestigationLanguageModel()
+  const body = (await req.json().catch(() => null)) as
+    | {
+        issue?: IssueChatContext
+        storeId?: string
+        messages?: UIMessage[]
+        model?: string
+      }
+    | null
+
+  const requestedModel =
+    typeof body?.model === "string" ? resolveOpenAiChatboxModelId(body.model) : undefined
+  const investigation = getInvestigationLanguageModel(requestedModel)
   if (!investigation) {
     return NextResponse.json(
       {
@@ -112,10 +124,6 @@ export async function POST(req: Request) {
       { status: 500 },
     )
   }
-
-  const body = (await req.json().catch(() => null)) as
-    | { issue?: IssueChatContext; storeId?: string; messages?: UIMessage[] }
-    | null
   const issue = body?.issue
   const messages = body?.messages
   const scope = parseIssueChatScope({ storeId: body?.storeId, issueId: issue?.id })

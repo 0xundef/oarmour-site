@@ -75,6 +75,15 @@ const SUGGESTIONS = [
   "Summarize the evidence we have for this issue.",
 ] as const
 
+const CHAT_MODEL_STORAGE_KEY = "oarmour-issue-chat-model"
+
+function pickInitialChatModel(available: string[], defaultModel: string) {
+  if (typeof window === "undefined") return defaultModel
+  const saved = localStorage.getItem(CHAT_MODEL_STORAGE_KEY)?.trim()
+  if (saved && available.includes(saved)) return saved
+  return defaultModel
+}
+
 function messageHasVisibleText(message: UIMessage): boolean {
   return message.parts.some((part) => part.type === "text" && (part.text ?? "").trim().length > 0)
 }
@@ -124,6 +133,8 @@ function IssueAiChatBoxInner({
   findingResolution,
   domainOnAllowlist,
   onResolutionChange,
+  chatModels,
+  defaultChatModel,
 }: {
   storeId: string
   issue: WorkbenchCheckItem
@@ -134,6 +145,8 @@ function IssueAiChatBoxInner({
   findingResolution: FindingListResolution
   domainOnAllowlist: boolean
   onResolutionChange: () => void
+  chatModels: string[]
+  defaultChatModel: string
 }) {
   const { toast } = useToast()
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
@@ -146,6 +159,16 @@ function IssueAiChatBoxInner({
   const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set())
   const [clearing, setClearing] = useState(false)
   const [clearActionError, setClearActionError] = useState("")
+  const [selectedModel, setSelectedModel] = useState(() =>
+    pickInitialChatModel(chatModels, defaultChatModel),
+  )
+
+  useEffect(() => {
+    setSelectedModel((prev) => {
+      if (chatModels.includes(prev)) return prev
+      return defaultChatModel
+    })
+  }, [chatModels, defaultChatModel])
 
   const issueContext = useMemo(() => toIssueChatContext(issue), [issue])
 
@@ -164,9 +187,9 @@ function IssueAiChatBoxInner({
     () =>
       new DefaultChatTransport({
         api: "/api/issues/chat",
-        body: { issue: issueContext, storeId },
+        body: { issue: issueContext, storeId, model: selectedModel },
       }),
-    [issueContext, storeId],
+    [issueContext, storeId, selectedModel],
   )
 
   const saveMessages = useCallback(
@@ -563,7 +586,39 @@ function IssueAiChatBoxInner({
             <PromptInputBody>
               <PromptInputTextarea placeholder="Ask about this issue..." rows={1} />
             </PromptInputBody>
-            <PromptInputFooter className="px-2 pb-1.5 pt-0">
+            <PromptInputFooter className="flex-wrap gap-2 px-2 pb-1.5 pt-0">
+              {chatModels.length > 1 ? (
+                <div className="flex items-center gap-1.5">
+                  <label
+                    htmlFor="issue-chat-model"
+                    className="sr-only"
+                  >
+                    Model
+                  </label>
+                  <select
+                    id="issue-chat-model"
+                    className="h-8 max-w-[11rem] truncate rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+                    value={selectedModel}
+                    disabled={isBusy}
+                    onChange={(e) => {
+                      const next = e.target.value
+                      setSelectedModel(next)
+                      try {
+                        localStorage.setItem(CHAT_MODEL_STORAGE_KEY, next)
+                      } catch {
+                        // ignore quota / private mode
+                      }
+                    }}
+                    title="Investigation chat model"
+                  >
+                    {chatModels.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="flex-1" />
               <PromptInputSubmit
                 className="size-9 rounded-full bg-foreground text-background shadow-none hover:bg-foreground/90 disabled:opacity-50"
@@ -606,6 +661,32 @@ export function IssueAiChatBox({
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [hydratedMessages, setHydratedMessages] = useState<UIMessage[] | null>(null)
   const [loadError, setLoadError] = useState("")
+  const [chatModels, setChatModels] = useState<string[]>([])
+  const [defaultChatModel, setDefaultChatModel] = useState("deepseek-chat")
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch("/api/issues/chat/models", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { models?: string[]; defaultModel?: string }
+        const models = Array.isArray(data.models) ? data.models.filter(Boolean) : []
+        if (models.length === 0) return
+        setChatModels(models)
+        if (typeof data.defaultModel === "string" && data.defaultModel.trim()) {
+          setDefaultChatModel(data.defaultModel.trim())
+        } else {
+          setDefaultChatModel(models[0]!)
+        }
+      })
+      .catch(() => {
+        // Non-fatal; server default applies when model is omitted from transport.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -670,6 +751,8 @@ export function IssueAiChatBox({
       findingResolution={findingResolution}
       domainOnAllowlist={domainOnAllowlist}
       onResolutionChange={onResolutionChange ?? (() => {})}
+      chatModels={chatModels.length > 0 ? chatModels : [defaultChatModel]}
+      defaultChatModel={defaultChatModel}
     />
   )
 }

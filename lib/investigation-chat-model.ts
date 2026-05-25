@@ -2,6 +2,9 @@ import { createDeepSeek, type DeepSeekLanguageModelOptions } from "@ai-sdk/deeps
 import type { LanguageModel } from "ai"
 import {
   getOpenAiChatboxConfig,
+  isOpenAiChatboxConfigured,
+  listOpenAiChatboxModels,
+  resolveOpenAiChatboxModelId,
   type OpenAiChatboxConfig,
 } from "@/lib/openai-chatbox-config"
 
@@ -62,11 +65,23 @@ export function createInvestigationLanguageModel(
   return deepseek.chat(config.model)
 }
 
-export function getInvestigationLanguageModel(): {
+export function listInvestigationChatModels(): {
+  models: string[]
+  defaultModel: string
+} | null {
+  if (!isOpenAiChatboxConfigured()) return null
+  const models = listOpenAiChatboxModels()
+  return {
+    models,
+    defaultModel: resolveOpenAiChatboxModelId(),
+  }
+}
+
+export function getInvestigationLanguageModel(modelId?: string | null): {
   model: LanguageModel
   modelId: string
 } | null {
-  const config = getOpenAiChatboxConfig()
+  const config = getOpenAiChatboxConfig(modelId)
   if (!config) return null
   return {
     model: createInvestigationLanguageModel(config),
