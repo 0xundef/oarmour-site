@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
-import { ExtensionDomainAllowlistSheet } from "@/components/dashboard/extension-domain-allowlist-sheet"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
@@ -228,22 +227,16 @@ export function SubscribedDetectionWorkbench({
           <div className="grid h-[calc(100dvh-8rem)] min-h-0 grid-cols-1 lg:grid-cols-[340px_1fr]">
             <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-muted/20">
               <div className="shrink-0 border-b p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-base font-semibold leading-snug">{extensionName}</div>
-                      {!loading && openHighCriticalCount > 0 ? (
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
-                          {openHighCriticalCount} high+
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{headerSubtitle}</div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-base font-semibold leading-snug">{extensionName}</div>
+                    {!loading && openHighCriticalCount > 0 ? (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                        {openHighCriticalCount} high+
+                      </Badge>
+                    ) : null}
                   </div>
-                  <ExtensionDomainAllowlistSheet
-                    storeId={storeId}
-                    onChanged={handleResolutionChange}
-                  />
+                  <div className="text-xs text-muted-foreground">{headerSubtitle}</div>
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
