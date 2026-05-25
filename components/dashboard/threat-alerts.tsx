@@ -18,7 +18,7 @@ import { useAiTestingDetailLoader } from "@/hooks/use-ai-testing-detail-loader"
 import Link from "next/link"
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 import { useSearchParams } from "next/navigation"
-import { buildDashboardDownloadUrl, usesPrefixBasedVersionCheck } from "@/lib/package-download-url"
+import { buildDashboardDownloadUrl } from "@/lib/package-download-url"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
@@ -255,6 +255,7 @@ export function ThreatAlerts() {
   const [liveStatusByExtensionId, setLiveStatusByExtensionId] = useState<Record<string, LiveAnalyzeStatus>>({})
   const [loading, setLoading] = useState(true)
   const [completedScanActions, setCompletedScanActions] = useState(0)
+  const [completeBrowserAgentTasks, setCompleteBrowserAgentTasks] = useState(0)
   const [selected, setSelected] = useState<ThreatAlert | null>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -313,7 +314,7 @@ export function ThreatAlerts() {
     const completedScans = completedScanActions
     const highCritical = data.filter((row) => isHighOrCritical(row.risk)).length
     const findings = highCritical
-    const aiTesting = data.filter((row) => usesPrefixBasedVersionCheck(row.packageDownloadPrefix)).length
+    const browserAgentTested = completeBrowserAgentTasks
     const remediated = data.filter((row) => row.risk === "SAFE" && isCompletedStatus(row.analysisStatus)).length
     const inProgress = data.filter((row) => isInProgressStatus(row.analysisStatus)).length
     const awaitingConfirmation = data.filter((row) => isHighOrCritical(row.risk) && isCompletedStatus(row.analysisStatus)).length
@@ -350,7 +351,7 @@ export function ThreatAlerts() {
       completedScans,
       findings,
       highCritical,
-      aiTesting,
+      browserAgentTested,
       remediated,
       inProgress,
       awaitingConfirmation,
@@ -359,7 +360,7 @@ export function ThreatAlerts() {
       safeConfirmed,
       severityData,
     }
-  }, [completedScanActions, data])
+  }, [completeBrowserAgentTasks, completedScanActions, data])
 
   const processingRows = useMemo(() => {
     const total = Math.max(1, overview.total)
@@ -394,7 +395,7 @@ export function ThreatAlerts() {
             riskLevel: string
             analysisStatus: string
           }>
-          metrics?: { completedScanActions?: number }
+          metrics?: { completedScanActions?: number; completeBrowserAgentTasks?: number }
         }
         const extensions = payload.extensions ?? []
 
@@ -412,6 +413,7 @@ export function ThreatAlerts() {
 
         setData(formattedData)
         setCompletedScanActions(payload.metrics?.completedScanActions ?? 0)
+        setCompleteBrowserAgentTasks(payload.metrics?.completeBrowserAgentTasks ?? 0)
     } catch (error) {
         console.error("Failed to fetch extensions", error);
     } finally {
@@ -684,8 +686,8 @@ export function ThreatAlerts() {
             <Card>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <div className="text-xs text-muted-foreground">AI Testing</div>
-                  <div className="text-2xl font-semibold text-purple-600">{overview.aiTesting}</div>
+                  <div className="text-xs text-muted-foreground">Browser Agent tested</div>
+                  <div className="text-2xl font-semibold text-purple-600">{overview.browserAgentTested}</div>
                 </div>
                 <Sparkles className="h-4 w-4 text-green-400" />
               </CardContent>

@@ -62,15 +62,20 @@ export async function getExtensions(): Promise<ExtensionWithAnalysis[]> {
 
 export async function getDashboardMetrics() {
   try {
-    const completedScanActions = await prisma.scanJob.count({
-      where: {
-        targetType: 'EXTENSION',
-        status: 'COMPLETED',
-      },
-    })
+    const [completedScanActions, completeBrowserAgentTasks] = await Promise.all([
+      prisma.scanJob.count({
+        where: {
+          targetType: 'EXTENSION',
+          status: 'COMPLETED',
+        },
+      }),
+      prisma.browserAgentTask.count({
+        where: { status: 'COMPLETE' },
+      }),
+    ])
 
-    return { completedScanActions }
+    return { completedScanActions, completeBrowserAgentTasks }
   } catch {
-    return { completedScanActions: 0 }
+    return { completedScanActions: 0, completeBrowserAgentTasks: 0 }
   }
 }
