@@ -578,17 +578,17 @@ function IssueAiChatBoxInner({
           disabled={isBusy}
         />
       ) : (
-        <div className="shrink-0 bg-background px-4 pb-3 pt-2">
+        <div className="shrink-0 bg-background px-4 pb-1.5 pt-1.5">
           <PromptInput
-            className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
+            className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-12 [&_textarea]:py-2.5"
             onSubmit={({ text }) => sendPrompt(text)}
           >
             <PromptInputBody>
-              <PromptInputTextarea placeholder="Ask about this issue..." rows={1} />
+              <PromptInputTextarea placeholder="Ask about this issue..." rows={2} />
             </PromptInputBody>
-            <PromptInputFooter className="flex-wrap gap-2 px-2 pb-1.5 pt-0">
+            <PromptInputFooter className="flex-wrap gap-1.5 px-2 pb-1 pt-0">
               {chatModels.length > 1 ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center">
                   <label
                     htmlFor="issue-chat-model"
                     className="sr-only"
@@ -597,7 +597,7 @@ function IssueAiChatBoxInner({
                   </label>
                   <select
                     id="issue-chat-model"
-                    className="h-8 max-w-[11rem] truncate rounded-md border border-input bg-background px-2 text-xs shadow-sm"
+                    className="h-6 max-w-[11rem] truncate rounded-md border border-input bg-background px-1.5 py-0 text-[11px] leading-none shadow-sm"
                     value={selectedModel}
                     disabled={isBusy}
                     onChange={(e) => {
