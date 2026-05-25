@@ -19,10 +19,7 @@ import {
   domainFromMaliciousFindingIssueId,
   type FindingListResolution,
 } from "@/lib/finding-resolution"
-import {
-  lastAssistantMessage,
-  shouldShowInlineResolutionActions,
-} from "@/lib/issue-investigation-resolution-ui"
+import { getInlineResolutionActionsMessageId } from "@/lib/issue-investigation-resolution-ui"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -143,8 +140,7 @@ function IssueAiChatBoxInner({
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [dismissDialogOpen, setDismissDialogOpen] = useState(false)
   const [revokeBusy, setRevokeBusy] = useState(false)
-  const [hideFooterActions, setHideFooterActions] = useState(false)
-  const [inlineActionsDismissed, setInlineActionsDismissed] = useState(false)
+  const [dismissedInlineMessageId, setDismissedInlineMessageId] = useState<string | null>(null)
   const allowlistDomain = useMemo(() => domainFromMaliciousFindingIssueId(issue.id), [issue.id])
   const [shareMode, setShareMode] = useState(false)
   const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set())
@@ -205,25 +201,17 @@ function IssueAiChatBoxInner({
   const hasClearableHistory = messages.some((message) => !isContextSeedMessage(message))
   const thinking = showAssistantThinking(messages, isBusy)
 
-  const showInlineActions = shouldShowInlineResolutionActions({
-    messages,
-    findingIsActive,
-    isBusy,
-    shareMode,
-    dismissedInline: inlineActionsDismissed,
-  })
-
-  const showFooterActions =
-    findingIsActive &&
-    hasAssistantReply &&
-    !shareMode &&
-    !hideFooterActions &&
-    !showInlineActions
-
-  const lastAssistantId = lastAssistantMessage(messages)?.id ?? null
-  useEffect(() => {
-    setInlineActionsDismissed(false)
-  }, [lastAssistantId])
+  const inlineActionsMessageId = useMemo(
+    () =>
+      getInlineResolutionActionsMessageId({
+        messages,
+        findingIsActive,
+        isBusy,
+        shareMode,
+        dismissedMessageId: dismissedInlineMessageId,
+      }),
+    [messages, findingIsActive, isBusy, shareMode, dismissedInlineMessageId],
+  )
 
   const handleRevokeDismiss = async () => {
     setRevokeBusy(true)
@@ -415,6 +403,8 @@ function IssueAiChatBoxInner({
             const isContextSeed = isContextSeedMessage(message)
             const isLast = index === messages.length - 1
             const isStreaming = isBusy && isLast && message.role === "assistant"
+            const showActionsOnMessage =
+              !shareMode && message.id === inlineActionsMessageId && message.role === "assistant"
 
             const shareChecked = shareSelectedIds.has(message.id)
             const shareLocked = isContextSeedMessage(message)
@@ -483,6 +473,20 @@ function IssueAiChatBoxInner({
                       )
                     })
                   )}
+                  {showActionsOnMessage ? (
+                    <div className="mt-3 border-t border-dashed border-muted-foreground/25 pt-3">
+                      <IssueInvestigationResolutionActions
+                        storeId={storeId}
+                        issue={issue}
+                        extensionVersion={extensionVersion}
+                        allowlistDomain={allowlistDomain}
+                        disabled={isBusy}
+                        onResolutionChange={onResolutionChange}
+                        onOpenDismissDialog={() => setDismissDialogOpen(true)}
+                        onCancel={() => setDismissedInlineMessageId(message.id)}
+                      />
+                    </div>
+                  ) : null}
                 </MessageContent>
               </Message>
               </div>
@@ -518,20 +522,6 @@ function IssueAiChatBoxInner({
             </div>
           ) : null}
 
-          {showInlineActions ? (
-            <div className="mx-auto w-full max-w-3xl pt-2">
-              <IssueInvestigationResolutionActions
-                storeId={storeId}
-                issue={issue}
-                extensionVersion={extensionVersion}
-                allowlistDomain={allowlistDomain}
-                disabled={isBusy}
-                onResolutionChange={onResolutionChange}
-                onOpenDismissDialog={() => setDismissDialogOpen(true)}
-                onCancel={() => setInlineActionsDismissed(true)}
-              />
-            </div>
-          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -562,21 +552,6 @@ function IssueAiChatBoxInner({
         />
       ) : (
         <div className="shrink-0 bg-background px-4 pb-3 pt-2">
-          {showFooterActions ? (
-            <div className="mx-auto mb-2 max-w-3xl">
-              <IssueInvestigationResolutionActions
-                storeId={storeId}
-                issue={issue}
-                extensionVersion={extensionVersion}
-                allowlistDomain={allowlistDomain}
-                disabled={isBusy}
-                onResolutionChange={onResolutionChange}
-                onOpenDismissDialog={() => setDismissDialogOpen(true)}
-                onCancel={() => setHideFooterActions(true)}
-                className="rounded-lg border border-muted bg-muted/30 px-3 py-3 space-y-2"
-              />
-            </div>
-          ) : null}
           <PromptInput
             className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
             onSubmit={({ text }) => sendPrompt(text)}

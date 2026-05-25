@@ -8,16 +8,55 @@ export function getMessageText(message: UIMessage): string {
     .join('\n')
 }
 
-/** Assistant asked to dismiss / allowlist in prose instead of calling propose_* tools. */
-export function assistantOffersResolutionActions(text: string): boolean {
+function messageHasVisibleText(message: UIMessage): boolean {
+  return message.parts.some((p) => p.type === 'text' && (p.text ?? '').trim().length > 0)
+}
+
+/** Assistant explicitly offers to dismiss / allowlist in prose. */
+function assistantExplicitlyOffersActions(text: string): boolean {
   const lower = text.toLowerCase()
-  if (!lower.trim()) return false
   const hasOffer =
     /\b(would you like|do you want|shall i|should i|want me to)\b/i.test(text) ||
     /\b(you can|i can)\b.*\b(dismiss|false positive|allowlist)\b/i.test(text)
   const hasAction =
     /\b(dismiss|false positive|allowlist|mark as)\b/i.test(lower)
   return hasOffer && hasAction
+}
+
+/**
+ * Investigation reached a closing recommendation (verdict, false positive, allowlist, etc.)
+ * without calling propose_* tools.
+ */
+export function assistantRecommendsResolutionActions(text: string): boolean {
+  const lower = text.toLowerCase()
+  if (!lower.trim()) return false
+
+  if (assistantExplicitlyOffersActions(text)) return true
+
+  if (/\b(recommend|suggest)(ed|s|ing)?\b/i.test(text) && /\b(dismiss|allowlist|false positive)\b/i.test(lower)) {
+    return true
+  }
+
+  if (/\bmark\b.*\b(false positive|as fp)\b/i.test(lower)) return true
+
+  if (/\b(add|adding)\b.*\b(allowlist|to the allowlist)\b/i.test(lower)) return true
+
+  const hasVerdict = /\bverdict\s*:/i.test(text)
+  if (
+    hasVerdict &&
+    /\b(false positive|allowlist|dismiss|malicious|phishing|appropriate|severity)\b/i.test(lower)
+  ) {
+    return true
+  }
+
+  if (
+    /\b(investigation|analysis)\b.*\b(complete|conclude|conclusion)\b/i.test(lower) &&
+    /\b(dismiss|allowlist|false positive)\b/i.test(lower)
+  ) {
+    return true
+  }
+
+  return false
 }
 
 export function lastAssistantMessage(messages: UIMessage[]): UIMessage | null {
@@ -42,22 +81,21 @@ export function hasPendingResolutionToolProposal(messages: UIMessage[]): boolean
   return false
 }
 
-export function shouldShowInlineResolutionActions(params: {
+export function getInlineResolutionActionsMessageId(params: {
   messages: UIMessage[]
   findingIsActive: boolean
   isBusy: boolean
   shareMode: boolean
-  dismissedInline: boolean
-}): boolean {
-  if (params.shareMode || !params.findingIsActive || params.isBusy || params.dismissedInline) {
-    return false
-  }
-  if (hasPendingResolutionToolProposal(params.messages)) return false
-  const last = lastAssistantMessage(params.messages)
-  if (!last || !messageHasVisibleText(last)) return false
-  return assistantOffersResolutionActions(getMessageText(last))
-}
+  dismissedMessageId: string | null
+}): string | null {
+  if (params.shareMode || !params.findingIsActive || params.isBusy) return null
+  if (hasPendingResolutionToolProposal(params.messages)) return null
 
-function messageHasVisibleText(message: UIMessage): boolean {
-  return message.parts.some((p) => p.type === 'text' && (p.text ?? '').trim().length > 0)
+  const last = lastAssistantMessage(params.messages)
+  if (!last || !messageHasVisibleText(last)) return null
+  if (params.dismissedMessageId === last.id) return null
+
+  if (!assistantRecommendsResolutionActions(getMessageText(last))) return null
+
+  return last.id
 }
