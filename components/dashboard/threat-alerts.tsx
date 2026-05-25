@@ -169,7 +169,7 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe to alert events'}
         className={cn(
           "relative",
-          subscribed && ready && "bg-blue-600 text-white hover:bg-blue-700 hover:text-white",
+          subscribed && ready && "text-foreground hover:bg-muted",
           !ready && "opacity-60",
         )}
         aria-label={subscribed ? 'Subscribed to alert events' : 'Not subscribed to alert events'}
