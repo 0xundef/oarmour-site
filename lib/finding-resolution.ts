@@ -53,6 +53,55 @@ export function applyFindingResolutions(
   })
 }
 
+export type FindingListResolution = 'active' | 'dismissed' | 'allowlisted'
+
+export function getFindingListResolution(
+  item: WorkbenchCheckItem,
+  params: {
+    dismissedIssueIds: ReadonlySet<string>
+    allowlistedDomains: ReadonlySet<string>
+  },
+): FindingListResolution {
+  if (params.dismissedIssueIds.has(item.id)) return 'dismissed'
+  const domain = domainFromMaliciousFindingIssueId(item.id)
+  if (domain && params.allowlistedDomains.has(domain)) return 'allowlisted'
+  return 'active'
+}
+
+export function isFindingResolved(
+  item: WorkbenchCheckItem,
+  params: {
+    dismissedIssueIds: ReadonlySet<string>
+    allowlistedDomains: ReadonlySet<string>
+  },
+): boolean {
+  return getFindingListResolution(item, params) !== 'active'
+}
+
+/** Horizontal strike through severity badge (false positive / allowlisted). */
+export const SEVERITY_BADGE_STRIKE_CLASS =
+  "relative overflow-hidden after:pointer-events-none after:absolute after:inset-x-0.5 after:top-1/2 after:h-[1.5px] after:-translate-y-1/2 after:bg-white/90 after:content-['']"
+
+const RESOLUTION_SORT_ORDER: Record<FindingListResolution, number> = {
+  active: 0,
+  allowlisted: 1,
+  dismissed: 2,
+}
+
+export function sortWorkbenchFindingList(
+  items: WorkbenchCheckItem[],
+  params: {
+    dismissedIssueIds: ReadonlySet<string>
+    allowlistedDomains: ReadonlySet<string>
+  },
+): WorkbenchCheckItem[] {
+  return [...items].sort(
+    (a, b) =>
+      RESOLUTION_SORT_ORDER[getFindingListResolution(a, params)] -
+      RESOLUTION_SORT_ORDER[getFindingListResolution(b, params)],
+  )
+}
+
 export function partitionWorkbenchFindings(
   items: WorkbenchCheckItem[],
   params: {

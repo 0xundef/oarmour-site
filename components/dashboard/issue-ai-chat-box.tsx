@@ -109,7 +109,7 @@ function IssueAiChatBoxInner({
   initialMessages,
   loadError,
   extensionVersion,
-  listTab,
+  findingIsActive,
   onResolutionChange,
 }: {
   storeId: string
@@ -117,7 +117,7 @@ function IssueAiChatBoxInner({
   initialMessages: UIMessage[]
   loadError: string
   extensionVersion?: string | null
-  listTab: "open" | "closed"
+  findingIsActive: boolean
   onResolutionChange: () => void
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
@@ -231,7 +231,7 @@ function IssueAiChatBoxInner({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {listTab === "open" ? (
+              {findingIsActive ? (
                 <DropdownMenuItem
                   className="gap-2 text-xs"
                   disabled={isBusy}
@@ -261,7 +261,7 @@ function IssueAiChatBoxInner({
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
-          {listTab === "open" ? (
+          {findingIsActive ? (
             <FindingDismissDialog
               open={dismissDialogOpen}
               onOpenChange={setDismissDialogOpen}
@@ -458,13 +458,13 @@ export function IssueAiChatBox({
   storeId,
   issue,
   extensionVersion,
-  listTab = "open",
+  findingIsActive = true,
   onResolutionChange,
 }: {
   storeId: string
   issue: WorkbenchCheckItem
   extensionVersion?: string | null
-  listTab?: "open" | "closed"
+  findingIsActive?: boolean
   onResolutionChange?: () => void
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
@@ -530,7 +530,7 @@ export function IssueAiChatBox({
       initialMessages={hydratedMessages}
       loadError={loadError}
       extensionVersion={extensionVersion}
-      listTab={listTab}
+      findingIsActive={findingIsActive}
       onResolutionChange={onResolutionChange ?? (() => {})}
     />
   )

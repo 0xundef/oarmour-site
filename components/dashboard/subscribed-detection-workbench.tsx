@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
 import { ExtensionDomainAllowlistSheet } from "@/components/dashboard/extension-domain-allowlist-sheet"
@@ -11,7 +10,10 @@ import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
   applyFindingResolutions,
-  partitionWorkbenchFindings,
+  getFindingListResolution,
+  isFindingResolved,
+  SEVERITY_BADGE_STRIKE_CLASS,
+  sortWorkbenchFindingList,
 } from "@/lib/finding-resolution"
 import {
   buildWorkbenchCheckItems,
@@ -56,7 +58,6 @@ export function SubscribedDetectionWorkbench({
     dismissedIssueIds: new Set(),
     allowlistedDomains: new Set(),
   })
-  const [listTab, setListTab] = useState<"open" | "closed">("open")
   const [alignedVersion, setAlignedVersion] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -151,35 +152,52 @@ export function SubscribedDetectionWorkbench({
     void load()
   }, [load])
 
-  const { open: openItems, closed: closedItems } = useMemo(
-    () => partitionWorkbenchFindings(allItems, resolutions),
+  const activeItems = useMemo(
+    () => applyFindingResolutions(allItems, resolutions),
     [allItems, resolutions],
   )
 
-  const listItems = listTab === "open" ? openItems : closedItems
+  const listItems = useMemo(
+    () => sortWorkbenchFindingList(allItems, resolutions),
+    [allItems, resolutions],
+  )
 
   const openHighCriticalCount = useMemo(() => {
-    return applyFindingResolutions(
-      allItems.filter((i) => i.severity === "CRITICAL" || i.severity === "HIGH"),
-      resolutions,
-    ).length
-  }, [allItems, resolutions])
+    return activeItems.filter((i) => i.severity === "CRITICAL" || i.severity === "HIGH").length
+  }, [activeItems])
 
   useEffect(() => {
     setActiveId((prev) => {
       if (prev && listItems.some((i) => i.id === prev)) return prev
       return listItems[0]?.id ?? ""
     })
-  }, [listItems, listTab])
+  }, [listItems])
 
   const active = useMemo(
     () => listItems.find((item) => item.id === activeId) ?? listItems[0] ?? null,
     [activeId, listItems],
   )
 
+  const activeFindingIsOpen = useMemo(
+    () => (active ? !isFindingResolved(active, resolutions) : false),
+    [active, resolutions],
+  )
+
   const handleResolutionChange = useCallback(() => {
     void loadResolutions().then(() => load())
   }, [loadResolutions, load])
+
+  const headerSubtitle = useMemo(() => {
+    if (loading) return "Loading…"
+    const total = allItems.length
+    const activeCount = activeItems.length
+    const versionPart = alignedVersion ? ` · version ${alignedVersion}` : ""
+    if (total === 0) return `No findings${versionPart}`
+    if (activeCount === total) {
+      return `${activeCount} active finding${activeCount === 1 ? "" : "s"}${versionPart}`
+    }
+    return `${activeCount} active · ${total} total${versionPart}`
+  }, [loading, allItems.length, activeItems.length, alignedVersion])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:pb-8 md:pt-4">
@@ -196,86 +214,81 @@ export function SubscribedDetectionWorkbench({
               <div className="shrink-0 border-b p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-base font-semibold leading-snug">{extensionName}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {loading
-                        ? "Loading…"
-                        : alignedVersion
-                          ? `${openItems.length} open · version ${alignedVersion}`
-                          : `${openItems.length} open finding${openItems.length === 1 ? "" : "s"}`}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-base font-semibold leading-snug">{extensionName}</div>
+                      {!loading && openHighCriticalCount > 0 ? (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                          {openHighCriticalCount} high+
+                        </Badge>
+                      ) : null}
                     </div>
+                    <div className="text-xs text-muted-foreground">{headerSubtitle}</div>
                   </div>
                   <ExtensionDomainAllowlistSheet
                     storeId={storeId}
                     onChanged={handleResolutionChange}
                   />
                 </div>
-                <Tabs
-                  value={listTab}
-                  onValueChange={(v) => setListTab(v === "closed" ? "closed" : "open")}
-                  className="mt-3"
-                >
-                  <TabsList className="grid h-8 w-full grid-cols-2">
-                    <TabsTrigger value="open" className="text-xs">
-                      Open
-                      {!loading && openHighCriticalCount > 0 ? (
-                        <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
-                          {openHighCriticalCount}
-                        </Badge>
-                      ) : null}
-                    </TabsTrigger>
-                    <TabsTrigger value="closed" className="text-xs">
-                      Closed
-                      {!loading && closedItems.length > 0 ? (
-                        <Badge variant="secondary" className="ml-1.5 h-4 px-1 text-[10px]">
-                          {closedItems.length}
-                        </Badge>
-                      ) : null}
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {loading ? (
                   <div className="p-3 text-sm text-muted-foreground">Loading findings…</div>
                 ) : listItems.length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">
-                    {listTab === "open"
-                      ? "No open findings. Dismissed or allowlisted items appear under Closed."
-                      : "No closed findings yet."}
-                  </div>
+                  <div className="p-3 text-sm text-muted-foreground">No findings yet.</div>
                 ) : (
-                  listItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setActiveId(item.id)}
-                      className={cn(
-                        "mb-2 w-full rounded-md border p-3 text-left hover:bg-accent",
-                        active && item.id === active.id ? "border-primary bg-accent" : "bg-background",
-                        listTab === "closed" && "opacity-80",
-                      )}
-                    >
-                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                        <Badge className={cn("h-5 px-1.5 text-[10px] leading-none", severityClass(item.severity))}>
-                          {item.severity}
-                        </Badge>
-                        <Badge className={cn("h-5 shrink-0 px-1.5 text-[10px] leading-none", sourceBadgeClass(item.source))}>
-                          {item.source}
-                        </Badge>
-                        <Badge variant="outline" className={cn("h-5 px-1.5 text-[10px] font-normal leading-none", categoryBadgeClass())}>
-                          {item.category}
-                        </Badge>
-                      </div>
-                      <div className="mb-1 line-clamp-2 text-sm font-medium leading-snug">{item.title}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {formatFindingRunLabel(item.source, item.detectedAt)}
-                      </div>
-                      <div className="truncate text-xs text-muted-foreground/80" title={item.file}>
-                        {item.file}
-                      </div>
-                    </button>
-                  ))
+                  listItems.map((item) => {
+                    const resolution = getFindingListResolution(item, resolutions)
+                    const resolved = resolution !== "active"
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveId(item.id)}
+                        className={cn(
+                          "mb-2 w-full rounded-md border p-3 text-left hover:bg-accent",
+                          active && item.id === active.id ? "border-primary bg-accent" : "bg-background",
+                          resolved && "opacity-80",
+                        )}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            className={cn(
+                              "h-5 px-1.5 text-[10px] leading-none",
+                              severityClass(item.severity),
+                              resolved && SEVERITY_BADGE_STRIKE_CLASS,
+                            )}
+                          >
+                            {item.severity}
+                          </Badge>
+                          <Badge
+                            className={cn(
+                              "h-5 shrink-0 px-1.5 text-[10px] leading-none",
+                              sourceBadgeClass(item.source),
+                            )}
+                          >
+                            {item.source}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "h-5 px-1.5 text-[10px] font-normal leading-none",
+                              categoryBadgeClass(),
+                            )}
+                          >
+                            {item.category}
+                          </Badge>
+                        </div>
+                        <div className="mb-1 line-clamp-2 text-sm font-medium leading-snug">{item.title}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {formatFindingRunLabel(item.source, item.detectedAt)}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground/80" title={item.file}>
+                          {item.file}
+                        </div>
+                      </button>
+                    )
+                  })
                 )}
               </div>
             </aside>
@@ -289,7 +302,7 @@ export function SubscribedDetectionWorkbench({
                   storeId={storeId}
                   issue={active}
                   extensionVersion={alignedVersion}
-                  listTab={listTab}
+                  findingIsActive={activeFindingIsOpen}
                   onResolutionChange={handleResolutionChange}
                 />
               )}
