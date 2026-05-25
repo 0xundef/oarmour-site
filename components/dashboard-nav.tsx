@@ -75,7 +75,7 @@ export function DashboardNav({ items, setOpen, isMinimized = false }: DashboardN
         const treeMode = !!item.tree;
         const childIsActive = !!item.items?.some((child) => child.href === currentUrl);
         const groupKey = item.href || item.title;
-        const isCollapsed = treeMode && !childIsActive ? collapsedGroups[groupKey] ?? false : false;
+        const isCollapsed = treeMode ? (collapsedGroups[groupKey] ?? false) : false;
         const itemIsActive = item.href === currentUrl || (!item.href && childIsActive) || (item.href === path && !item.href?.includes("?"));
 
         return (
