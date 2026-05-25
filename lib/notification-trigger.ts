@@ -24,9 +24,9 @@ export async function triggerMaliciousAlertNotifications(
       where: {
         OR: [{ id: extensionId }, { storeId: extensionId }],
       },
-      select: { id: true },
+      select: { id: true, storeId: true },
     })
-    if (!extension?.id) {
+    if (!extension?.id || !extension.storeId?.trim()) {
       return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'extension_not_found' as const }
     }
 
@@ -40,7 +40,7 @@ export async function triggerMaliciousAlertNotifications(
     }
 
     const detectedAt = new Date()
-    const viewReportUrl = `${NEXTAUTH_URL}/dashboard/extension?id=${encodeURIComponent(extensionId)}`
+    const viewReportUrl = `${NEXTAUTH_URL}/dashboard/subscribed/${encodeURIComponent(extension.storeId.trim())}`
 
     const results = await Promise.all(
       subscribers.map(async (sub) => {
