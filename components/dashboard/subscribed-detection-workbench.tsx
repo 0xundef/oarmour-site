@@ -12,7 +12,6 @@ import {
   applyFindingResolutions,
   getFindingListResolution,
   isFindingResolved,
-  SEVERITY_BADGE_STRIKE_CLASS,
   sortWorkbenchFindingList,
 } from "@/lib/finding-resolution"
 import {
@@ -38,6 +37,10 @@ function sourceBadgeClass(source: WorkbenchCheckItem["source"]) {
 function categoryBadgeClass() {
   return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
 }
+
+/** Literal in this file so Tailwind JIT emits `after:*` utilities (imported strings are not scanned). */
+const SEVERITY_BADGE_STRIKE =
+  "relative overflow-hidden after:pointer-events-none after:absolute after:inset-x-0.5 after:top-1/2 after:h-[2px] after:-translate-y-1/2 after:z-10 after:bg-white after:content-['']"
 
 type ResolutionState = {
   dismissedIssueIds: Set<string>
@@ -256,10 +259,10 @@ export function SubscribedDetectionWorkbench({
                             className={cn(
                               "h-5 px-1.5 text-[10px] leading-none",
                               severityClass(item.severity),
-                              resolved && SEVERITY_BADGE_STRIKE_CLASS,
+                              resolved && SEVERITY_BADGE_STRIKE,
                             )}
                           >
-                            {item.severity}
+                            <span className={cn(resolved && "opacity-95")}>{item.severity}</span>
                           </Badge>
                           <Badge
                             className={cn(
