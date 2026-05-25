@@ -10,6 +10,7 @@ import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
   applyFindingResolutions,
+  domainFromMaliciousFindingIssueId,
   getFindingListResolution,
   isFindingResolved,
   sortWorkbenchFindingList,
@@ -186,6 +187,17 @@ export function SubscribedDetectionWorkbench({
     [active, resolutions],
   )
 
+  const activeFindingResolution = useMemo(
+    () => (active ? getFindingListResolution(active, resolutions) : "active"),
+    [active, resolutions],
+  )
+
+  const activeDomainOnAllowlist = useMemo(() => {
+    if (!active) return false
+    const domain = domainFromMaliciousFindingIssueId(active.id)
+    return domain != null && resolutions.allowlistedDomains.has(domain)
+  }, [active, resolutions])
+
   const handleResolutionChange = useCallback(() => {
     void loadResolutions().then(() => load())
   }, [loadResolutions, load])
@@ -306,6 +318,8 @@ export function SubscribedDetectionWorkbench({
                   issue={active}
                   extensionVersion={alignedVersion}
                   findingIsActive={activeFindingIsOpen}
+                  findingResolution={activeFindingResolution}
+                  domainOnAllowlist={activeDomainOnAllowlist}
                   onResolutionChange={handleResolutionChange}
                 />
               )}

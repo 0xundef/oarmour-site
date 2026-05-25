@@ -92,3 +92,29 @@ export async function POST(req: Request, context: RouteContext) {
 
   return NextResponse.json({ ok: true, allowlistedDomain })
 }
+
+export async function DELETE(req: Request, context: RouteContext) {
+  const { storeId } = await context.params
+  const trimmed = storeId?.trim()
+  if (!trimmed) {
+    return NextResponse.json({ error: 'Missing storeId.' }, { status: 400 })
+  }
+
+  const actor = await requireSubscribedFindingActor(trimmed)
+  if ('error' in actor) return actor.error
+
+  const issueId = new URL(req.url).searchParams.get('issueId')?.trim() ?? ''
+  if (!issueId) {
+    return NextResponse.json({ error: 'issueId query param is required.' }, { status: 400 })
+  }
+
+  const result = await prisma.findingDismissal.deleteMany({
+    where: {
+      userId: actor.userId,
+      storeId: trimmed,
+      issueId,
+    },
+  })
+
+  return NextResponse.json({ ok: true, removed: result.count })
+}

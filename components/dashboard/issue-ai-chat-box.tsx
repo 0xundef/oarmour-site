@@ -6,13 +6,23 @@ import { DefaultChatTransport, isToolUIPart, type UIMessage } from "ai"
 import {
   ArrowUpIcon,
   Link2Icon,
+  ListMinus,
   MoreHorizontal,
   ShieldOffIcon,
   SquareIcon,
   Trash2Icon,
+  Undo2Icon,
 } from "lucide-react"
 import { FindingDismissDialog } from "@/components/dashboard/finding-dismiss-dialog"
-import { domainFromMaliciousFindingIssueId } from "@/lib/finding-resolution"
+import { IssueInvestigationResolutionActions } from "@/components/dashboard/issue-investigation-resolution-actions"
+import {
+  domainFromMaliciousFindingIssueId,
+  type FindingListResolution,
+} from "@/lib/finding-resolution"
+import {
+  lastAssistantMessage,
+  shouldShowInlineResolutionActions,
+} from "@/lib/issue-investigation-resolution-ui"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,6 +50,7 @@ import {
 } from "@/components/ai-elements/prompt-input"
 import { Suggestion } from "@/components/ai-elements/suggestion"
 import { Spinner } from "@/components/ui/spinner"
+import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 import { IssueContextDisplay } from "@/components/dashboard/issue-context-display"
 import {
@@ -113,6 +124,8 @@ function IssueAiChatBoxInner({
   loadError,
   extensionVersion,
   findingIsActive,
+  findingResolution,
+  domainOnAllowlist,
   onResolutionChange,
 }: {
   storeId: string
@@ -121,11 +134,17 @@ function IssueAiChatBoxInner({
   loadError: string
   extensionVersion?: string | null
   findingIsActive: boolean
+  findingResolution: FindingListResolution
+  domainOnAllowlist: boolean
   onResolutionChange: () => void
 }) {
+  const { toast } = useToast()
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [dismissDialogOpen, setDismissDialogOpen] = useState(false)
+  const [revokeBusy, setRevokeBusy] = useState(false)
+  const [hideFooterActions, setHideFooterActions] = useState(false)
+  const [inlineActionsDismissed, setInlineActionsDismissed] = useState(false)
   const allowlistDomain = useMemo(() => domainFromMaliciousFindingIssueId(issue.id), [issue.id])
   const [shareMode, setShareMode] = useState(false)
   const [shareSelectedIds, setShareSelectedIds] = useState<Set<string>>(new Set())
@@ -185,6 +204,75 @@ function IssueAiChatBoxInner({
   )
   const hasClearableHistory = messages.some((message) => !isContextSeedMessage(message))
   const thinking = showAssistantThinking(messages, isBusy)
+
+  const showInlineActions = shouldShowInlineResolutionActions({
+    messages,
+    findingIsActive,
+    isBusy,
+    shareMode,
+    dismissedInline: inlineActionsDismissed,
+  })
+
+  const showFooterActions =
+    findingIsActive &&
+    hasAssistantReply &&
+    !shareMode &&
+    !hideFooterActions &&
+    !showInlineActions
+
+  const lastAssistantId = lastAssistantMessage(messages)?.id ?? null
+  useEffect(() => {
+    setInlineActionsDismissed(false)
+  }, [lastAssistantId])
+
+  const handleRevokeDismiss = async () => {
+    setRevokeBusy(true)
+    try {
+      const qs = new URLSearchParams({ issueId: issue.id })
+      const res = await fetch(
+        `/api/extensions/${encodeURIComponent(storeId)}/findings/dismiss?${qs.toString()}`,
+        { method: "DELETE" },
+      )
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error || "Could not revoke dismiss.")
+      }
+      toast({ description: "Dismissal removed; finding is open again." })
+      onResolutionChange()
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        description: e instanceof Error ? e.message : "Could not revoke dismiss.",
+      })
+    } finally {
+      setRevokeBusy(false)
+    }
+  }
+
+  const handleRemoveFromAllowlist = async () => {
+    if (!allowlistDomain) return
+    setRevokeBusy(true)
+    try {
+      const qs = new URLSearchParams({ domain: allowlistDomain })
+      const res = await fetch(
+        `/api/extensions/${encodeURIComponent(storeId)}/allowlist?${qs.toString()}`,
+        { method: "DELETE" },
+      )
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error || "Could not remove from allowlist.")
+      }
+      toast({ description: `${allowlistDomain} removed from allowlist.` })
+      onResolutionChange()
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        description: e instanceof Error ? e.message : "Could not remove from allowlist.",
+      })
+    } finally {
+      setRevokeBusy(false)
+    }
+  }
 
   const handleClearConversation = async () => {
     setClearActionError("")
@@ -253,6 +341,26 @@ function IssueAiChatBoxInner({
                 >
                   <ShieldOffIcon className="size-3.5" />
                   Mark false positive
+                </DropdownMenuItem>
+              ) : null}
+              {findingResolution === "dismissed" ? (
+                <DropdownMenuItem
+                  className="gap-2 text-xs"
+                  disabled={isBusy || revokeBusy}
+                  onClick={() => void handleRevokeDismiss()}
+                >
+                  <Undo2Icon className="size-3.5" />
+                  Revoke dismiss
+                </DropdownMenuItem>
+              ) : null}
+              {domainOnAllowlist && allowlistDomain ? (
+                <DropdownMenuItem
+                  className="gap-2 text-xs"
+                  disabled={isBusy || revokeBusy}
+                  onClick={() => void handleRemoveFromAllowlist()}
+                >
+                  <ListMinus className="size-3.5" />
+                  Remove {allowlistDomain} from allowlist
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem
@@ -409,6 +517,21 @@ function IssueAiChatBoxInner({
               </div>
             </div>
           ) : null}
+
+          {showInlineActions ? (
+            <div className="mx-auto w-full max-w-3xl pt-2">
+              <IssueInvestigationResolutionActions
+                storeId={storeId}
+                issue={issue}
+                extensionVersion={extensionVersion}
+                allowlistDomain={allowlistDomain}
+                disabled={isBusy}
+                onResolutionChange={onResolutionChange}
+                onOpenDismissDialog={() => setDismissDialogOpen(true)}
+                onCancel={() => setInlineActionsDismissed(true)}
+              />
+            </div>
+          ) : null}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -439,6 +562,21 @@ function IssueAiChatBoxInner({
         />
       ) : (
         <div className="shrink-0 bg-background px-4 pb-3 pt-2">
+          {showFooterActions ? (
+            <div className="mx-auto mb-2 max-w-3xl">
+              <IssueInvestigationResolutionActions
+                storeId={storeId}
+                issue={issue}
+                extensionVersion={extensionVersion}
+                allowlistDomain={allowlistDomain}
+                disabled={isBusy}
+                onResolutionChange={onResolutionChange}
+                onOpenDismissDialog={() => setDismissDialogOpen(true)}
+                onCancel={() => setHideFooterActions(true)}
+                className="rounded-lg border border-muted bg-muted/30 px-3 py-3 space-y-2"
+              />
+            </div>
+          ) : null}
           <PromptInput
             className="mx-auto max-w-3xl [&_[data-slot=input-group]]:min-h-0 [&_[data-slot=input-group]]:rounded-2xl [&_[data-slot=input-group]]:shadow-sm [&_textarea]:min-h-9 [&_textarea]:py-2"
             onSubmit={({ text }) => sendPrompt(text)}
@@ -474,12 +612,16 @@ export function IssueAiChatBox({
   issue,
   extensionVersion,
   findingIsActive = true,
+  findingResolution = "active",
+  domainOnAllowlist = false,
   onResolutionChange,
 }: {
   storeId: string
   issue: WorkbenchCheckItem
   extensionVersion?: string | null
   findingIsActive?: boolean
+  findingResolution?: FindingListResolution
+  domainOnAllowlist?: boolean
   onResolutionChange?: () => void
 }) {
   const seedMessages = useMemo(() => [buildInitialContextMessage(issue)], [issue])
@@ -546,6 +688,8 @@ export function IssueAiChatBox({
       loadError={loadError}
       extensionVersion={extensionVersion}
       findingIsActive={findingIsActive}
+      findingResolution={findingResolution}
+      domainOnAllowlist={domainOnAllowlist}
       onResolutionChange={onResolutionChange ?? (() => {})}
     />
   )
