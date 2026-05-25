@@ -80,7 +80,7 @@ export function isFindingResolved(
 
 /** Horizontal strike through severity badge (false positive / allowlisted). */
 export const SEVERITY_BADGE_STRIKE_CLASS =
-  "relative overflow-hidden after:pointer-events-none after:absolute after:inset-x-0.5 after:top-1/2 after:h-[1.5px] after:-translate-y-1/2 after:bg-white/90 after:content-['']"
+  "relative overflow-hidden after:pointer-events-none after:absolute after:inset-x-0.5 after:top-1/2 after:h-[2px] after:-translate-y-1/2 after:z-10 after:bg-black after:content-['']"
 
 const RESOLUTION_SORT_ORDER: Record<FindingListResolution, number> = {
   active: 0,
