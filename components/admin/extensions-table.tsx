@@ -3,7 +3,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/use-toast";
-import { useEffect, useTransition, useState } from "react";
+import { useEffect, useMemo, useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +76,8 @@ function formatLastUpdate(iso?: string | null) {
   return date.toLocaleString();
 }
 
+const PAGE_SIZE = 10;
+
 export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -90,7 +92,19 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
   const [versionsByExtensionId, setVersionsByExtensionId] = useState<
     Record<string, VersionListItem[]>
   >({});
+  const [pageIndex, setPageIndex] = useState(0);
   const editingExtension = rows.find((row) => row.id === editingId) ?? null;
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+
+  const paginatedRows = useMemo(() => {
+    const start = pageIndex * PAGE_SIZE;
+    return rows.slice(start, start + PAGE_SIZE);
+  }, [rows, pageIndex]);
+
+  useEffect(() => {
+    setPageIndex((prev) => Math.min(prev, pageCount - 1));
+  }, [pageCount]);
 
   const copyStoreId = async (storeId: string) => {
     try {
@@ -415,7 +429,7 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((ext) => (
+              paginatedRows.map((ext) => (
                 <TableRow key={ext.id}>
                   <TableCell className="px-4">
                     <div className="flex min-w-0 items-center gap-0.5">
@@ -535,6 +549,32 @@ export function ExtensionsTable({ extensions }: { extensions: ExtRow[] }) {
           </TableBody>
         </Table>
       </div>
+
+      {rows.length > PAGE_SIZE ? (
+        <div className="flex items-center justify-end gap-2 py-4">
+          <span className="mr-2 text-sm text-muted-foreground">
+            Page {pageIndex + 1} of {pageCount}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+            disabled={pageIndex === 0}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={pageIndex >= pageCount - 1}
+          >
+            Next
+          </Button>
+        </div>
+      ) : null}
 
       <Dialog
         open={!!deleteTarget}
