@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { X } from "lucide-react";
+import { useState } from "react";
 import { Input } from "./input";
 import { Button } from "./button";
 
@@ -40,6 +41,7 @@ export function DataTable<TData, TValue>({
 }: DataTableProps<TData, TValue>) {
   const filterKeys = searchKeys ?? [searchKey];
   const useGlobalFilter = filterKeys.length > 1;
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   const table = useReactTable({
     data,
@@ -47,6 +49,9 @@ export function DataTable<TData, TValue>({
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
+    state: { pagination },
+    onPaginationChange: setPagination,
     globalFilterFn: (row, _columnId, filterValue) => {
       const query = String(filterValue ?? "").trim().toLowerCase();
       if (!query) return true;
@@ -61,12 +66,6 @@ export function DataTable<TData, TValue>({
           .toLowerCase()
           .includes(query);
       });
-    },
-    initialState: {
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
     },
   });
 
@@ -83,6 +82,7 @@ export function DataTable<TData, TValue>({
     } else {
       table.getColumn(searchKey)?.setFilterValue(value);
     }
+    table.setPageIndex(0);
   };
 
   return (
@@ -167,6 +167,7 @@ export function DataTable<TData, TValue>({
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="space-x-2">
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => table.previousPage()}
@@ -175,6 +176,7 @@ export function DataTable<TData, TValue>({
             Previous
           </Button>
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={() => table.nextPage()}

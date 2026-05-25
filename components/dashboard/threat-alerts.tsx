@@ -422,6 +422,18 @@ export function ThreatAlerts() {
     }
   }, [completeBrowserAgentTasks, completedScanActions, data])
 
+  const openExtensionDetail = useCallback((row: ThreatAlert) => {
+    setDetails(null)
+    setAiTestingPayload(null)
+    setSelected(row)
+    setOpen(true)
+  }, [])
+
+  const tableColumns = useMemo(
+    () => makeColumns(openExtensionDetail, liveStatusByExtensionId),
+    [openExtensionDetail, liveStatusByExtensionId],
+  )
+
   const processingRows = useMemo(() => {
     const total = Math.max(1, overview.total)
     return [
@@ -859,12 +871,7 @@ export function ThreatAlerts() {
 
         <DataTable
           data={data}
-          columns={makeColumns((row) => {
-            setDetails(null)
-            setAiTestingPayload(null)
-            setSelected(row)
-            setOpen(true)
-          }, liveStatusByExtensionId)}
+          columns={tableColumns}
           searchKey="extensionName"
           searchKeys={["extensionName", "extensionId"]}
           searchPlaceholder="Search extension name or ID..."
