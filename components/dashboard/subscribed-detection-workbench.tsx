@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { Sparkles } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -278,11 +279,17 @@ export function SubscribedDetectionWorkbench({
                           </Badge>
                           <Badge
                             className={cn(
-                              "h-5 shrink-0 px-1.5 text-[10px] leading-none",
+                              "h-5 shrink-0 leading-none",
+                              item.source === "ai" ? "w-5 justify-center px-0" : "px-1.5 text-[10px]",
                               sourceBadgeClass(item.source),
                             )}
+                            aria-label={item.source === "ai" ? "AI test" : undefined}
                           >
-                            {item.source}
+                            {item.source === "ai" ? (
+                              <Sparkles className="size-3" aria-hidden />
+                            ) : (
+                              item.source
+                            )}
                           </Badge>
                           <Badge
                             variant="outline"
