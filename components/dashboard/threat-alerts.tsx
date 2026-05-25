@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Copy, Bell, Download, Maximize2, Minimize2, Link2, ShieldCheck, ShieldAlert, ScanSearch, FolderKanban, Sparkles } from "lucide-react"
+import { Bell, Check, Copy, Download, FolderKanban, Link2, Maximize2, Minimize2, ScanSearch, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -21,7 +21,12 @@ import { useSearchParams } from "next/navigation"
 import { buildDashboardDownloadUrl } from "@/lib/package-download-url"
 import { formatDomainAgeDisplay } from "@/lib/format-domain-age"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
+import {
+  getCachedExtensionSubscription,
+  setCachedExtensionSubscription,
+} from "@/lib/extension-subscription-cache"
 import { dispatchSubscriptionsNavRefresh } from "@/lib/subscriptions-nav-events"
+import { cn } from "@/lib/utils"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 
 type ThreatAlert = {
@@ -62,31 +67,42 @@ const isHighOrCritical = (risk: string) => risk === "HIGH" || risk === "CRITICAL
 
 const OperationCell = ({ extensionId }: { extensionId: string }) => {
   const { toast } = useToast()
-  const [subscribed, setSubscribed] = useState(false)
-  const [subscriptionLoading, setSubscriptionLoading] = useState(true)
-
-  const loadSubscriptionState = useCallback(async () => {
-    setSubscriptionLoading(true)
-    try {
-      const qs = new URLSearchParams({ extensionId })
-      const res = await fetch(`/api/notifications/subscribe?${qs.toString()}`, {
-        cache: "no-store",
-      })
-      if (!res.ok) return
-      const data = (await res.json()) as { subscribed?: boolean; degraded?: boolean }
-      if (!data.degraded && typeof data.subscribed === "boolean") {
-        setSubscribed(data.subscribed)
-      }
-    } catch {
-      // Non-fatal; bell stays unsubscribed styling.
-    } finally {
-      setSubscriptionLoading(false)
-    }
-  }, [extensionId])
+  const cachedInitial = getCachedExtensionSubscription(extensionId)
+  const [subscribed, setSubscribed] = useState(cachedInitial ?? false)
+  const [ready, setReady] = useState(cachedInitial !== undefined)
 
   useEffect(() => {
-    void loadSubscriptionState()
-  }, [loadSubscriptionState])
+    const cached = getCachedExtensionSubscription(extensionId)
+    if (cached !== undefined) {
+      setSubscribed(cached)
+      setReady(true)
+      return
+    }
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const qs = new URLSearchParams({ extensionId })
+        const res = await fetch(`/api/notifications/subscribe?${qs.toString()}`, {
+          cache: "no-store",
+        })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { subscribed?: boolean; degraded?: boolean }
+        if (!data.degraded && typeof data.subscribed === "boolean") {
+          setCachedExtensionSubscription(extensionId, data.subscribed)
+          setSubscribed(data.subscribed)
+        }
+      } catch {
+        // Non-fatal; bell stays unsubscribed styling.
+      } finally {
+        if (!cancelled) setReady(true)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [extensionId])
 
   const handleCopy = async () => {
     try {
@@ -120,13 +136,16 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         return
       }
       if (typeof data.subscribed === 'boolean') {
+        setCachedExtensionSubscription(extensionId, data.subscribed)
         setSubscribed(data.subscribed)
         toast({ description: data.subscribed ? 'Subscribed to alert events' : 'Unsubscribed from alerts' })
         dispatchSubscriptionsNavRefresh()
         return
       }
       if (typeof data.unsubscribed === 'boolean') {
-        setSubscribed(!data.unsubscribed)
+        const next = !data.unsubscribed
+        setCachedExtensionSubscription(extensionId, next)
+        setSubscribed(next)
         toast({ description: data.unsubscribed ? 'Unsubscribed from alerts' : 'Subscribed to alert events' })
         dispatchSubscriptionsNavRefresh()
         return
@@ -143,16 +162,29 @@ const OperationCell = ({ extensionId }: { extensionId: string }) => {
         <Copy className="h-4 w-4" />
       </Button>
       <Button
-        variant={subscribed ? 'default' : 'ghost'}
+        variant="ghost"
         size="icon"
         onClick={handleSubscribe}
-        disabled={subscriptionLoading}
+        disabled={!ready}
         title={subscribed ? 'Subscribed - click to unsubscribe' : 'Subscribe to alert events'}
-        className={subscribed ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
+        className={cn(
+          "relative",
+          subscribed && ready && "bg-blue-600 text-white hover:bg-blue-700 hover:text-white",
+          !ready && "opacity-60",
+        )}
         aria-label={subscribed ? 'Subscribed to alert events' : 'Not subscribed to alert events'}
         aria-pressed={subscribed}
+        aria-busy={!ready}
       >
         <Bell className="h-4 w-4" />
+        {subscribed && ready ? (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500 ring-1 ring-background"
+            aria-hidden
+          >
+            <Check className="h-2.5 w-2.5 stroke-[3] text-white" />
+          </span>
+        ) : null}
       </Button>
     </div>
   )
