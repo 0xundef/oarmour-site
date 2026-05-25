@@ -305,72 +305,76 @@ function IssueAiChatBoxInner({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {!shareMode ? (
-        <div className="flex shrink-0 items-center justify-end gap-1 border-b px-3 py-1.5">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8 text-muted-foreground"
-                aria-label="Conversation actions"
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {findingIsActive ? (
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      {shareMode ? (
+        <IssueInvestigationShareHeader onCancel={exitShareMode} />
+      ) : (
+        <>
+          <div className="absolute right-2 top-2 z-10">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 bg-background/80 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-background"
+                  aria-label="Conversation actions"
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {findingIsActive ? (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs"
+                    disabled={isBusy}
+                    onClick={() => setDismissDialogOpen(true)}
+                  >
+                    <ShieldOffIcon className="size-3.5" />
+                    Mark false positive
+                  </DropdownMenuItem>
+                ) : null}
+                {findingResolution === "dismissed" ? (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs"
+                    disabled={isBusy || revokeBusy}
+                    onClick={() => void handleRevokeDismiss()}
+                  >
+                    <Undo2Icon className="size-3.5" />
+                    Revoke dismiss
+                  </DropdownMenuItem>
+                ) : null}
+                {domainOnAllowlist && allowlistDomain ? (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs"
+                    disabled={isBusy || revokeBusy}
+                    onClick={() => void handleRemoveFromAllowlist()}
+                  >
+                    <ListMinus className="size-3.5" />
+                    Remove {allowlistDomain} from allowlist
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem
                   className="gap-2 text-xs"
-                  disabled={isBusy}
-                  onClick={() => setDismissDialogOpen(true)}
+                  disabled={isBusy || messages.length === 0}
+                  onClick={enterShareMode}
                 >
-                  <ShieldOffIcon className="size-3.5" />
-                  Mark false positive
+                  <Link2Icon className="size-3.5" />
+                  Share
                 </DropdownMenuItem>
-              ) : null}
-              {findingResolution === "dismissed" ? (
-                <DropdownMenuItem
-                  className="gap-2 text-xs"
-                  disabled={isBusy || revokeBusy}
-                  onClick={() => void handleRevokeDismiss()}
-                >
-                  <Undo2Icon className="size-3.5" />
-                  Revoke dismiss
-                </DropdownMenuItem>
-              ) : null}
-              {domainOnAllowlist && allowlistDomain ? (
-                <DropdownMenuItem
-                  className="gap-2 text-xs"
-                  disabled={isBusy || revokeBusy}
-                  onClick={() => void handleRemoveFromAllowlist()}
-                >
-                  <ListMinus className="size-3.5" />
-                  Remove {allowlistDomain} from allowlist
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem
-                className="gap-2 text-xs"
-                disabled={isBusy || messages.length === 0}
-                onClick={enterShareMode}
-              >
-                <Link2Icon className="size-3.5" />
-                Share
-              </DropdownMenuItem>
-              {hasClearableHistory ? (
-                <DropdownMenuItem
-                  className="gap-2 text-xs text-destructive focus:text-destructive"
-                  disabled={isBusy || clearing}
-                  onClick={() => setClearDialogOpen(true)}
-                >
-                  <Trash2Icon className="size-3.5" />
-                  Clear conversation
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                {hasClearableHistory ? (
+                  <DropdownMenuItem
+                    className="gap-2 text-xs text-destructive focus:text-destructive"
+                    disabled={isBusy || clearing}
+                    onClick={() => setClearDialogOpen(true)}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                    Clear conversation
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {findingIsActive ? (
             <FindingDismissDialog
               open={dismissDialogOpen}
@@ -382,9 +386,7 @@ function IssueAiChatBoxInner({
               onDismissed={onResolutionChange}
             />
           ) : null}
-        </div>
-      ) : (
-        <IssueInvestigationShareHeader onCancel={exitShareMode} />
+        </>
       )}
 
       <ConfirmDeleteDialog
@@ -398,7 +400,9 @@ function IssueAiChatBoxInner({
       />
 
       <Conversation className="min-h-0 flex-1 overflow-hidden">
-        <ConversationContent className="mx-auto w-full max-w-3xl">
+        <ConversationContent
+          className={cn("mx-auto w-full max-w-3xl", !shareMode && "pr-11")}
+        >
           {messages.map((message, index) => {
             const isContextSeed = isContextSeedMessage(message)
             const isLast = index === messages.length - 1
