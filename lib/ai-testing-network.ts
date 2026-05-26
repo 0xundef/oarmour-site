@@ -18,6 +18,8 @@ export type AiTestingNetworkLog = {
   filter: string
   /** e.g. `"playwright-cli requests"` from browseragent */
   source?: string
+  /** Whether capture used `playwright-cli requests --static`. */
+  includeStatic?: boolean
   resourceTypes?: string[]
   requestCount: number
   requests: AiTestingNetworkRequest[]
@@ -83,11 +85,13 @@ export function parseNetworkLogFile(filePath: string): AiTestingNetworkLog | nul
       : undefined
 
     const source = typeof obj.source === 'string' ? obj.source : undefined
+    const includeStatic = obj.includeStatic === true
 
     return {
       capturedAt: typeof obj.capturedAt === 'string' ? obj.capturedAt : '',
       filter: typeof obj.filter === 'string' ? obj.filter : '',
       source,
+      ...(includeStatic ? { includeStatic: true } : {}),
       resourceTypes,
       requestCount:
         typeof obj.requestCount === 'number' ? obj.requestCount : requests.length,
