@@ -50,12 +50,50 @@ function formatTime(iso?: string | null) {
   return d.toLocaleString()
 }
 
+function parseIsoMs(iso?: string | null) {
+  if (!iso) return null
+  const ms = Date.parse(iso)
+  return Number.isFinite(ms) ? ms : null
+}
+
 function formatDuration(seconds?: number) {
   if (seconds == null || !Number.isFinite(seconds)) return "—"
   if (seconds < 60) return `${seconds}s`
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return s > 0 ? `${m}m ${s}s` : `${m}m`
+}
+
+function isActiveTaskStatus(status: string) {
+  return status === "queued" || status === "pending" || status === "running"
+}
+
+function resolveTaskDurationSeconds(task: TaskSession, nowMs: number) {
+  const active = isActiveTaskStatus(task.status)
+  if (!active && task.duration != null && Number.isFinite(task.duration)) {
+    return task.duration
+  }
+  const startMs = parseIsoMs(task.queuedAt) ?? parseIsoMs(task.updatedAt)
+  if (startMs == null) {
+    return task.duration != null && Number.isFinite(task.duration) ? task.duration : null
+  }
+  const endMs = active ? nowMs : parseIsoMs(task.updatedAt) ?? nowMs
+  return Math.max(0, Math.floor((endMs - startMs) / 1000))
+}
+
+function TaskSessionDuration({ task }: { task: TaskSession }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  const active = isActiveTaskStatus(task.status)
+
+  useEffect(() => {
+    setNowMs(Date.now())
+    if (!active) return
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [active, task.sessionId, task.status])
+
+  const seconds = resolveTaskDurationSeconds(task, nowMs)
+  return <>{formatDuration(seconds ?? undefined)}</>
 }
 
 function statusBadge(status: string) {
@@ -401,7 +439,9 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Duration</dt>
-                    <dd className="mt-1">{formatDuration(selectedTask.duration)}</dd>
+                    <dd className="mt-1 tabular-nums">
+                      <TaskSessionDuration task={selectedTask} />
+                    </dd>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
