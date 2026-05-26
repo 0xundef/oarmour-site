@@ -240,8 +240,8 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Submit AI test</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-4">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="flex min-w-0 flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-4">
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground" htmlFor="browser-agent-extension">
                 Extension
@@ -269,7 +269,7 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 p-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border bg-muted/20 p-4">
             <div
               className="flex min-w-[3rem] items-center justify-center rounded-md border bg-background px-3 py-2 tabular-nums text-xl font-semibold"
               title="Active playwright-cli browser sessions (playwright-cli list)"
