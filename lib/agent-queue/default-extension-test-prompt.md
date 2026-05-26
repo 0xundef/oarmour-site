@@ -24,4 +24,4 @@ You are driving **playwright-cli** (and related shell tools) to smoke-test an **
 
 ## Done when
 
-You have a short summary of what was reachable, at least one screenshot-backed step in `recordings.json`, **`network.json` present under `ai_testing/<runId>/`** (empty `requests` array is valid), and validation passes—or a clear explanation of a blocking error (missing UI, blocked host permission, etc.).
+You have a short summary of what was reachable, at least one screenshot-backed step in `recordings.json`, **`network.json` present under `ai_testing/<runId>/`** (empty `requests` array is valid), and validation passes—or a clear explanation of a blocking error (missing UI, blocked host permission, etc.). The browseragent service also writes **`agent_testing.log`** in the same folder (structured service logs + agent narrative).

@@ -83,4 +83,4 @@ If the UI is **English** instead, use the same sequence with equivalent labels: 
 
 ## Done when
 
-You have a short summary of what was reachable, at least one screenshot-backed step in **`recordings.json`**, **`network.json`** under `ai_testing/<runId>/` (empty `requests` is valid), and validation passes—or a clear explanation of a blocking error (terms not clickable, import blocked, missing host permission, etc.).
+You have a short summary of what was reachable, at least one screenshot-backed step in **`recordings.json`**, **`network.json`** under `ai_testing/<runId>/` (empty `requests` is valid), and validation passes—or a clear explanation of a blocking error (terms not clickable, import blocked, missing host permission, etc.). **`agent_testing.log`** in the same folder captures service logs and the agent run narrative for post-mortem review.
