@@ -1,10 +1,13 @@
 import { tool } from "ai"
 import { z } from "zod"
+import { readAiTestingNetworkTrace } from "@/lib/ai-testing-trace-read"
+import { runBase64Codec, runGzipDecode } from "@/lib/binary-payload-codec"
 import { locateDomainInSource, parseFindingFilePath } from "@/lib/domain-code-locator"
 import { lookupDomainWhois } from "@/lib/domain-whois-lookup"
 import { fetchWebPage } from "@/lib/web-page-fetch"
 import { normalizeAllowlistDomain } from "@/lib/finding-resolution"
 import { findingDismissalReasonSchema } from "@/lib/issue-chat-tool-proposals"
+import { resolveIssueExtensionArtifact } from "@/lib/issue-extension-artifact"
 
 export function createIssueChatTools(ctx: {
   storeId: string
@@ -51,6 +54,74 @@ export function createIssueChatTools(ctx: {
         url: z.string().url().describe("Full HTTPS URL, e.g. https://example.com/path"),
       }),
       execute: async ({ url }) => fetchWebPage(url),
+    }),
+    ai_testing_trace: tool({
+      description:
+        "Read browser AI test network traffic for this extension: prefers ai_testing/<runId>/network.json (includes POST requestBody when captured). Falls back to the latest Playwright trace .network file under .playwright-cli/traces. Filter by urlContains when investigating a specific host. Call once per investigation unless the user asks for another run.",
+      inputSchema: z.object({
+        runId: z
+          .string()
+          .optional()
+          .describe("ai_testing session id; default is the latest run with recordings.json"),
+        urlContains: z
+          .string()
+          .optional()
+          .describe("Substring filter on request URL, e.g. metrics-trustwallet.com"),
+        maxRequests: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Max rows to return (default 40)"),
+        includeBodies: z
+          .boolean()
+          .optional()
+          .describe("Include request/response bodies when present (default true)"),
+      }),
+      execute: async ({ runId, urlContains, maxRequests, includeBodies }) => {
+        const artifact = await resolveIssueExtensionArtifact(ctx.storeId)
+        if (!artifact) {
+          return {
+            ok: false,
+            error: "Extension version or sidecar not found for this store.",
+            requests: [],
+          }
+        }
+        return readAiTestingNetworkTrace({
+          storeId: ctx.storeId,
+          version: artifact.version,
+          runId,
+          urlContains,
+          maxRequests,
+          includeBodies,
+        })
+      },
+    }),
+    base64_codec: tool({
+      description:
+        "Encode UTF-8 text to base64 or decode base64 to UTF-8. Use when network bodies or API payloads are base64-wrapped.",
+      inputSchema: z.object({
+        operation: z.enum(["encode", "decode"]),
+        input: z.string().min(1).describe("Plain text (encode) or base64 string (decode)"),
+      }),
+      execute: async ({ operation, input }) => runBase64Codec({ operation, input }),
+    }),
+    gzip_decode: tool({
+      description:
+        "Decompress gzip-compressed data (expects base64 input by default). Use on Content-Encoding: gzip bodies after base64_codec if needed.",
+      inputSchema: z.object({
+        input: z
+          .string()
+          .min(1)
+          .describe("Gzip bytes as base64 (or hex when inputEncoding is hex)"),
+        inputEncoding: z
+          .enum(["base64", "hex"])
+          .optional()
+          .describe("How input is encoded (default base64)"),
+      }),
+      execute: async ({ input, inputEncoding }) =>
+        runGzipDecode({ input, inputEncoding }),
     }),
     propose_add_allowlist: tool({
       description:

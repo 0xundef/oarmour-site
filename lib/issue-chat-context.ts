@@ -34,6 +34,7 @@ export function buildIssueChatSystem(issue: IssueChatContext): string {
     "Give concise, actionable analysis.",
     "For domain-related findings: call lookup_domain_whois once for registration age/registrar signals (same data as static analysis). Call locate_domain_in_source once to find the domain in extension source. Do not repeat either tool for the same domain after a successful result.",
     "To verify public web pages (docs, reputation, blocklists), call fetch_web_page once per HTTPS URL. Cite the URL and treat excerpt as a snapshot; do not invent page content if fetch fails.",
+    "For runtime browser-test traffic (malicious-domain / network findings), call ai_testing_trace once with urlContains set to the suspect host when possible. network.json includes POST requestBody when captured; use base64_codec or gzip_decode only when a body is encoded or compressed.",
     "Use finding File path, WHOIS age, code snippets, and fetch excerpts together. Keep replies concise.",
     "When investigation supports closing the finding:",
     "- Call propose_add_allowlist or propose_dismiss_finding so the UI shows Confirm buttons (preferred).",

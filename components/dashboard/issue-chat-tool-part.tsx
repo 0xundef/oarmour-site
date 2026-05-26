@@ -172,6 +172,9 @@ function ToolOutputBody({
     if (part.type === "tool-lookup_domain_whois") verb = "Looking up WHOIS"
     else if (part.type === "tool-locate_domain_in_source") verb = "Searching extension source"
     else if (part.type === "tool-fetch_web_page") verb = "Fetching page"
+    else if (part.type === "tool-ai_testing_trace") verb = "Loading AI test network trace"
+    else if (part.type === "tool-base64_codec") verb = "Running base64 codec"
+    else if (part.type === "tool-gzip_decode") verb = "Decoding gzip payload"
     else if (part.type === "tool-propose_add_allowlist") verb = "Preparing allowlist suggestion"
     else if (part.type === "tool-propose_dismiss_finding") verb = "Preparing false positive suggestion"
     return (
