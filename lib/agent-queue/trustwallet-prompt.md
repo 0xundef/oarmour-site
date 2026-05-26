@@ -17,7 +17,7 @@ Trust Wallet’s UI runs on **`chrome-extension://…`** origins with a strict *
 1. Launch Chromium with Trust Wallet loaded (`playwright-cli open --config=./cli_config.json` or the path documented in config).
 2. Right after a successful open, call **`start_network_capture`** (clears the in-session request list via `playwright-cli requests --clear` for this run).
 3. Open the **Trust Wallet** extension (toolbar icon or `chrome://extensions` to confirm it is loaded).
-4. Complete a minimal **import / unlock** flow on the welcome screen (see **Trust Wallet UI flow** below)—use a test mnemonic from **`generate_mnemonic`**; do **not** create a real mainnet wallet with user funds.
+4. Complete the **已有钱包 → 密码 → MetaMask → recovery phrase** onboarding path (see **Trust Wallet UI flow** below)—use a test mnemonic from **`generate_mnemonic`**; do **not** create a real mainnet wallet with user funds.
 5. After each meaningful UI state, take a screenshot and append a step with **`record_step`** (`time` ISO 8601, `thinking`, `image` under `ai_testing/<runId>/`).
 6. If `cli_config.json` documents a test dApp URL, optionally navigate there and attempt **Connect** / **Approve** only when the UI clearly offers it; otherwise stop after a successful wallet home / account view.
 7. **Network traffic:** before finishing, call **`capture_network_traffic`**. It snapshots HTTPS traffic into **`ai_testing/<runId>/network.json`** (via `playwright-cli requests` under the hood). **Always call it**—zero requests is OK; the file must exist with `"requests": []`. `chrome-extension://` URLs are excluded. For offline review use **`network.json` only**; do not use `playwright-cli request <index>` after the browser session ends.
@@ -25,32 +25,60 @@ Trust Wallet’s UI runs on **`chrome-extension://…`** origins with a strict *
 
 ## Trust Wallet UI flow (welcome / onboarding)
 
-The first-run UI is often **Chinese**. Use visible text (or accessibility labels) to click—do not assume English.
+The first-run UI is often **Chinese**. Use visible text (or accessibility labels) to click—do not assume English. After each screen change, **screenshot** and **`record_step`**.
 
 | UI text (zh) | Meaning | Action for this test |
 |--------------|---------|----------------------|
 | 我已阅读并同意使用条款和隐私政策 | Terms & Privacy checkbox | **Check** if unchecked before continuing |
-| **已有钱包** | I already have a wallet | **Prefer this** — import / restore with test mnemonic |
-| 创建一个新钱包 | Create a new wallet | Avoid unless import path is blocked; creates extra setup |
-| 已有 Trust Wallet 移动端 App? | Already have mobile app | Optional; skip for automation |
+| **已有钱包** | I already have a wallet | **Click this** on the welcome screen (blue primary button) |
+| 创建一个新钱包 | Create a new wallet | **Do not** click — skip new-wallet creation |
+| 选择一种安全保护方案 | Choose a security method | On this screen, select **密码** (password) |
+| 密码 | Password | **Click** to proceed to set / confirm password |
+| MetaMask | MetaMask (import source) | **Select** when choosing an existing wallet provider |
+| 已有 Trust Wallet 移动端 App? | Already have mobile app | **Skip** |
 | 扫码同步信息 | Scan QR to sync from mobile | **Skip** — not suitable for headless smoke test |
 
-**Recommended path (import):**
+**Required path (import via MetaMask + recovery phrase):**
 
-1. On the welcome screen, ensure the terms checkbox is checked.
-2. Click **已有钱包**.
-3. Follow on-screen steps to **import secret phrase / recovery phrase** (word count may be 12 or 24—match what the UI shows).
-4. Call **`generate_mnemonic`** if you need a fresh BIP39 phrase; enter words into the UI fields the same way you would for other wallets (single textarea or per-word boxes—adapt to what appears).
-5. Set a **test-only password** if prompted (use a fixed test password documented in `thinking`, e.g. `TestWallet123!`—never a real user password).
-6. Stop when you reach a **main wallet / home** view (balance area, asset list, or account header visible). Take a final screenshot.
+### 1. Welcome — 已有钱包
 
-If the UI is **English** instead, equivalent controls are typically **“I already have a wallet”**, **“Create a new wallet”**, and **“I agree to the Terms of Service and Privacy Policy”**—same rules: prefer import, check terms, skip QR sync.
+1. Open the Trust Wallet extension UI (toolbar icon or full-page onboarding).
+2. Ensure **我已阅读并同意使用条款和隐私政策** is **checked** (check the box if it is empty).
+3. Click the blue button **已有钱包** (not **创建一个新钱包**).
+4. Screenshot + **`record_step`**.
+
+### 2. Security — 密码
+
+1. On **选择一种安全保护方案**, click the row **密码** (padlock icon, chevron on the right).
+2. On the password screen, enter a **test-only** password in both fields (e.g. `TestWallet123!` — document it in `thinking`; never a real user password).
+3. Confirm / continue (e.g. **下一步**, **继续**, **创建**, or **确认** — match the visible primary button).
+4. Screenshot + **`record_step`** after password is set.
+
+### 3. Import source — MetaMask
+
+1. When prompted to choose an **existing wallet** / import source, select **MetaMask** (icon or label **MetaMask**).
+2. Do **not** pick Trust Wallet mobile, QR sync, or hardware-only paths unless MetaMask is unavailable; then report the blocker.
+3. Screenshot + **`record_step`**.
+
+### 4. Recovery phrase — Secret Recovery Phrase or Private Key
+
+1. On the import screen, use the flow for **Secret Recovery Phrase** or **Private Key** (English UI may show exactly that heading; Chinese may say **助记词** / **恢复短语** / **私钥** — follow what is on screen).
+2. Call **`generate_mnemonic`** for a fresh **12- or 24-word** BIP39 phrase if you need one; word count must match the UI (12 vs 24).
+3. Enter the phrase into the UI (single textarea or per-word fields — adapt to what appears). If the UI offers **Private Key** instead, you may use a test key only if the product flow requires it; prefer mnemonic when both are offered.
+4. Complete any **Next** / **Import** / **继续** confirmation until import finishes.
+5. Screenshot + **`record_step`**.
+
+### 5. Done with onboarding
+
+1. Stop when you reach a **main wallet / home** view (balance area, asset list, or account header visible). Final screenshot + **`record_step`**.
+
+If the UI is **English** instead, use the same sequence with equivalent labels: **“I already have a wallet”** → **Password** → **MetaMask** → **Secret Recovery Phrase or Private Key** → import → wallet home.
 
 ## Rules
 
 - **Non-destructive only:** no real mainnet transactions, no sending funds, no bridging real assets.
 - If the same step fails **twice** with the same error, summarize and stop rather than looping.
-- Do not hard-code MetaMask copy; this run is **Trust Wallet only**.
+- This run tests **Trust Wallet only**; **MetaMask** appears only as the **import source** inside Trust Wallet’s UI (not the MetaMask extension).
 - Finish order: **`capture_network_traffic`** → **`validate_recordings`** → short summary.
 
 ## Done when
