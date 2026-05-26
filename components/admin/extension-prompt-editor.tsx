@@ -2,6 +2,7 @@
 
 import { useMemo } from "react"
 import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -47,7 +48,7 @@ export function ExtensionPromptEditor({
               <p className="text-sm text-muted-foreground">Loading prompt…</p>
             ) : (
               <article className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown>{preview}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{preview}</ReactMarkdown>
               </article>
             )}
           </div>
