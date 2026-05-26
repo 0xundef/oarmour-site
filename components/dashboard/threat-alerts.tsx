@@ -288,7 +288,7 @@ function makeColumns(
     },
     {
       accessorKey: "dynamicAnalysisStatus",
-      header: "Dynamic analysis",
+      header: "AI test",
       cell: ({ row }) => (
         <DynamicAnalysisSparkle status={row.original.dynamicAnalysisStatus} />
       ),
