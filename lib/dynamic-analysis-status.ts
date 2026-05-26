@@ -1,8 +1,8 @@
 import 'server-only'
 
 import type { BrowserAgentTaskStatus, JobStatus } from '@prisma/client'
-import { readAgentStatuses } from '@/lib/agent-queue'
 import type { DynamicAnalysisDisplayStatus } from '@/lib/dynamic-analysis-display'
+import { syncBrowserAgentTasksFromStatus } from '@/lib/browser-agent-task-queue'
 import { prisma } from '@/lib/prisma'
 import { normalizeExtensionVersion } from '@/lib/workbench-check-items'
 
@@ -16,29 +16,21 @@ export function resolveDynamicAnalysisDisplayStatus(input: {
   version: string | null | undefined
   taskStatus: BrowserAgentTaskStatus | null
   aiStatus: JobStatus | null
-  agentQueueStatus: string | null
 }): DynamicAnalysisDisplayStatus {
   const version = normalizeExtensionVersion(input.version)
   if (!version) return 'unavailable'
 
-  const agent = (input.agentQueueStatus ?? '').trim().toLowerCase()
-  if (agent === 'pending' || agent === 'running') return 'in_progress'
-
   const task = input.taskStatus
-  if (task === 'QUEUED' || task === 'DISPATCHED' || task === 'RUNNING') return 'in_progress'
-
   const ai = input.aiStatus
+
+  if (task === 'QUEUED' || task === 'DISPATCHED' || task === 'RUNNING') return 'in_progress'
   if (ai === 'PENDING' || ai === 'RUNNING') return 'in_progress'
 
   if (task === 'ERROR' || task === 'CANCELLED') return 'unavailable'
   if (ai === 'FAILED') return 'unavailable'
 
   if (ai === 'COMPLETED') return 'success'
-
-  if (task === 'COMPLETE') {
-    if (!ai) return 'in_progress'
-    return 'success'
-  }
+  if (task === 'COMPLETE') return 'success'
 
   return 'unavailable'
 }
@@ -50,6 +42,8 @@ export async function mapDynamicAnalysisStatusByStoreId(
   const storeIds = [...new Set(rows.map((r) => r.storeId).filter((id) => id.length > 0))]
   const out = new Map<string, DynamicAnalysisDisplayStatus>()
   if (storeIds.length === 0) return out
+
+  await syncBrowserAgentTasksFromStatus()
 
   const [tasks, aiResults] = await Promise.all([
     prisma.browserAgentTask.findMany({
@@ -76,12 +70,6 @@ export async function mapDynamicAnalysisStatusByStoreId(
     if (!aiByKey.has(key)) aiByKey.set(key, ai)
   }
 
-  const agentByKey = new Map<string, string>()
-  for (const entry of readAgentStatuses()) {
-    const key = statusKey(entry.id, entry.version)
-    if (!agentByKey.has(key)) agentByKey.set(key, entry.status)
-  }
-
   for (const row of rows) {
     const key = statusKey(row.storeId, row.version)
     out.set(
@@ -90,7 +78,6 @@ export async function mapDynamicAnalysisStatusByStoreId(
         version: row.version,
         taskStatus: taskByKey.get(key)?.status ?? null,
         aiStatus: aiByKey.get(key)?.status ?? null,
-        agentQueueStatus: agentByKey.get(key) ?? null,
       }),
     )
   }

@@ -87,7 +87,6 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
   const [busy, setBusy] = useState(false)
   const [apiConfigured, setApiConfigured] = useState<boolean | null>(null)
   const [taskSessions, setTaskSessions] = useState<TaskSession[]>([])
-  const [taskSource, setTaskSource] = useState<"db" | null>(null)
   const [playwrightRunningCount, setPlaywrightRunningCount] = useState<number | null>(null)
   const [enqueueStoreId, setEnqueueStoreId] = useState(extensions[0]?.storeId ?? "")
   const [selectedTask, setSelectedTask] = useState<TaskSession | null>(null)
@@ -112,11 +111,9 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
       if (tasksRes.ok) {
         const json = (await tasksRes.json()) as {
           sessions?: TaskSession[]
-          source?: "db"
           apiConfigured?: boolean
         }
         setTaskSessions(json.sessions ?? [])
-        setTaskSource(json.source ?? null)
         if (json.apiConfigured !== undefined) setApiConfigured(json.apiConfigured)
       }
 
@@ -242,10 +239,6 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Submit AI test</CardTitle>
-          <CardDescription>
-            Returns a <code className="text-xs">sessionId</code> (runId) immediately; the browser
-            agent worker runs the task in the background.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-4">
@@ -274,9 +267,6 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
             <Button disabled={busy || !enqueueVersion} onClick={() => void submitTask()}>
               Submit task
             </Button>
-            {taskSource ? (
-              <span className="text-xs text-muted-foreground">Tasks via {taskSource}</span>
-            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 p-4">
