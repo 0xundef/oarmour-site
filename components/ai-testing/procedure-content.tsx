@@ -10,11 +10,22 @@ type AiTestingRecordingStep = {
   image: string
 }
 
-function statusBadgeClass(status: number | null) {
+function statusBadgeClass(status: number | null, failed?: boolean) {
+  if (failed) return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
   if (status === null) return "bg-muted text-muted-foreground"
   if (status >= 400) return "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
   if (status >= 300) return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
   return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
+}
+
+function formatNetworkStatus(row: {
+  status: number | null
+  failed?: boolean
+  errorText?: string
+}) {
+  if (row.failed) return row.errorText ?? "FAILED"
+  if (row.status !== null) return String(row.status)
+  return "—"
 }
 
 function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
@@ -27,6 +38,7 @@ function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
         r.url.toLowerCase().includes(q) ||
         r.method.toLowerCase().includes(q) ||
         (r.resourceType ?? "").toLowerCase().includes(q) ||
+        (r.errorText ?? "").toLowerCase().includes(q) ||
         String(r.status ?? "").includes(q),
     )
   }, [network.requests, query])
@@ -44,7 +56,7 @@ function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
       </div>
       <input
         type="search"
-        placeholder="Filter by URL, method, or status…"
+        placeholder="Filter by URL, method, status, or error…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -73,11 +85,12 @@ function AiTestingNetworkPanel({ network }: { network: AiTestingNetworkLog }) {
                     {row.resourceType ?? "—"}
                   </td>
                   <td className="whitespace-nowrap px-2 py-2 font-mono">{row.method}</td>
-                  <td className="whitespace-nowrap px-2 py-2">
+                  <td className="max-w-[14rem] whitespace-nowrap px-2 py-2">
                     <span
-                      className={`inline-block rounded px-1.5 py-0.5 font-mono ${statusBadgeClass(row.status)}`}
+                      className={`inline-block max-w-full truncate rounded px-1.5 py-0.5 font-mono ${statusBadgeClass(row.status, row.failed)}`}
+                      title={row.errorText}
                     >
-                      {row.status ?? "—"}
+                      {formatNetworkStatus(row)}
                     </span>
                   </td>
                   <td className="break-all px-2 py-2 font-mono text-[11px] leading-snug">

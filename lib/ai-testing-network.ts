@@ -5,6 +5,8 @@ export type AiTestingNetworkRequest = {
   method: string
   url: string
   status: number | null
+  failed?: boolean
+  errorText?: string
   resourceType?: 'fetch' | 'xhr' | 'websocket'
   requestedAt?: string
   requestHeaders?: Record<string, string>
@@ -29,6 +31,9 @@ function parseRequestRow(row: Record<string, unknown>): AiTestingNetworkRequest 
   const status =
     typeof row.status === 'number' ? row.status : row.status === null ? null : null
 
+  const failed = row.failed === true
+  const errorText = typeof row.errorText === 'string' ? row.errorText : undefined
+
   const resourceTypeRaw = row.resourceType
   const resourceType =
     resourceTypeRaw === 'fetch' ||
@@ -46,7 +51,16 @@ function parseRequestRow(row: Record<string, unknown>): AiTestingNetworkRequest 
       ? (row.requestHeaders as Record<string, string>)
       : undefined
 
-  return { method, url, status, resourceType, requestedAt, requestHeaders }
+  return {
+    method,
+    url,
+    status,
+    ...(failed ? { failed: true } : {}),
+    ...(errorText ? { errorText } : {}),
+    resourceType,
+    requestedAt,
+    requestHeaders,
+  }
 }
 
 export function parseNetworkLogFile(filePath: string): AiTestingNetworkLog | null {
