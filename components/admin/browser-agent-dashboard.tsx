@@ -88,6 +88,7 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
   const [apiConfigured, setApiConfigured] = useState<boolean | null>(null)
   const [taskSessions, setTaskSessions] = useState<TaskSession[]>([])
   const [taskSource, setTaskSource] = useState<"db" | null>(null)
+  const [playwrightRunningCount, setPlaywrightRunningCount] = useState<number | null>(null)
   const [enqueueStoreId, setEnqueueStoreId] = useState(extensions[0]?.storeId ?? "")
   const [selectedTask, setSelectedTask] = useState<TaskSession | null>(null)
 
@@ -103,7 +104,11 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
 
   const refresh = useCallback(async () => {
     try {
-      const tasksRes = await fetch("/api/admin/browser-agent/sessions", { cache: "no-store" })
+      const [tasksRes, playwrightRes] = await Promise.all([
+        fetch("/api/admin/browser-agent/sessions", { cache: "no-store" }),
+        fetch("/api/admin/browser-agent/playwright/sessions", { cache: "no-store" }),
+      ])
+
       if (tasksRes.ok) {
         const json = (await tasksRes.json()) as {
           sessions?: TaskSession[]
@@ -112,6 +117,15 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
         }
         setTaskSessions(json.sessions ?? [])
         setTaskSource(json.source ?? null)
+        if (json.apiConfigured !== undefined) setApiConfigured(json.apiConfigured)
+      }
+
+      if (playwrightRes.ok) {
+        const json = (await playwrightRes.json()) as {
+          sessions?: unknown[]
+          apiConfigured?: boolean
+        }
+        setPlaywrightRunningCount(Array.isArray(json.sessions) ? json.sessions.length : 0)
         if (json.apiConfigured !== undefined) setApiConfigured(json.apiConfigured)
       }
     } finally {
@@ -233,57 +247,77 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
             agent worker runs the task in the background.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground" htmlFor="browser-agent-extension">
-              Extension
-            </label>
-            <select
-              id="browser-agent-extension"
-              className="flex h-9 min-w-[14rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              value={enqueueStoreId}
-              onChange={(e) => setEnqueueStoreId(e.target.value)}
-              disabled={busy}
-            >
-              {extensions.map((ext) => (
-                <option key={ext.storeId} value={ext.storeId}>
-                  {ext.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">Version</div>
-            <div className="text-sm font-mono">{enqueueVersion ?? "N/A"}</div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-4">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground" htmlFor="browser-agent-extension">
+                Extension
+              </label>
+              <select
+                id="browser-agent-extension"
+                className="flex h-9 min-w-[14rem] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                value={enqueueStoreId}
+                onChange={(e) => setEnqueueStoreId(e.target.value)}
+                disabled={busy}
+              >
+                {extensions.map((ext) => (
+                  <option key={ext.storeId} value={ext.storeId}>
+                    {ext.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">Version</div>
+              <div className="text-sm font-mono">{enqueueVersion ?? "N/A"}</div>
+            </div>
             <Button disabled={busy || !enqueueVersion} onClick={() => void submitTask()}>
               Submit task
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy || apiConfigured === false}
-              onClick={() => void killAllPlaywright(false)}
-            >
-              Close all
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={busy || apiConfigured === false}
-              onClick={() => void killAllPlaywright(true)}
-            >
-              Kill all
-            </Button>
+            {taskSource ? (
+              <span className="text-xs text-muted-foreground">Tasks via {taskSource}</span>
+            ) : null}
           </div>
-          {taskSource ? (
-            <span className="w-full text-xs text-muted-foreground sm:w-auto">
-              Tasks via {taskSource}
-            </span>
-          ) : null}
+
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 p-4">
+            <div
+              className="flex min-w-[3rem] items-center justify-center rounded-md border bg-background px-3 py-2 tabular-nums text-xl font-semibold"
+              title="Active playwright-cli browser sessions (playwright-cli list)"
+              aria-label={`${playwrightRunningCount ?? "—"} running browsers`}
+            >
+              {apiConfigured === false
+                ? "—"
+                : playwrightRunningCount == null
+                  ? "…"
+                  : playwrightRunningCount}
+            </div>
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="text-sm font-medium">Running browsers</div>
+              <div className="text-xs text-muted-foreground">
+                From browser agent via <code className="text-[10px]">playwright-cli list</code>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || apiConfigured === false}
+                onClick={() => void killAllPlaywright(false)}
+              >
+                Close all
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={busy || apiConfigured === false}
+                onClick={() => void killAllPlaywright(true)}
+              >
+                Kill all
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
