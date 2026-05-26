@@ -9,18 +9,18 @@ You are driving **playwright-cli** (and related shell tools) to smoke-test the *
 Trust Wallet’s UI runs on **`chrome-extension://…`** origins with a strict **Content Security Policy** that typically **blocks `eval` and inline script execution**.
 
 - **Do not** use `playwright-cli eval …` (or similar “inject and run arbitrary JS string” automation) **while focused on the Trust Wallet / extension UI**—it often fails or appears blocked for this reason.
-- **Prefer** tab selection, snapshots, clicking by stable labels / roles / visible text, keyboard input, and screenshots. Use `playwright-cli --help` and **`cli_config.json`** for supported non-eval commands.
+- **Prefer** tab selection, snapshots, clicking by stable labels / roles / visible text, keyboard input, and screenshots. Use `playwright-cli --help` (or `-help`) and **`cli_config.json`** for supported non-eval commands.
 - On **normal `https://` test dapps**, `eval` may work if the page CSP allows it; still prefer the same non-eval style when possible.
 
 ## Goals
 
 1. Launch Chromium with Trust Wallet loaded (`playwright-cli open --config=./cli_config.json` or the path documented in config).
-2. Right after a successful open, call **`start_network_capture`** (clears the playwright-cli network log for this run).
+2. Right after a successful open, call **`start_network_capture`** (clears the in-session request list via `playwright-cli requests --clear` for this run).
 3. Open the **Trust Wallet** extension (toolbar icon or `chrome://extensions` to confirm it is loaded).
 4. Complete a minimal **import / unlock** flow on the welcome screen (see **Trust Wallet UI flow** below)—use a test mnemonic from **`generate_mnemonic`**; do **not** create a real mainnet wallet with user funds.
 5. After each meaningful UI state, take a screenshot and append a step with **`record_step`** (`time` ISO 8601, `thinking`, `image` under `ai_testing/<runId>/`).
 6. If `cli_config.json` documents a test dApp URL, optionally navigate there and attempt **Connect** / **Approve** only when the UI clearly offers it; otherwise stop after a successful wallet home / account view.
-7. **Network traffic:** before finishing, call **`capture_network_traffic`**. It runs `playwright-cli network --request-headers --filter="https?://"` and writes **`ai_testing/<runId>/network.json`**. **Always call it**—zero requests is OK; the file must exist with `"requests": []`. HTTPS matches are saved except `chrome-extension://` URLs.
+7. **Network traffic:** before finishing, call **`capture_network_traffic`**. It snapshots HTTPS traffic into **`ai_testing/<runId>/network.json`** (via `playwright-cli requests` under the hood). **Always call it**—zero requests is OK; the file must exist with `"requests": []`. `chrome-extension://` URLs are excluded. For offline review use **`network.json` only**; do not use `playwright-cli request <index>` after the browser session ends.
 8. Call **`validate_recordings`**, then summarize what was reachable.
 
 ## Trust Wallet UI flow (welcome / onboarding)

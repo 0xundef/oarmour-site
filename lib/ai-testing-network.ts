@@ -14,7 +14,7 @@ export type AiTestingNetworkRequest = {
 export type AiTestingNetworkLog = {
   capturedAt: string
   filter: string
-  /** e.g. `"playwright-cli network"` from browseragent */
+  /** e.g. `"playwright-cli requests"` from browseragent */
   source?: string
   resourceTypes?: string[]
   requestCount: number
