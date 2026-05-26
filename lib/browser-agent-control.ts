@@ -1,5 +1,8 @@
 import 'server-only'
-import type { BrowserAgentTaskStatus } from '@prisma/client'
+import {
+  mapDbStatusToTaskUi,
+  type BrowserAgentTaskUiStatus,
+} from '@/lib/browser-agent-task-ui-status'
 import {
   cancelBrowserAgentTask,
   listBrowserAgentTasks,
@@ -22,30 +25,12 @@ export type BrowserAgentTaskSession = {
   extensionId: string
   extensionName?: string
   version: string
-  status: 'queued' | 'pending' | 'running' | 'complete' | 'error' | 'cancelled'
+  status: BrowserAgentTaskUiStatus
   error?: string
   queuedAt?: string
   updatedAt?: string
   duration?: number
   inQueue: boolean
-}
-
-function mapDbStatusToUi(status: BrowserAgentTaskStatus): BrowserAgentTaskSession['status'] {
-  switch (status) {
-    case 'QUEUED':
-      return 'queued'
-    case 'DISPATCHED':
-      return 'pending'
-    case 'RUNNING':
-      return 'running'
-    case 'COMPLETE':
-      return 'complete'
-    case 'CANCELLED':
-      return 'cancelled'
-    case 'ERROR':
-    default:
-      return 'error'
-  }
 }
 
 function mapDbTaskToSession(
@@ -57,7 +42,7 @@ function mapDbTaskToSession(
     extensionId: task.storeId,
     extensionName: task.extensionName ?? undefined,
     version: task.version,
-    status: mapDbStatusToUi(task.status),
+    status: mapDbStatusToTaskUi(task.status),
     error: task.error ?? undefined,
     queuedAt: task.createdAt.toISOString(),
     updatedAt: (task.dispatchedAt ?? task.completedAt ?? task.updatedAt).toISOString(),

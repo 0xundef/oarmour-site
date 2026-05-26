@@ -5,9 +5,9 @@ import type { DynamicAnalysisDisplayStatus } from "@/lib/dynamic-analysis-displa
 import { cn } from "@/lib/utils"
 
 const LABELS: Record<DynamicAnalysisDisplayStatus, string> = {
-  in_progress: "Dynamic analysis in progress",
-  success: "Dynamic analysis completed for this version",
-  unavailable: "Dynamic analysis not completed for this version",
+  in_progress: "AI test session: queued, dispatched, or running",
+  success: "AI test session: complete",
+  unavailable: "AI test session: error, cancelled, or no run for this version",
 }
 
 export function DynamicAnalysisSparkle({
