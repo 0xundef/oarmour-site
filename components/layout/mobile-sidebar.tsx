@@ -32,8 +32,9 @@ export function MobileSidebar({ className }: SidebarProps) {
       const res = await fetch("/api/notifications/subscriptions", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { items?: NavItem[] };
-      if (!Array.isArray(data.items)) return;
-      setNavItemsState((prev) => patchNavItemsWithSubscribedChildren(prev, data.items));
+      const subscribedItems = data.items;
+      if (!Array.isArray(subscribedItems)) return;
+      setNavItemsState((prev) => patchNavItemsWithSubscribedChildren(prev, subscribedItems));
     } catch {
       // Keep current nav if refresh fails.
     }
