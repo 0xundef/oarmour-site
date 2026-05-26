@@ -838,27 +838,7 @@ export function ThreatAlerts() {
 
             <Card className="xl:col-span-2">
               <CardContent className="p-4">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">Processing Status</div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toast({ description: "Confirmation workflow triggered for selected findings." })}
-                    >
-                      Confirm Findings
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toast({ description: "Feedback workflow opened for security operations team." })}
-                    >
-                      Provide Feedback
-                    </Button>
-                  </div>
-                </div>
+                <div className="mb-3 text-sm font-medium">Processing Status</div>
 
                 <div className="space-y-3">
                   {processingRows.map((row) => (
