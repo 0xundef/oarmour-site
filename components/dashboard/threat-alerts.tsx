@@ -27,6 +27,8 @@ import {
 } from "@/lib/extension-subscription-cache"
 import { dispatchSubscriptionsNavRefresh } from "@/lib/subscriptions-nav-events"
 import { cn } from "@/lib/utils"
+import { DynamicAnalysisSparkle } from "@/components/dashboard/dynamic-analysis-sparkle"
+import type { DynamicAnalysisDisplayStatus } from "@/lib/dynamic-analysis-display"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 
 type ThreatAlert = {
@@ -39,6 +41,7 @@ type ThreatAlert = {
   lastUpdate: string
   risk: string
   analysisStatus: string
+  dynamicAnalysisStatus: DynamicAnalysisDisplayStatus
 }
 
 type LiveAnalyzeStatus = {
@@ -284,6 +287,13 @@ function makeColumns(
       },
     },
     {
+      accessorKey: "dynamicAnalysisStatus",
+      header: "Dynamic analysis",
+      cell: ({ row }) => (
+        <DynamicAnalysisSparkle status={row.original.dynamicAnalysisStatus} />
+      ),
+    },
+    {
       id: "operation",
       header: "Operation",
       cell: ({ row }) => {
@@ -466,6 +476,7 @@ export function ThreatAlerts() {
             updatedAt: string
             riskLevel: string
             analysisStatus: string
+            dynamicAnalysisStatus?: DynamicAnalysisDisplayStatus
           }>
           metrics?: { completedScanActions?: number; completeBrowserAgentTasks?: number }
         }
@@ -481,6 +492,7 @@ export function ThreatAlerts() {
             lastUpdate: new Date(ext.updatedAt).toLocaleDateString(),
             risk: ext.riskLevel,
             analysisStatus: ext.analysisStatus,
+            dynamicAnalysisStatus: ext.dynamicAnalysisStatus ?? "unavailable",
         }))
 
         setData(formattedData)

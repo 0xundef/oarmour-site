@@ -1,5 +1,9 @@
 "use server"
 
+import {
+  mapDynamicAnalysisStatusByStoreId,
+  type DynamicAnalysisDisplayStatus,
+} from "@/lib/dynamic-analysis-status"
 import { prisma } from "@/lib/prisma"
 
 export type ExtensionWithAnalysis = {
@@ -14,6 +18,7 @@ export type ExtensionWithAnalysis = {
   riskLevel: string
   analysisStatus: string
   filesScanned: number
+  dynamicAnalysisStatus: DynamicAnalysisDisplayStatus
 }
 
 export async function listExtensionsWithAnalysis(): Promise<ExtensionWithAnalysis[]> {
@@ -31,6 +36,10 @@ export async function listExtensionsWithAnalysis(): Promise<ExtensionWithAnalysi
     },
   })
 
+  const dynamicStatusByStoreId = await mapDynamicAnalysisStatusByStoreId(
+    extensions.map((ext) => ({ storeId: ext.storeId, version: ext.version })),
+  )
+
   return extensions.map((ext) => {
     const latestAnalysis = ext.analysisResults[0]
 
@@ -46,6 +55,8 @@ export async function listExtensionsWithAnalysis(): Promise<ExtensionWithAnalysi
       riskLevel: ext.riskLevel,
       analysisStatus: latestAnalysis?.status || 'PENDING',
       filesScanned: latestAnalysis?.filesScanned || 0,
+      dynamicAnalysisStatus:
+        dynamicStatusByStoreId.get(ext.storeId) ?? 'unavailable',
     }
   })
 }
