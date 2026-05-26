@@ -9,7 +9,10 @@ export type AiTestingNetworkRequest = {
   errorText?: string
   resourceType?: 'fetch' | 'xhr' | 'websocket'
   requestedAt?: string
+  cliIndex?: number
   requestHeaders?: Record<string, string>
+  requestBody?: string | null
+  requestBodyTruncated?: boolean
 }
 
 /** Matches browseragent `lib/network-capture.ts` NetworkLog. */
@@ -20,6 +23,7 @@ export type AiTestingNetworkLog = {
   source?: string
   /** Whether capture used `playwright-cli requests --static`. */
   includeStatic?: boolean
+  capturePostDetails?: boolean
   resourceTypes?: string[]
   requestCount: number
   requests: AiTestingNetworkRequest[]
@@ -53,6 +57,15 @@ function parseRequestRow(row: Record<string, unknown>): AiTestingNetworkRequest 
       ? (row.requestHeaders as Record<string, string>)
       : undefined
 
+  const cliIndex = typeof row.cliIndex === 'number' ? row.cliIndex : undefined
+  const requestBody =
+    typeof row.requestBody === 'string'
+      ? row.requestBody
+      : row.requestBody === null
+        ? null
+        : undefined
+  const requestBodyTruncated = row.requestBodyTruncated === true
+
   return {
     method,
     url,
@@ -61,7 +74,10 @@ function parseRequestRow(row: Record<string, unknown>): AiTestingNetworkRequest 
     ...(errorText ? { errorText } : {}),
     resourceType,
     requestedAt,
+    cliIndex,
     requestHeaders,
+    ...(requestBody !== undefined ? { requestBody } : {}),
+    ...(requestBodyTruncated ? { requestBodyTruncated: true } : {}),
   }
 }
 
@@ -86,12 +102,14 @@ export function parseNetworkLogFile(filePath: string): AiTestingNetworkLog | nul
 
     const source = typeof obj.source === 'string' ? obj.source : undefined
     const includeStatic = obj.includeStatic === true
+    const capturePostDetails = obj.capturePostDetails === true
 
     return {
       capturedAt: typeof obj.capturedAt === 'string' ? obj.capturedAt : '',
       filter: typeof obj.filter === 'string' ? obj.filter : '',
       source,
       ...(includeStatic ? { includeStatic: true } : {}),
+      ...(capturePostDetails ? { capturePostDetails: true } : {}),
       resourceTypes,
       requestCount:
         typeof obj.requestCount === 'number' ? obj.requestCount : requests.length,
