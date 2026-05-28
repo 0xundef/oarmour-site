@@ -8,6 +8,7 @@ import { ExtensionsTable } from "@/components/admin/extensions-table";
 import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
 import { getLatestPublisherPublishedAtByStoreIds } from "@/lib/extension-publisher-versions";
 import { BrowserAgentDashboard } from "@/components/admin/browser-agent-dashboard";
+import { ExtensionVersionHistoryDashboard } from "@/components/admin/extension-version-history-dashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type AdminSection = "users" | "audit" | "monitoring";
@@ -155,6 +156,7 @@ export default async function AdminPage({
           <TabsTrigger value="extensions">Extension Management</TabsTrigger>
           <TabsTrigger value="browser-agent">Browser Agent</TabsTrigger>
           <TabsTrigger value="service-health">Service Health</TabsTrigger>
+          <TabsTrigger value="version-history">Version History</TabsTrigger>
         </TabsList>
         <TabsContent value="extensions" className="space-y-4">
           <ExtensionsTable extensions={extensions} />
@@ -164,6 +166,15 @@ export default async function AdminPage({
         </TabsContent>
         <TabsContent value="service-health" className="space-y-4">
           <MonitorJobsDashboard />
+        </TabsContent>
+        <TabsContent value="version-history" className="space-y-4">
+          <ExtensionVersionHistoryDashboard
+            extensions={extensions.map((e) => ({
+              id: e.id,
+              name: e.name,
+              storeId: e.storeId,
+            }))}
+          />
         </TabsContent>
       </Tabs>
     );
