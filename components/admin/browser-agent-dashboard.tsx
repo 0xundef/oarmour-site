@@ -20,6 +20,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -284,19 +291,22 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
               <label className="text-xs text-muted-foreground" htmlFor="browser-agent-extension">
                 Extension
               </label>
-              <select
-                id="browser-agent-extension"
-                className="flex h-9 min-w-[14rem] rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                value={enqueueStoreId}
-                onChange={(e) => setEnqueueStoreId(e.target.value)}
-                disabled={busy}
+              <Select
+                value={enqueueStoreId || undefined}
+                onValueChange={setEnqueueStoreId}
+                disabled={busy || extensions.length === 0}
               >
-                {extensions.map((ext) => (
-                  <option key={ext.storeId} value={ext.storeId}>
-                    {ext.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="browser-agent-extension" className="min-w-[14rem] w-full">
+                  <SelectValue placeholder="Select extension" />
+                </SelectTrigger>
+                <SelectContent>
+                  {extensions.map((ext) => (
+                    <SelectItem key={ext.storeId} value={ext.storeId}>
+                      {ext.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">Version</div>

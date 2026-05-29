@@ -10,6 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 
 export type VersionHistoryExtension = {
@@ -30,6 +37,11 @@ function formatPublishedAt(iso: string) {
   return date.toLocaleString()
 }
 
+function formatExtensionOptionLabel(name: string, releaseCount?: number) {
+  if (releaseCount == null) return name
+  return `${name} (${releaseCount})`
+}
+
 export function ExtensionVersionHistoryDashboard({
   extensions,
 }: {
@@ -39,6 +51,9 @@ export function ExtensionVersionHistoryDashboard({
   const [extensionId, setExtensionId] = useState(extensions[0]?.id ?? "")
   const [loading, setLoading] = useState(false)
   const [releases, setReleases] = useState<PublisherRelease[]>([])
+  const [releaseCountByExtensionId, setReleaseCountByExtensionId] = useState<
+    Record<string, number>
+  >({})
 
   const selected = useMemo(
     () => extensions.find((e) => e.id === extensionId),
@@ -78,6 +93,37 @@ export function ExtensionVersionHistoryDashboard({
     void loadReleases()
   }, [loadReleases])
 
+  useEffect(() => {
+    let cancelled = false
+    const loadReleaseCounts = async () => {
+      const entries = await Promise.all(
+        extensions.map(async (ext) => {
+          try {
+            const res = await fetch(
+              `/api/admin/extensions/${encodeURIComponent(ext.id)}/publisher-versions`,
+              { cache: "no-store" },
+            )
+            if (!res.ok) return [ext.id, 0] as const
+            const json = (await res.json()) as { releases?: unknown[] }
+            return [ext.id, Array.isArray(json.releases) ? json.releases.length : 0] as const
+          } catch {
+            return [ext.id, 0] as const
+          }
+        }),
+      )
+      if (cancelled) return
+      const next: Record<string, number> = {}
+      for (const [id, count] of entries) {
+        next[id] = count
+      }
+      setReleaseCountByExtensionId(next)
+    }
+    void loadReleaseCounts()
+    return () => {
+      cancelled = true
+    }
+  }, [extensions])
+
   if (extensions.length === 0) {
     return (
       <Card>
@@ -103,19 +149,22 @@ export function ExtensionVersionHistoryDashboard({
             <label className="text-xs text-muted-foreground" htmlFor="version-history-extension">
               Extension
             </label>
-            <select
-              id="version-history-extension"
-              className="flex h-9 min-w-[16rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              value={extensionId}
-              onChange={(e) => setExtensionId(e.target.value)}
+            <Select
+              value={extensionId || undefined}
+              onValueChange={setExtensionId}
               disabled={loading}
             >
-              {extensions.map((ext) => (
-                <option key={ext.id} value={ext.id}>
-                  {ext.name} ({ext.storeId.slice(0, 8)}…)
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="version-history-extension" className="min-w-[16rem] w-full">
+                <SelectValue placeholder="Select extension" />
+              </SelectTrigger>
+              <SelectContent>
+                {extensions.map((ext) => (
+                  <SelectItem key={ext.id} value={ext.id}>
+                    {formatExtensionOptionLabel(ext.name, releaseCountByExtensionId[ext.id])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {selected ? (
             <div className="space-y-1">

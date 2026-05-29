@@ -23,6 +23,13 @@ import { getInlineResolutionActionsMessageId } from "@/lib/issue-investigation-r
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { Button } from "@/components/ui/button"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -595,13 +602,10 @@ function IssueAiChatBoxInner({
                   >
                     Model
                   </label>
-                  <select
-                    id="issue-chat-model"
-                    className="h-6 max-w-[11rem] truncate rounded-md border border-input bg-background px-1.5 py-0 text-[11px] leading-none shadow-sm"
+                  <Select
                     value={selectedModel}
                     disabled={isBusy}
-                    onChange={(e) => {
-                      const next = e.target.value
+                    onValueChange={(next) => {
                       setSelectedModel(next)
                       try {
                         localStorage.setItem(CHAT_MODEL_STORAGE_KEY, next)
@@ -609,14 +613,22 @@ function IssueAiChatBoxInner({
                         // ignore quota / private mode
                       }
                     }}
-                    title="Investigation chat model"
                   >
-                    {chatModels.map((id) => (
-                      <option key={id} value={id}>
-                        {id}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      id="issue-chat-model"
+                      title="Investigation chat model"
+                      className="h-6 max-w-[11rem] px-1.5 py-0 text-[11px] leading-none shadow-sm"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chatModels.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : null}
               <div className="flex-1" />
