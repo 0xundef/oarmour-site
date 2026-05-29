@@ -24,16 +24,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 
 type MonitorExtension = {
-  id: string
   storeId: string
   name: string
   version: string | null
   pendingVersion?: string | null
-}
-
-function formatExtensionOptionLabel(name: string, versionCount?: number) {
-  if (versionCount == null) return name
-  return `${name} (${versionCount})`
 }
 
 type TaskSession = {
@@ -133,9 +127,6 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
   const [taskSessions, setTaskSessions] = useState<TaskSession[]>([])
   const [playwrightRunningCount, setPlaywrightRunningCount] = useState<number | null>(null)
   const [enqueueStoreId, setEnqueueStoreId] = useState(extensions[0]?.storeId ?? "")
-  const [versionCountByExtensionId, setVersionCountByExtensionId] = useState<
-    Record<string, number>
-  >({})
   const [selectedTask, setSelectedTask] = useState<TaskSession | null>(null)
 
   const selectedExtension = useMemo(
@@ -182,36 +173,6 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
     const interval = setInterval(() => void refresh(), 5000)
     return () => clearInterval(interval)
   }, [refresh])
-
-  useEffect(() => {
-    let cancelled = false
-    const loadVersionCounts = async () => {
-      const entries = await Promise.all(
-        extensions.map(async (ext) => {
-          try {
-            const res = await fetch(`/api/admin/extensions/${ext.id}/versions`, {
-              cache: "no-store",
-            })
-            if (!res.ok) return [ext.id, 0] as const
-            const json = (await res.json()) as { versions?: unknown[] }
-            return [ext.id, Array.isArray(json.versions) ? json.versions.length : 0] as const
-          } catch {
-            return [ext.id, 0] as const
-          }
-        }),
-      )
-      if (cancelled) return
-      const next: Record<string, number> = {}
-      for (const [id, count] of entries) {
-        next[id] = count
-      }
-      setVersionCountByExtensionId(next)
-    }
-    void loadVersionCounts()
-    return () => {
-      cancelled = true
-    }
-  }, [extensions])
 
   useEffect(() => {
     setSelectedTask((prev) => {
@@ -332,7 +293,7 @@ export function BrowserAgentDashboard({ extensions }: { extensions: MonitorExten
               >
                 {extensions.map((ext) => (
                   <option key={ext.storeId} value={ext.storeId}>
-                    {formatExtensionOptionLabel(ext.name, versionCountByExtensionId[ext.id])}
+                    {ext.name}
                   </option>
                 ))}
               </select>
