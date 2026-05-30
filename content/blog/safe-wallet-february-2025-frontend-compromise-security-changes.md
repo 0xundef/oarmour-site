@@ -14,18 +14,15 @@ tags:
   - blockaid
   - safe-shield
   - security-hub
-slug: "safe-wallet-february-2025-frontend-compromise-security-changes"
-featured: true
-readingTime: 16
 ---
 
-# After the February 2025 Safe\{Wallet\} Frontend Compromise: What Changed in Signing, Integrity Checks, and Pre-Sign Review
+# After the February 2025 Safe{Wallet} Frontend Compromise: What Changed in Signing, Integrity Checks, and Pre-Sign Review
 
-In February 2025, the crypto industry faced one of the largest thefts on record when approximately **$1.4–1.5 billion** was drained from Bybit's cold-wallet operations. Independent forensic investigations—including reports from [Sygnia](https://www.dlnews.com/articles/defi/safe-wallet-compromise-behind-bybit-hack/) and [Verichains](https://thedefiant.io/news/hacks/safe-wallet-found-responsible-for-bybit-s-usd1-5-billion-hack)— traced the root cause to **malicious JavaScript served from Safe\{Wallet\}'s frontend infrastructure**, not to a flaw in Safe smart contracts themselves.
+In February 2025, the crypto industry faced one of the largest thefts on record when approximately **$1.4–1.5 billion** was drained from Bybit's cold-wallet operations. Independent forensic investigations—including reports from [Sygnia](https://www.dlnews.com/articles/defi/safe-wallet-compromise-behind-bybit-hack/) and [Verichains](https://thedefiant.io/news/hacks/safe-wallet-found-responsible-for-bybit-s-usd1-5-billion-hack)— traced the root cause to **malicious JavaScript served from Safe{Wallet}'s frontend infrastructure**, not to a flaw in Safe smart contracts themselves.
 
 The attack pattern is sometimes referred to internally as the **"puppet" attack**: the interface **showed signers one transaction** while **silently altering the data that was actually signed and executed**. Signers believed they were approving a routine cold-to-hot transfer; the modified payload effectively handed control to the attacker.
 
-This post summarizes **targeted security improvements Safe\{Wallet\} shipped after the 21 February 2025 attack**, starting with the emergency **v1.51.0** release on **24 February 2025** and the hardening that followed through 2025 and into 2026.
+This post summarizes **targeted security improvements Safe{Wallet} shipped after the 21 February 2025 attack**, starting with the emergency **v1.51.0** release on **24 February 2025** and the hardening that followed through 2025 and into 2026.
 
 **Scope of this article:** We include changes that directly address—or extend—the same failure mode: *compromised or dishonest frontend code misleading signers about transaction content*. We do **not** catalogue every security-related commit in the monorepo (for example, general mobile WalletConnect fixes or unrelated permission hardening). Those matter, but they belong in a separate platform-security overview.
 
@@ -35,14 +32,14 @@ This post summarizes **targeted security improvements Safe\{Wallet\} shipped aft
 
 Understanding the fixes requires a clear picture of the failure mode:
 
-1. **Supply-chain compromise** — Attackers gained access to Safe\{Wallet\} build/deploy infrastructure (initially via a compromised developer workstation) and injected malicious JavaScript into assets served to users.
+1. **Supply-chain compromise** — Attackers gained access to Safe{Wallet} build/deploy infrastructure (initially via a compromised developer workstation) and injected malicious JavaScript into assets served to users.
 2. **Targeted activation** — The payload was designed to remain dormant unless specific wallet conditions were met, reducing the chance of early detection.
 3. **UI vs. reality mismatch** — When Bybit signers initiated a legitimate operation on **21 February 2025**, the malicious script **modified transaction parameters** (including operation type) *before* hardware wallets and human reviewers could verify the true intent.
 4. **Rapid cleanup** — Forensic timelines show malicious assets were removed from infrastructure within minutes of execution, complicating post-incident analysis.
 
 The lesson is blunt: **even perfect multisig policy and hardware wallets cannot save you if the application layer lies about what is being signed.**
 
-Safe\{Wallet\}'s response combined **immediate client-side mitigations**, **dependency and infrastructure hardening**, and a **sustained program of pre-sign review** (Safe Shield, Security Hub, Hypernative Guard integration).
+Safe{Wallet}'s response combined **immediate client-side mitigations**, **dependency and infrastructure hardening**, and a **sustained program of pre-sign review** (Safe Shield, Security Hub, Hypernative Guard integration).
 
 ---
 
@@ -252,7 +249,7 @@ Session handling is peripheral to the puppet attack but part of **reducing unaut
 
 ### Infrastructure and release integrity
 
-Post-incident, Safe\{Wallet\} publicly committed to **rebuilding infrastructure**, **rotating credentials**, and tightening release processes. In the codebase this manifests as:
+Post-incident, Safe{Wallet} publicly committed to **rebuilding infrastructure**, **rotating credentials**, and tightening release processes. In the codebase this manifests as:
 
 - **GPG-signed release and back-merge commits** (`#6772`, `#7943`)
 - **CI permission hardening** and **`/version.json` exposure** for deploy verification (`#7918`)
@@ -294,7 +291,7 @@ The February 2025 incident was a **supply-chain and frontend integrity** failure
 
 > **Multisig does not protect you from an application that lies.**
 
-Safe\{Wallet\}'s post-incident work prioritized **detecting lies**—hash consistency checks, structured signing, independent verification tooling, simulation-backed review, and release integrity—while rebuilding the trust assumptions around how frontend artifacts reach users.
+Safe{Wallet}'s post-incident work prioritized **detecting lies**—hash consistency checks, structured signing, independent verification tooling, simulation-backed review, and release integrity—while rebuilding the trust assumptions around how frontend artifacts reach users.
 
 We will continue publishing technical summaries as major security milestones ship. If you operate a treasury Safe, treat this post as a checklist, not history.
 
@@ -305,9 +302,9 @@ We will continue publishing technical summaries as major security milestones shi
 - [DL News — Sygnia investigation summary](https://www.dlnews.com/articles/defi/safe-wallet-compromise-behind-bybit-hack/)
 - [The Defiant — Third-party audit findings](https://thedefiant.io/news/hacks/safe-wallet-found-responsible-for-bybit-s-usd1-5-billion-hack)
 - [TRM Labs — Bybit exploit analysis](https://www.trmlabs.com/resources/blog/the-bybit-hack-following-north-koreas-largest-exploit)
-- [Safe\{Wallet\} v1.51.0 release](https://github.com/safe-global/safe-wallet-monorepo/releases/tag/v1.51.0)
+- [Safe{Wallet} v1.51.0 release](https://github.com/safe-global/safe-wallet-monorepo/releases/tag/v1.51.0)
 - [OpenZeppelin Safe Utils](https://safeutils.openzeppelin.com/)
 
 ---
 
-*Last updated: May 2026. Feature statuses reflect the `dev` branch as of that date. This article is intentionally scoped to Safe\{Wallet\} changes tied to the February 2025 frontend-integrity incident—not an exhaustive security changelog.*
+*Last updated: May 2026. Feature statuses reflect the `dev` branch as of that date. This article is intentionally scoped to Safe{Wallet} changes tied to the February 2025 frontend-integrity incident—not an exhaustive security changelog.*

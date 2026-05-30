@@ -29,8 +29,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     if (fs.existsSync(blogDir)) {
       const files = fs.readdirSync(blogDir);
       for (const file of files) {
-        if (file.endsWith('.mdx')) {
-          const slug = file.replace(/\.mdx$/, '');
+        if (file.startsWith("_")) continue;
+        if (file.endsWith(".md") || file.endsWith(".mdx")) {
+          const slug = file.replace(/\.mdx?$/, "");
           entries.push({
             url: `https://oarmour.com/blog/${slug}`,
             lastModified: new Date(),

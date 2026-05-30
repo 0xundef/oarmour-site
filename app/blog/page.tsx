@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
-import { getAllPosts, type Post } from "@/lib/blog";
-import { BLOG_CATEGORIES, type BlogCategoryId } from "@/lib/blog-categories";
+import { getAllPosts } from "@/lib/blog";
+import { BLOG_CATEGORIES } from "@/lib/blog-categories";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { Metadata } from "next";
@@ -26,41 +26,8 @@ export const metadata: Metadata = {
   },
 };
 
-const CATEGORY_ORDER: BlogCategoryId[] = ["code", "general"];
-
-function PostCard({ post }: { post: Post }) {
-  const category = BLOG_CATEGORIES[post.category];
-
-  return (
-    <Link href={`/blog/${post.slug}`}>
-      <Card className="hover:bg-muted/50 transition-colors">
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <Badge variant="secondary">{category.label}</Badge>
-            {post.featured ? <Badge variant="outline">Featured</Badge> : null}
-          </div>
-          <CardTitle>{post.title}</CardTitle>
-          <CardDescription>
-            {post.date}
-            {post.readingTime ? ` • ${post.readingTime} min read` : ""}
-            {` • ${post.author}`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">{post.description}</p>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
 export default function BlogPage() {
   const posts = getAllPosts();
-
-  const sections = CATEGORY_ORDER.map((categoryId) => ({
-    ...BLOG_CATEGORIES[categoryId],
-    posts: posts.filter((post) => post.category === categoryId),
-  })).filter((section) => section.posts.length > 0);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -90,7 +57,7 @@ export default function BlogPage() {
             </Button>
         </div>
         
-        <div className="space-y-12">
+        <div className="space-y-8">
             <div className="text-center space-y-4">
                 <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
                 <p className="text-xl text-muted-foreground">
@@ -98,20 +65,29 @@ export default function BlogPage() {
                 </p>
             </div>
 
-            {sections.length > 0 ? (
-                sections.map((section) => (
-                  <section key={section.id} className="space-y-4">
-                    <div className="space-y-1">
-                      <h2 className="text-2xl font-semibold tracking-tight">{section.label}</h2>
-                      <p className="text-muted-foreground">{section.description}</p>
-                    </div>
-                    <div className="grid gap-6">
-                      {section.posts.map((post) => (
-                        <PostCard key={post.slug} post={post} />
-                      ))}
-                    </div>
-                  </section>
-                ))
+            {posts.length > 0 ? (
+                <div className="grid gap-6">
+                    {posts.map((post) => (
+                        <Link key={post.slug} href={`/blog/${post.slug}`}>
+                            <Card className="hover:bg-muted/50 transition-colors">
+                                <CardHeader>
+                                    {post.category === "code" ? (
+                                      <Badge variant="secondary" className="w-fit mb-2">
+                                        {BLOG_CATEGORIES.code.label}
+                                      </Badge>
+                                    ) : null}
+                                    <CardTitle>{post.title}</CardTitle>
+                                    <CardDescription>
+                                        {post.date} • {post.author}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground">{post.description}</p>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))}
+                </div>
             ) : (
                 <div className="p-12 border rounded-lg bg-muted/20 mt-8 text-center">
                     <p className="text-muted-foreground italic">No posts yet. Stay tuned!</p>
