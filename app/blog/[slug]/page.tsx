@@ -8,7 +8,7 @@ import { extractBlogToc } from "@/lib/blog-toc";
 import { BLOG_CATEGORIES } from "@/lib/blog-categories";
 import { Badge } from "@/components/ui/badge";
 import { BlogMarkdown } from "@/components/blog/blog-markdown";
-import { BlogTableOfContents } from "@/components/blog/blog-table-of-contents";
+import { BlogPostLayout } from "@/components/blog/blog-post-layout";
 import type { Metadata } from "next";
 
 export async function generateStaticParams() {
@@ -94,16 +94,9 @@ export default async function BlogPost({
           </Button>
         </div>
 
-        <div className="flex flex-col gap-10 xl:flex-row xl:gap-12">
-          {toc.length > 0 ? (
-            <aside className="not-prose hidden shrink-0 xl:block xl:w-56">
-              <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
-                <BlogTableOfContents items={toc} />
-              </div>
-            </aside>
-          ) : null}
-
-          <article className="prose prose-neutral dark:prose-invert min-w-0 max-w-3xl flex-1">
+        <BlogPostLayout
+          toc={toc}
+          header={
             <div className="not-prose mb-8 border-b pb-8">
               {post.category === "code" ? (
                 <Badge variant="secondary" className="mb-4">
@@ -117,16 +110,10 @@ export default async function BlogPost({
                 <span>{post.author}</span>
               </div>
             </div>
-
-            {toc.length > 0 ? (
-              <div className="not-prose mb-8 border-b pb-8 xl:hidden">
-                <BlogTableOfContents items={toc} />
-              </div>
-            ) : null}
-
-            <BlogMarkdown content={post.content} headings={toc} />
-          </article>
-        </div>
+          }
+        >
+          <BlogMarkdown content={post.content} headings={toc} />
+        </BlogPostLayout>
       </main>
     </div>
   );
