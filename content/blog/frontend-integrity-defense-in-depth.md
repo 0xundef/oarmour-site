@@ -30,7 +30,7 @@ This post maps that landscape: what each layer defends, what it cannot defend, a
 
 **Scope:** We focus on *frontend integrity* failures—compromised or dishonest client code that misleads users about intent—using the Safe{Wallet} incident as the anchor case study. We do not attempt a full catalogue of application security (authentication, API hardening, smart-contract audits, etc.). Those matter, but they address different threat models.
 
-For incident-specific Safe{Wallet} mitigations and implementation detail, see our companion posts on [post-incident hardening](/blog/safe-wallet-february-2025-frontend-compromise-security-changes) and [how Safe{Wallet} implements SRI](/blog/how-safe-wallet-implements-sri).
+For incident-specific Safe{Wallet} mitigations, see [post-incident hardening](/blog/safe-wallet-february-2025-frontend-compromise-security-changes).
 
 ---
 
@@ -136,8 +136,6 @@ SRI binds a script's content to a cryptographic digest declared on the `<script>
 **Why it matters after February 2025:** Safe{Wallet} serves a large webpack/Next.js surface with lazy-loaded chunks. Standard HTML-only SRI misses runtime-loaded scripts; their [#5199](https://github.com/safe-global/safe-wallet-monorepo/pull/5199) and [#7026](https://github.com/safe-global/safe-wallet-monorepo/pull/7026) work closes that gap with manifest-based integrity for dynamic imports.
 
 **Critical limitation:** SRI verifies consistency between **the hash embedded in HTML (or manifest)** and **the downloaded file**. If the attacker **controls the build pipeline**, they produce **fresh, valid hashes for malicious files**. SRI still "passes"—it was never designed to prove moral intent, only byte-level consistency with the page's claims.
-
-See [How Safe{Wallet} implements SRI](/blog/how-safe-wallet-implements-sri) for the technical split between static scripts, route chunks, and webpack lazy loading—and where Next.js App Router still leaves gaps.
 
 ### Content Security Policy (CSP)
 
@@ -318,18 +316,6 @@ OArmour fits that gap. Built on extension monitoring—release diffing, domain i
 | **Pipeline** | Build & deploy | Unauthorized releases; unproven artifacts; weak secret hygiene | Live CDN swap; ephemeral prod edits; in-session puppet UI |
 | **Client (SRI, CSP, signing checks)** | User load & sign | Wire/storage chunk tampering; many XSS paths; UI ≠ hash mismatches | Malicious but self-consistent builds; bypassed in-app checks |
 | **Outside monitoring** | Continuous prod observation | Drift from baseline; new scripts/domains; short-lived tampering evidence | Instant per-click blocking in the user's browser |
-
----
-
-## References
-
-- [DL News — Sygnia investigation summary](https://www.dlnews.com/articles/defi/safe-wallet-compromise-behind-bybit-hack/)
-- [The Defiant — Third-party audit findings](https://thedefiant.io/news/hacks/safe-wallet-found-responsible-for-bybit-s-usd1-5-billion-hack)
-- [W3C Subresource Integrity](https://www.w3.org/TR/SRI/)
-- [OpenZeppelin Safe Utils](https://safeutils.openzeppelin.com/)
-- [Safe{Wallet} v1.51.0 release](https://github.com/safe-global/safe-wallet-monorepo/releases/tag/v1.51.0)
-- [OArmour — Hardening the signing surface (February 2025 incident)](/blog/safe-wallet-february-2025-frontend-compromise-security-changes)
-- [OArmour — How Safe{Wallet} implements SRI](/blog/how-safe-wallet-implements-sri)
 
 ---
 
