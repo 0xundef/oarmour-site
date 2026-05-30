@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
 import { getPostBySlug, getAllPosts } from "@/lib/blog";
+import { getBlogCategory } from "@/lib/blog-categories";
+import { Badge } from "@/components/ui/badge";
 import type { Metadata } from "next";
 
 export async function generateStaticParams() {
@@ -51,6 +54,8 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
     notFound();
   }
 
+  const category = getBlogCategory(post.category);
+
   return (
     <div className="flex min-h-screen flex-col">
        <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -81,9 +86,25 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
         
         <article className="prose prose-neutral dark:prose-invert max-w-none">
             <div className="mb-8 not-prose border-b pb-8">
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <Badge variant="secondary">{category.label}</Badge>
+                  {post.featured ? <Badge variant="outline">Featured</Badge> : null}
+                </div>
                 <h1 className="text-4xl font-bold tracking-tight mb-4">{post.title}</h1>
-                <div className="text-muted-foreground flex items-center gap-2">
+                <div className="text-muted-foreground flex flex-wrap items-center gap-2">
                     <span>{post.date}</span>
+                    {post.updated ? (
+                      <>
+                        <span>•</span>
+                        <span>Updated {post.updated}</span>
+                      </>
+                    ) : null}
+                    {post.readingTime ? (
+                      <>
+                        <span>•</span>
+                        <span>{post.readingTime} min read</span>
+                      </>
+                    ) : null}
                     <span>•</span>
                     <span>{post.author}</span>
                 </div>
@@ -92,6 +113,9 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
             <MDXRemote
               source={post.content}
               options={{
+                mdxOptions: {
+                  remarkPlugins: [remarkGfm],
+                },
                 blockJS: true,
                 blockDangerousJS: true,
               }}

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
+import { type BlogCategoryId, normalizeBlogCategory } from "@/lib/blog-categories";
 
 const postsDirectory = path.join(process.cwd(), "content/blog");
 
@@ -11,6 +12,11 @@ export type Post = {
   description: string;
   author: string;
   content: string;
+  category: BlogCategoryId;
+  tags?: string[];
+  readingTime?: number;
+  updated?: string;
+  featured?: boolean;
 };
 
 export function getAllPosts(): Post[] {
@@ -38,8 +44,12 @@ export function getAllPosts(): Post[] {
       date: data.date,
       description: data.description,
       author: data.author,
-      ...data,
-    } as Post;
+      category: normalizeBlogCategory(data.category),
+      tags: Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === "string") : undefined,
+      readingTime: typeof data.readingTime === "number" ? data.readingTime : undefined,
+      updated: typeof data.updated === "string" ? data.updated : undefined,
+      featured: data.featured === true,
+    };
   });
 
   // Sort posts by date
@@ -65,8 +75,12 @@ export function getPostBySlug(slug: string): Post | null {
       date: data.date,
       description: data.description,
       author: data.author,
-      ...data,
-    } as Post;
+      category: normalizeBlogCategory(data.category),
+      tags: Array.isArray(data.tags) ? data.tags.filter((t): t is string => typeof t === "string") : undefined,
+      readingTime: typeof data.readingTime === "number" ? data.readingTime : undefined,
+      updated: typeof data.updated === "string" ? data.updated : undefined,
+      featured: data.featured === true,
+    };
   } catch {
     return null;
   }
