@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/logo";
 import { ChevronLeft } from "lucide-react";
 import { getPostBySlug, getAllPosts } from "@/lib/blog";
+import { extractBlogToc } from "@/lib/blog-toc";
 import { BLOG_CATEGORIES } from "@/lib/blog-categories";
 import { Badge } from "@/components/ui/badge";
+import { BlogMarkdown } from "@/components/blog/blog-markdown";
+import { BlogTableOfContents } from "@/components/blog/blog-table-of-contents";
 import type { Metadata } from "next";
 
 export async function generateStaticParams() {
@@ -62,6 +63,8 @@ export default async function BlogPost({
   if (!post) {
     notFound();
   }
+
+  const toc = extractBlogToc(post.content);
 
   return (
     <div className="flex min-h-screen flex-col">
