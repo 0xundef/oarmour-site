@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 import { type BlogCategoryId, normalizeBlogCategory } from "@/lib/blog-categories";
+import { stripInlineMarkdown } from "@/lib/blog-toc";
 
 const postsDirectory = path.join(process.cwd(), "content/blog");
 
@@ -32,6 +33,27 @@ function resolvePostFileName(slug: string): string | null {
   return null;
 }
 
+function normalizeTitle(text: string): string {
+  return stripInlineMarkdown(text).replace(/\s+/g, " ").trim();
+}
+
+/** Drop a leading `#` heading when it repeats frontmatter title (page header already renders it). */
+function stripDuplicateLeadingTitle(content: string, title: string): string {
+  const expected = normalizeTitle(title);
+  if (!expected) return content;
+
+  const lines = content.split("\n");
+  let index = 0;
+  while (index < lines.length && lines[index].trim() === "") index++;
+
+  const match = /^#\s+(.+)$/.exec(lines[index]?.trim() ?? "");
+  if (!match || normalizeTitle(match[1]) !== expected) return content;
+
+  lines.splice(index, 1);
+  if (lines[index]?.trim() === "") lines.splice(index, 1);
+  return lines.join("\n");
+}
+
 function parsePostFile(fileName: string): Post {
   const slug = fileName.replace(/\.mdx?$/, "");
   const fullPath = path.join(postsDirectory, fileName);
@@ -40,7 +62,7 @@ function parsePostFile(fileName: string): Post {
 
   return {
     slug,
-    content,
+    content: stripDuplicateLeadingTitle(content, data.title),
     title: data.title,
     date: data.date,
     description: data.description,

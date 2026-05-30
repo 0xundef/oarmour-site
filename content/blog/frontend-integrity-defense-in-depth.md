@@ -16,8 +16,6 @@ featured: false
 readingTime: 14
 ---
 
-# Defense in depth for frontend integrity: pipeline, client-side, and outside monitoring
-
 In February 2025, roughly **$1.4–1.5 billion** was stolen from Bybit's cold-wallet operations. Forensic investigations traced the root cause not to a Safe smart-contract bug, but to **malicious JavaScript served from Safe{Wallet}'s frontend infrastructure**. Signers saw one transaction on screen while the application silently altered what was actually signed—the **"puppet" attack**.
 
 That incident reframed a question every Web3 and high-trust web team must answer:

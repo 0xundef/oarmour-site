@@ -6,7 +6,7 @@ author: "OArmour Team"
 category: "code"
 ---
 
-Write your article in Markdown below.
+Write your article in Markdown below. Put the post title in frontmatter only — do not repeat it as `# Title` in the body (the blog page renders it once in the header).
 
 Use `category: "code"` for security analysis posts. Omit it (or use `general`) for updates and guides.
 
