@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { sendMaliciousAlertEmail } from '@/lib/email'
+import { sendMaliciousAlertSlack, type SlackAlertResult } from '@/lib/slack'
 import { logError, logInfo, logWarn } from '@/lib/app-logger'
 
 const NEXTAUTH_URL = process.env.NEXTAUTH_URL || 'http://localhost:3000'
@@ -9,17 +10,25 @@ const notificationSubscriptionModel = (prisma as unknown as {
   }
 }).notificationSubscription
 
+type NotificationResult = {
+  attempted: number
+  sent: number
+  failed: number
+  skipped: boolean
+  reason: 'sent' | 'no_subscribers' | 'extension_not_found' | 'degraded' | 'error'
+  slack: SlackAlertResult
+}
+
 export async function triggerMaliciousAlertNotifications(
   extensionId: string,
   extensionName: string,
   riskLevel: string,
   summary: string,
   maliciousDomains?: string[],
-) {
+): Promise<NotificationResult> {
+  const emptySlack: SlackAlertResult = { ok: true, skipped: true, reason: 'not_configured' }
+
   try {
-    if (!notificationSubscriptionModel) {
-      return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'degraded' as const }
-    }
     const extension = await prisma.globalExtension.findFirst({
       where: {
         OR: [{ id: extensionId }, { storeId: extensionId }],
@@ -27,7 +36,39 @@ export async function triggerMaliciousAlertNotifications(
       select: { id: true, storeId: true },
     })
     if (!extension?.id || !extension.storeId?.trim()) {
-      return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'extension_not_found' as const }
+      return {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: true,
+        reason: 'extension_not_found',
+        slack: emptySlack,
+      }
+    }
+
+    const storeId = extension.storeId.trim()
+    const detectedAt = new Date()
+    const viewReportUrl = `${NEXTAUTH_URL}/dashboard/subscribed/${encodeURIComponent(storeId)}`
+
+    const slack = await sendMaliciousAlertSlack({
+      extensionName,
+      extensionId: storeId,
+      riskLevel,
+      detectedAt,
+      summary,
+      maliciousDomains,
+      viewReportUrl,
+    })
+
+    if (!notificationSubscriptionModel) {
+      return {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: true,
+        reason: 'degraded',
+        slack,
+      }
     }
 
     const subscribers = await notificationSubscriptionModel.findMany({
@@ -36,11 +77,15 @@ export async function triggerMaliciousAlertNotifications(
     })
 
     if (subscribers.length === 0) {
-      return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'no_subscribers' as const }
+      return {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: true,
+        reason: 'no_subscribers',
+        slack,
+      }
     }
-
-    const detectedAt = new Date()
-    const viewReportUrl = `${NEXTAUTH_URL}/dashboard/subscribed/${encodeURIComponent(extension.storeId.trim())}`
 
     const results = await Promise.all(
       subscribers.map(async (sub) => {
@@ -49,7 +94,7 @@ export async function triggerMaliciousAlertNotifications(
 
         return sendMaliciousAlertEmail(sub.user.email, {
           extensionName,
-          extensionId,
+          extensionId: storeId,
           riskLevel,
           detectedAt,
           summary,
@@ -65,20 +110,29 @@ export async function triggerMaliciousAlertNotifications(
       logWarn('[notifications] some emails failed', {
         failed: failed.length,
         total: results.length,
-        extensionId,
+        extensionId: storeId,
       })
     } else {
-      logInfo('[notifications] alert emails sent', { count: results.length, extensionId })
+      logInfo('[notifications] alert emails sent', { count: results.length, extensionId: storeId })
     }
+
     return {
       attempted: results.length,
       sent: results.length - failed.length,
       failed: failed.length,
-      skipped: false as const,
-      reason: 'sent' as const,
+      skipped: false,
+      reason: 'sent',
+      slack,
     }
   } catch (e) {
     logError('[notifications] failed to trigger notifications', { error: e })
-    return { attempted: 0, sent: 0, failed: 0, skipped: true as const, reason: 'error' as const }
+    return {
+      attempted: 0,
+      sent: 0,
+      failed: 0,
+      skipped: true,
+      reason: 'error',
+      slack: emptySlack,
+    }
   }
 }
