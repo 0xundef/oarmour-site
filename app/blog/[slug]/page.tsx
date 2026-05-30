@@ -84,33 +84,49 @@ export default async function BlogPost({
         </div>
       </header>
       
-      <main className="flex-1 container py-12 max-w-3xl">
+      <main className="container max-w-6xl flex-1 py-12">
         <div className="mb-8">
-            <Button asChild variant="ghost" size="sm">
-                <Link href="/blog" className="flex items-center gap-2">
-                    <ChevronLeft className="h-4 w-4" />
-                    Back to Blog
-                </Link>
-            </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/blog" className="flex items-center gap-2">
+              <ChevronLeft className="h-4 w-4" />
+              Back to Blog
+            </Link>
+          </Button>
         </div>
-        
-        <article className="prose prose-neutral dark:prose-invert max-w-none">
-            <div className="mb-8 not-prose border-b pb-8">
-                {post.category === "code" ? (
-                  <Badge variant="secondary" className="mb-4">
-                    {BLOG_CATEGORIES.code.label}
-                  </Badge>
-                ) : null}
-                <h1 className="text-4xl font-bold tracking-tight mb-4">{post.title}</h1>
-                <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-                    <span>{post.date}</span>
-                    <span>•</span>
-                    <span>{post.author}</span>
-                </div>
+
+        <div className="flex flex-col gap-10 xl:flex-row xl:gap-12">
+          {toc.length > 0 ? (
+            <aside className="not-prose hidden shrink-0 xl:block xl:w-56">
+              <div className="sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto pr-2">
+                <BlogTableOfContents items={toc} />
+              </div>
+            </aside>
+          ) : null}
+
+          <article className="prose prose-neutral dark:prose-invert min-w-0 max-w-3xl flex-1">
+            <div className="not-prose mb-8 border-b pb-8">
+              {post.category === "code" ? (
+                <Badge variant="secondary" className="mb-4">
+                  {BLOG_CATEGORIES.code.label}
+                </Badge>
+              ) : null}
+              <h1 className="mb-4 text-4xl font-bold tracking-tight">{post.title}</h1>
+              <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                <span>{post.date}</span>
+                <span>•</span>
+                <span>{post.author}</span>
+              </div>
             </div>
-            
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
-        </article>
+
+            {toc.length > 0 ? (
+              <div className="not-prose mb-8 border-b pb-8 xl:hidden">
+                <BlogTableOfContents items={toc} />
+              </div>
+            ) : null}
+
+            <BlogMarkdown content={post.content} headings={toc} />
+          </article>
+        </div>
       </main>
     </div>
   );
