@@ -51,8 +51,9 @@ export async function sendMaliciousAlertSlack(
     return { ok: true, skipped: true, reason: 'not_configured' }
   }
 
-  const minRisk = process.env.SLACK_ALERT_MIN_RISK?.trim() || 'HIGH'
-  if (!meetsMinRisk(props.riskLevel, minRisk)) {
+  const minRisk = process.env.SLACK_ALERT_MIN_RISK?.trim()
+  // Unset: notify on every completed analysis (any risk level). Set: only at/above threshold.
+  if (minRisk && !meetsMinRisk(props.riskLevel, minRisk)) {
     return { ok: true, skipped: true, reason: 'below_min_risk' }
   }
 
