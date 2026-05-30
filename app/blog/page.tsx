@@ -58,8 +58,7 @@ export default function BlogPage() {
         </div>
         
         <div className="space-y-8">
-            <div className="text-center space-y-4">
-                <h1 className="text-4xl font-bold tracking-tight">Blog</h1>
+            <div className="text-center">
                 <p className="text-xl text-muted-foreground">
                     Latest news, updates, and security insights from the OArmour team.
                 </p>

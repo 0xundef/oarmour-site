@@ -2,7 +2,7 @@
 title: "Hardening the signing surface: security improvements after the February 2025 incident"
 description: "A focused account of Safe{Wallet} security changes shipped after the 21 February 2025 frontend compromise—hash validation, signing hardening, bundle integrity, and pre-sign review—not a full product security changelog."
 date: "2025-02-28"
-author: "Safe Security Team"
+author: "OArmour Team"
 category: "code"
 ---
 
