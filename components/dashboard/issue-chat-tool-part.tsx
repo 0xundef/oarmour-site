@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import type { LocateDomainInSourceResult } from "@/lib/domain-code-locator"
 import type { LookupDomainWhoisResult } from "@/lib/domain-whois-lookup"
 import type { FetchWebPageResult } from "@/lib/web-page-fetch"
+import type { ExtensionInvestigationFsResult } from "@/lib/extension-investigation-fs"
 import type {
   AllowlistProposalOutput,
   DismissProposalOutput,
@@ -154,6 +155,29 @@ function LocateDomainOutput({ output }: { output: LocateDomainInSourceResult }) 
   )
 }
 
+function ExtensionFsOutput({ output }: { output: ExtensionInvestigationFsResult }) {
+  if (!output.ok) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {output.error ?? "Filesystem tool failed."}
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-2 text-xs">
+      <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-2 whitespace-pre-wrap break-all font-mono text-[11px] text-foreground">
+        {output.text}
+      </pre>
+      {output.notices?.map((notice) => (
+        <p key={notice} className="text-muted-foreground">
+          {notice}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function ToolOutputBody({
   part,
   actions,
@@ -175,6 +199,9 @@ function ToolOutputBody({
     else if (part.type === "tool-ai_testing_trace") verb = "Loading AI test network trace"
     else if (part.type === "tool-base64_codec") verb = "Running base64 codec"
     else if (part.type === "tool-gzip_decode") verb = "Decoding gzip payload"
+    else if (part.type === "tool-grep") verb = "Searching extension source"
+    else if (part.type === "tool-find") verb = "Finding extension files"
+    else if (part.type === "tool-ls") verb = "Listing extension directory"
     else if (part.type === "tool-propose_add_allowlist") verb = "Preparing allowlist suggestion"
     else if (part.type === "tool-propose_dismiss_finding") verb = "Preparing false positive suggestion"
     return (
@@ -205,6 +232,14 @@ function ToolOutputBody({
 
   if (part.type === "tool-fetch_web_page") {
     return <FetchWebPageOutput output={part.output as FetchWebPageResult} />
+  }
+
+  if (
+    part.type === "tool-grep" ||
+    part.type === "tool-find" ||
+    part.type === "tool-ls"
+  ) {
+    return <ExtensionFsOutput output={part.output as ExtensionInvestigationFsResult} />
   }
 
   if (part.type === "tool-propose_add_allowlist") {

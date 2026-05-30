@@ -7,6 +7,7 @@ import { lookupDomainWhois } from "@/lib/domain-whois-lookup"
 import { fetchWebPage } from "@/lib/web-page-fetch"
 import { normalizeAllowlistDomain } from "@/lib/finding-resolution"
 import { findingDismissalReasonSchema } from "@/lib/issue-chat-tool-proposals"
+import { runExtensionInvestigationTool } from "@/lib/extension-investigation-fs"
 import { resolveIssueExtensionArtifact } from "@/lib/issue-extension-artifact"
 
 export function createIssueChatTools(ctx: {
@@ -106,6 +107,84 @@ export function createIssueChatTools(ctx: {
         input: z.string().min(1).describe("Plain text (encode) or base64 string (decode)"),
       }),
       execute: async ({ operation, input }) => runBase64Codec({ operation, input }),
+    }),
+    grep: tool({
+      description:
+        "Search unpacked extension source (or sidecar with root=sidecar) for a regex or literal pattern. Returns file:line matches. Default root is the extension package; use root=sidecar for analysis/ or ai_testing/. Output is truncated.",
+      inputSchema: z.object({
+        pattern: z.string().min(1).describe("Regex or literal string to search for"),
+        path: z
+          .string()
+          .optional()
+          .describe("Directory or file relative to root (default .)"),
+        root: z
+          .enum(["extension", "sidecar"])
+          .optional()
+          .describe("Search in unpacked extension (default) or sidecar data"),
+        glob: z
+          .string()
+          .optional()
+          .describe("Optional file glob filter, e.g. '*.js' or '**/*.json'"),
+        ignoreCase: z.boolean().optional().describe("Case-insensitive search"),
+        literal: z.boolean().optional().describe("Treat pattern as literal text, not regex"),
+        context: z
+          .number()
+          .int()
+          .min(0)
+          .max(20)
+          .optional()
+          .describe("Lines of context before/after each match"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .optional()
+          .describe("Max matches to return (default 100)"),
+      }),
+      execute: async (input) => runExtensionInvestigationTool(ctx.storeId, "grep", input),
+    }),
+    find: tool({
+      description:
+        "Find files by glob pattern under the extension package or sidecar. Examples: '*.js', '**/*.json', 'manifest.json'. Default root is extension.",
+      inputSchema: z.object({
+        pattern: z
+          .string()
+          .min(1)
+          .describe("Glob pattern, e.g. '*.ts' or 'src/**/*.spec.ts'"),
+        path: z
+          .string()
+          .optional()
+          .describe("Directory to search relative to root (default .)"),
+        root: z.enum(["extension", "sidecar"]).optional(),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(2000)
+          .optional()
+          .describe("Max file paths to return (default 1000)"),
+      }),
+      execute: async (input) => runExtensionInvestigationTool(ctx.storeId, "find", input),
+    }),
+    ls: tool({
+      description:
+        "List a directory in the unpacked extension or sidecar. Entries use a trailing / for directories. Default root is extension.",
+      inputSchema: z.object({
+        path: z
+          .string()
+          .optional()
+          .describe("Directory relative to root (default .)"),
+        root: z.enum(["extension", "sidecar"]).optional(),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(2000)
+          .optional()
+          .describe("Max entries to return (default 500)"),
+      }),
+      execute: async (input) => runExtensionInvestigationTool(ctx.storeId, "ls", input),
     }),
     gzip_decode: tool({
       description:
