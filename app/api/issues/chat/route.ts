@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai"
 import { createIssueChatTools } from "@/lib/issue-chat-tools"
-import { buildIssueChatSystem, type IssueChatContext } from "@/lib/issue-chat-context"
+import { buildIssueChatSystem } from "@/lib/issue-chat-system"
+import { type IssueChatContext } from "@/lib/issue-chat-context"
 import {
   getInvestigationLanguageModel,
   resolveInvestigationProviderOptions,

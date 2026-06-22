@@ -1,5 +1,4 @@
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
-import { loadSkill } from "@/lib/investigation/load-skill"
 import type { WorkbenchCheckItem } from "@/lib/workbench-check-items"
 
 export type IssueChatContext = {
@@ -26,23 +25,6 @@ export function toIssueChatContext(issue: WorkbenchCheckItem): IssueChatContext 
     impact: issue.impact,
     detectedAt: issue.detectedAt,
   }
-}
-
-export function buildIssueChatSystem(issue: IssueChatContext): string {
-  return [
-    loadSkill("triage"),
-    "",
-    "Current issue context:",
-    `- id: ${issue.id}`,
-    `- source: ${issue.source}`,
-    `- severity: ${issue.severity}`,
-    `- title: ${issue.title}`,
-    `- file: ${issue.file}`,
-    `- scan batch: ${formatFindingRunLabel(issue.source, issue.detectedAt)}`,
-    `- summary: ${issue.summary}`,
-    `- conditions: ${issue.conditions.join(" | ")}`,
-    `- impact: ${issue.impact}`,
-  ].join("\n")
 }
 
 /** Detail panel text seeded as the first user message (display only; no auto-reply). */
