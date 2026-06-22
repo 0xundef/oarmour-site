@@ -1,4 +1,5 @@
 import Providers from "@/components/layout/providers";
+import { ChunkLoadRecovery } from "@/components/chunk-load-recovery";
 import { Toaster } from "@/components/ui/toaster";
 import "@uploadthing/react/styles.css";
 import type { Metadata } from "next";
@@ -81,6 +82,7 @@ export default async function RootLayout({
       <body className={`${inter.className}`}>
         <PHProvider>
           <Providers session={session}>
+            <ChunkLoadRecovery />
             <Toaster />
             {children}
           </Providers>
