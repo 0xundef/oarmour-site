@@ -13,9 +13,6 @@ tags:
   - research
 ---
 
-# Evolution of Multichain Fraud Detection in the Blockchain Era
-### A Deep Research Report — July 2026
-
 **Process**: 107 agents · 25 sources · 101 claims extracted · 25 adversarially verified (10 confirmed, 15 refuted) · 5 synthesized findings
 
 ---
