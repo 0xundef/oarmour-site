@@ -6,7 +6,7 @@ import {
   getExtensionArtifactRoot,
   getAiTestingRunRoot,
 } from "@/lib/extension-storage"
-import type { StageName } from "./schemas"
+import { type StageName, RunManifestSchema, type RunManifest } from "./schemas"
 
 const PIPELINE_RUNS_DIR = "pipeline-runs"
 
@@ -103,4 +103,62 @@ export function listFindingsPartitionPaths(runDir: string): string[] {
     .filter((f) => /^02-findings\..*\.json$/.test(f))
     .map((f) => path.join(runDir, f))
     .sort()
+}
+
+export interface PipelineRunSummary {
+  runId: string
+  runDir: string
+  manifest: RunManifest
+}
+
+/** List all pipeline runs for a store, newest-first by manifest.startedAt. */
+export function listPipelineRuns(storeId: string): PipelineRunSummary[] {
+  const storeDir = getPipelineStoreDir(storeId)
+  if (!fs.existsSync(storeDir)) return []
+  const runs: PipelineRunSummary[] = []
+  for (const entry of fs.readdirSync(storeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const runDir = path.join(storeDir, entry.name)
+    const manifestPath = getManifestPath(runDir)
+    if (!fs.existsSync(manifestPath)) continue
+    try {
+      const raw = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+      const parsed = RunManifestSchema.safeParse(raw)
+      if (!parsed.success) continue
+      runs.push({ runId: entry.name, runDir, manifest: parsed.data })
+    } catch {
+      continue
+    }
+  }
+  return runs.sort((a, b) =>
+    (b.manifest.startedAt ?? "").localeCompare(a.manifest.startedAt ?? ""),
+  )
+}
+
+/** Newest completed run (report stage completed) for a store, or the newest run, or null. */
+export function getLatestPipelineRun(storeId: string): PipelineRunSummary | null {
+  const runs = listPipelineRuns(storeId)
+  return runs.find((r) => r.manifest.stages.report?.status === "completed") ?? runs[0] ?? null
+}
+
+/** Read the latest run's report.md + metadata for a store, or null if none/none-yet. */
+export function readPipelineReportMarkdown(storeId: string): {
+  runId: string
+  startedAt: string
+  finishedAt: string | null
+  sourceFidelity: string
+  markdown: string
+} | null {
+  const latest = getLatestPipelineRun(storeId)
+  if (!latest) return null
+  const reportPath = getReportPath(latest.runDir)
+  if (!fs.existsSync(reportPath)) return null
+  const markdown = fs.readFileSync(reportPath, "utf8")
+  return {
+    runId: latest.runId,
+    startedAt: latest.manifest.startedAt,
+    finishedAt: latest.manifest.finishedAt,
+    sourceFidelity: latest.manifest.sourceFidelity,
+    markdown,
+  }
 }

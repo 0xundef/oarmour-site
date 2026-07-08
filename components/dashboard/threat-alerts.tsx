@@ -28,6 +28,7 @@ import {
 import { dispatchSubscriptionsNavRefresh } from "@/lib/subscriptions-nav-events"
 import { cn } from "@/lib/utils"
 import { DynamicAnalysisSparkle } from "@/components/dashboard/dynamic-analysis-sparkle"
+import { AiAnalysisButton } from "@/components/dashboard/ai-analysis-button"
 import type { DynamicAnalysisDisplayStatus } from "@/lib/dynamic-analysis-display"
 import { normalizeExtensionVersion, versionsAligned } from "@/lib/workbench-check-items"
 
@@ -310,6 +311,11 @@ function makeColumns(
                 <Download className="h-4 w-4" />
               </a>
             </Button>
+            <AiAnalysisButton
+              storeId={row.original.extensionId}
+              version={row.original.version}
+              extensionId={row.original.extensionId}
+            />
             <OperationCell extensionId={row.original.extensionId} />
           </div>
         )

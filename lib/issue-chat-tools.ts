@@ -1,5 +1,6 @@
 import { tool } from "ai"
 import { z } from "zod"
+import fs from "fs"
 import { readAiTestingNetworkTrace } from "@/lib/ai-testing-trace-read"
 import { runBase64Codec, runGzipDecode } from "@/lib/binary-payload-codec"
 import { locateDomainInSource, parseFindingFilePath } from "@/lib/domain-code-locator"
@@ -8,6 +9,12 @@ import { fetchWebPage } from "@/lib/web-page-fetch"
 import { normalizeAllowlistDomain } from "@/lib/finding-resolution"
 import { findingDismissalReasonSchema } from "@/lib/issue-chat-tool-proposals"
 import { resolveIssueExtensionArtifact } from "@/lib/issue-extension-artifact"
+import {
+  getLatestPipelineRun,
+  getManifestPath,
+  getPipelineRunDir,
+  getPipelineStagePath,
+} from "@/lib/detection-pipeline/storage"
 
 export function createIssueChatTools(ctx: {
   storeId: string
@@ -122,6 +129,41 @@ export function createIssueChatTools(ctx: {
       }),
       execute: async ({ input, inputEncoding }) =>
         runGzipDecode({ input, inputEncoding }),
+    }),
+    read_pipeline_stage: tool({
+      description:
+        "Read a JSON artifact from the latest detection-pipeline run for this extension. "
+        + "stage is one of recon|findings|dedupe|report|manifest (default manifest). "
+        + "Use to inspect the AI analysis's per-stage evidence/findings/verdicts beyond the "
+        + "report summary already in the system prompt. Returns the JSON (truncated ~24KB).",
+      inputSchema: z.object({
+        stage: z
+          .enum(["recon", "findings", "dedupe", "report", "manifest"])
+          .optional()
+          .describe("Stage artifact to read (default manifest)"),
+        runId: z
+          .string()
+          .optional()
+          .describe("Pipeline run id; default = latest completed run for this store"),
+      }),
+      execute: async ({ stage, runId }) => {
+        const latest = runId
+          ? { runId, runDir: getPipelineRunDir(ctx.storeId, runId) }
+          : getLatestPipelineRun(ctx.storeId)
+        if (!latest) {
+          return { ok: false, error: "No pipeline run found for this store." }
+        }
+        const target =
+          (stage ?? "manifest") === "manifest"
+            ? getManifestPath(latest.runDir)
+            : getPipelineStagePath(latest.runDir, (stage ?? "manifest") as "recon" | "findings" | "dedupe" | "report")
+        if (!fs.existsSync(target)) {
+          return { ok: false, error: `Artifact not found: ${target}`, runId: latest.runId }
+        }
+        const raw = fs.readFileSync(target, "utf8")
+        const capped = raw.length > 24000 ? `${raw.slice(0, 24000)}\n…(truncated, ${raw.length} bytes total)` : raw
+        return { ok: true, runId: latest.runId, stage: stage ?? "manifest", file: target, json: capped }
+      },
     }),
     propose_add_allowlist: tool({
       description:
