@@ -67,6 +67,32 @@ export async function loadFindingResolutionsForUser(
   }
 }
 
+/**
+ * Store-scoped suppression sets for the detection pipeline's deterministic
+ * dedupe pre-filter (no user dimension — the pipeline is store-level).
+ * Returns allowlisted apex domains for this store. `dismissedIssueIds` are
+ * workbench-issue-scoped (different ID space than pipeline `dp:` findingIds),
+ * so the pipeline suppresses by allowlisted domain only.
+ */
+export async function loadStoreSuppressions(
+  storeId: string,
+): Promise<{ allowlistedDomains: Set<string>; dismissedIssueIds: Set<string> }> {
+  const [dismissals, allowlist] = await Promise.all([
+    prisma.findingDismissal.findMany({
+      where: { storeId },
+      select: { issueId: true },
+    }),
+    prisma.extensionDomainAllowlist.findMany({
+      where: { storeId },
+      select: { domain: true },
+    }),
+  ])
+  return {
+    allowlistedDomains: new Set(allowlist.map((a) => normalizeAllowlistDomain(a.domain))),
+    dismissedIssueIds: new Set(dismissals.map((d) => d.issueId)),
+  }
+}
+
 export function countOpenHighCriticalFindings(
   params: {
     staticPayload: StaticLatestPayload | null
