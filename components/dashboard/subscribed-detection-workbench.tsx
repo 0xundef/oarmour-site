@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
+import { AiReportView, type AiReport } from "@/components/dashboard/ai-report-view"
+import { useSearchParams } from "next/navigation"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
 import {
@@ -39,6 +41,13 @@ function categoryBadgeClass() {
   return "border-muted-foreground/25 bg-muted/50 text-muted-foreground"
 }
 
+function tabButtonClass(active: boolean) {
+  return cn(
+    "rounded-md px-2 py-1 text-xs",
+    active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent",
+  )
+}
+
 /** Literal in this file so Tailwind JIT emits `after:*` utilities (imported strings are not scanned). */
 const SEVERITY_BADGE_STRIKE =
   "relative overflow-hidden after:pointer-events-none after:absolute after:inset-x-0.5 after:top-1/2 after:h-[2px] after:-translate-y-1/2 after:z-10 after:bg-black after:content-['']"
@@ -52,11 +61,17 @@ export function SubscribedDetectionWorkbench({
   storeId,
   extensionName,
   extensionVersion: extensionVersionHint,
+  aiReport,
 }: {
   storeId: string
   extensionName: string
   extensionVersion?: string | null
+  aiReport?: AiReport | null
 }) {
+  const searchParams = useSearchParams()
+  const [tab, setTab] = useState<string>(
+    searchParams.get("tab") === "ai-report" ? "report" : "findings",
+  )
   const [allItems, setAllItems] = useState<WorkbenchCheckItem[]>([])
   const [resolutions, setResolutions] = useState<ResolutionState>({
     dismissedIssueIds: new Set(),
@@ -224,6 +239,19 @@ export function SubscribedDetectionWorkbench({
 
       <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          {tab === "report" ? (
+            <div className="h-[calc(100dvh-8rem)] min-h-0">
+              <AiReportView
+                aiReport={aiReport ?? null}
+                storeId={storeId}
+                onInvestigateInChat={() => {
+                  setTab("findings")
+                  const top = listItems[0]
+                  if (top) setActiveId(top.id)
+                }}
+              />
+            </div>
+          ) : (
           <div className="grid h-[calc(100dvh-8rem)] min-h-0 grid-cols-1 lg:grid-cols-[340px_1fr]">
             <aside className="flex min-h-0 flex-col overflow-hidden border-r bg-muted/20">
               <div className="shrink-0 border-b p-3">
@@ -237,6 +265,22 @@ export function SubscribedDetectionWorkbench({
                     ) : null}
                   </div>
                   <div className="text-xs text-muted-foreground">{headerSubtitle}</div>
+                  <div className="mt-2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setTab("findings")}
+                      className={tabButtonClass(tab === "findings")}
+                    >
+                      Findings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTab("report")}
+                      className={tabButtonClass(tab === "report")}
+                    >
+                      AI 分析报告
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -325,6 +369,7 @@ export function SubscribedDetectionWorkbench({
               )}
             </section>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

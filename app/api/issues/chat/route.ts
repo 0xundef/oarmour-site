@@ -146,7 +146,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: investigation.model,
-    system: buildIssueChatSystem(issue),
+    system: buildIssueChatSystem(issue, scope.storeId),
     messages: await convertToModelMessages(messages, { tools }),
     tools,
     stopWhen: stepCountIs(10),
