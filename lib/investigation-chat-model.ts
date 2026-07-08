@@ -1,79 +1,65 @@
-import { createDeepSeek, type DeepSeekLanguageModelOptions } from "@ai-sdk/deepseek"
+import { createAnthropic } from "@ai-sdk/anthropic"
 import type { LanguageModel } from "ai"
 import {
-  getOpenAiChatboxConfig,
-  isOpenAiChatboxConfigured,
-  listOpenAiChatboxModels,
-  resolveOpenAiChatboxModelId,
-  type OpenAiChatboxConfig,
-} from "@/lib/openai-chatbox-config"
+  getAnthropicChatboxConfig,
+  isAnthropicChatboxConfigured,
+  listAnthropicChatboxModels,
+  resolveAnthropicChatboxModelId,
+  type AnthropicChatboxConfig,
+} from "@/lib/anthropic-chatbox-config"
 
-export type DeepSeekThinkingMode = "disabled" | "enabled" | "adaptive"
-
-/**
- * `@ai-sdk/openai` uses `…/v1/chat/completions`; official DeepSeek is `…/chat/completions`.
- * @see https://api-docs.deepseek.com/zh-cn/
- */
-function deepSeekProviderBaseUrl(openAiCompatibleBaseUrl: string): string {
-  const trimmed = openAiCompatibleBaseUrl.replace(/\/$/, "")
-  try {
-    const host = new URL(trimmed).hostname
-    if (host === "api.deepseek.com") {
-      return trimmed.replace(/\/v1$/i, "")
-    }
-  } catch {
-    // fall through
-  }
-  return trimmed
-}
+export type AnthropicThinkingMode = "disabled" | "enabled" | "adaptive"
 
 /**
- * Thinking + tool calls: reasoning_content must round-trip (thinking mode only).
- * Non-thinking tool flow: https://api-docs.deepseek.com/zh-cn/guides/tool_calls
- * Thinking tool flow: https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
- *
- * Override with OPENAI_CHATBOX_THINKING=disabled|enabled|adaptive
+ * Thinking mode for the chat. Override with `ANTHROPIC_CHATBOX_THINKING=
+ * disabled|enabled|adaptive`. Default `adaptive`: enable for reasoner-class
+ * models (deepseek-reasoner / v4-pro), disabled otherwise. DeepSeek's Anthropic
+ * endpoint supports the `thinking` field (budget_tokens is ignored).
  */
-export function resolveInvestigationThinkingMode(model: string): DeepSeekThinkingMode {
-  const env = process.env.OPENAI_CHATBOX_THINKING?.trim().toLowerCase()
+export function resolveInvestigationThinkingMode(model: string): AnthropicThinkingMode {
+  const env = process.env.ANTHROPIC_CHATBOX_THINKING?.trim().toLowerCase()
   if (env === "disabled" || env === "enabled" || env === "adaptive") {
     return env
   }
-  if (/reasoner/i.test(model)) return "enabled"
-  if (/^deepseek-chat$/i.test(model)) return "disabled"
-  if (/v4/i.test(model)) return "enabled"
+  if (/reasoner|v4-pro/i.test(model)) return "enabled"
   return "disabled"
 }
 
+/**
+ * Anthropic provider options for `streamText`. When thinking is enabled, passes
+ * `{ anthropic: { thinking: { type: "enabled", budgetTokens } } }` (budgetTokens
+ * is nominal — DeepSeek's endpoint ignores it; `@ai-sdk/anthropic` requires it
+ * when type is "enabled"). When disabled, no thinking field is set.
+ */
 export function resolveInvestigationProviderOptions(
   model: string,
-): { deepseek: DeepSeekLanguageModelOptions } {
-  return {
-    deepseek: {
-      thinking: { type: resolveInvestigationThinkingMode(model) },
-    },
+): { anthropic: { thinking?: { type: "enabled"; budgetTokens: number } } } {
+  const mode = resolveInvestigationThinkingMode(model)
+  if (mode === "enabled") {
+    return { anthropic: { thinking: { type: "enabled", budgetTokens: 4000 } } }
   }
+  return { anthropic: {} }
 }
 
 export function createInvestigationLanguageModel(
-  config: OpenAiChatboxConfig,
+  config: AnthropicChatboxConfig,
 ): LanguageModel {
-  const deepseek = createDeepSeek({
+  const anthropic = createAnthropic({
     apiKey: config.apiKey,
-    baseURL: deepSeekProviderBaseUrl(config.baseURL),
+    baseURL: config.baseURL,
   })
-  return deepseek.chat(config.model)
+  return anthropic(config.model)
 }
 
 export function listInvestigationChatModels(): {
   models: string[]
   defaultModel: string
 } | null {
-  if (!isOpenAiChatboxConfigured()) return null
-  const models = listOpenAiChatboxModels()
+  if (!isAnthropicChatboxConfigured()) return null
+  const models = listAnthropicChatboxModels()
   return {
     models,
-    defaultModel: resolveOpenAiChatboxModelId(),
+    defaultModel: resolveAnthropicChatboxModelId(),
   }
 }
 
@@ -81,7 +67,7 @@ export function getInvestigationLanguageModel(modelId?: string | null): {
   model: LanguageModel
   modelId: string
 } | null {
-  const config = getOpenAiChatboxConfig(modelId)
+  const config = getAnthropicChatboxConfig(modelId)
   if (!config) return null
   return {
     model: createInvestigationLanguageModel(config),
