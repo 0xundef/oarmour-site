@@ -7,7 +7,7 @@ import {
   getInvestigationLanguageModel,
   resolveInvestigationProviderOptions,
 } from "@/lib/investigation-chat-model"
-import { resolveOpenAiChatboxModelId } from "@/lib/openai-chatbox-config"
+import { resolveAnthropicChatboxModelId } from "@/lib/anthropic-chatbox-config"
 import { getIssueChatSessionUserId } from "@/lib/issue-chat-session"
 import {
   deleteIssueInvestigationChat,
@@ -114,13 +114,13 @@ export async function POST(req: Request) {
     | null
 
   const requestedModel =
-    typeof body?.model === "string" ? resolveOpenAiChatboxModelId(body.model) : undefined
+    typeof body?.model === "string" ? resolveAnthropicChatboxModelId(body.model) : undefined
   const investigation = getInvestigationLanguageModel(requestedModel)
   if (!investigation) {
     return NextResponse.json(
       {
         error:
-          "OPENAI_CHATBOX_API_KEY is not set (GitHub secret or .env.local for local dev).",
+          "ANTHROPIC_CHATBOX_API_KEY is not set (GitHub secret or .env.local for local dev).",
       },
       { status: 500 },
     )
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
     findingFile: issue.file,
   })
   const providerOptions = resolveInvestigationProviderOptions(investigation.modelId)
-  const thinkingDisabled = providerOptions.deepseek.thinking?.type === "disabled"
+  const thinkingDisabled = providerOptions.anthropic?.thinking?.type !== "enabled"
 
   const result = streamText({
     model: investigation.model,

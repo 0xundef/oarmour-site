@@ -15,7 +15,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          "OPENAI_CHATBOX_API_KEY is not set (GitHub secret or .env.local for local dev).",
+          "ANTHROPIC_CHATBOX_API_KEY is not set (GitHub secret or .env.local for local dev).",
       },
       { status: 500 },
     )
