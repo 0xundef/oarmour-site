@@ -2,7 +2,7 @@ import { SubscribedDetectionWorkbench } from "@/components/dashboard/subscribed-
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { redirect } from "next/navigation";
-import { readPipelineReportMarkdown } from "@/lib/detection-pipeline/storage";
+import { getLatestPipelineRunState } from "@/lib/detection-pipeline/storage";
 import { Suspense } from "react";
 
 export default async function SubscribedExtensionPage({
@@ -24,7 +24,7 @@ export default async function SubscribedExtensionPage({
   const extensionName = extension?.name?.trim() || storeId;
   const extensionVersion = extension?.version?.trim() || null;
 
-  const aiReport = readPipelineReportMarkdown(storeId);
+  const aiReportState = getLatestPipelineRunState(storeId);
 
   return (
     <Suspense fallback={null}>
@@ -32,7 +32,7 @@ export default async function SubscribedExtensionPage({
         storeId={storeId}
         extensionName={extensionName}
         extensionVersion={extensionVersion}
-        aiReport={aiReport}
+        aiReportState={aiReportState}
       />
     </Suspense>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth-options"
-import { readPipelineReportMarkdown } from "@/lib/detection-pipeline/storage"
+import { getLatestPipelineRunState } from "@/lib/detection-pipeline/storage"
 
 export const runtime = "nodejs"
 
@@ -15,9 +15,9 @@ export async function GET(req: Request) {
   if (!storeId) {
     return NextResponse.json({ error: "storeId is required" }, { status: 400 })
   }
-  const report = readPipelineReportMarkdown(storeId)
-  if (!report) {
+  const state = getLatestPipelineRunState(storeId)
+  if (!state) {
     return NextResponse.json({ error: "No pipeline report found for this store." }, { status: 404 })
   }
-  return NextResponse.json(report)
+  return NextResponse.json(state)
 }

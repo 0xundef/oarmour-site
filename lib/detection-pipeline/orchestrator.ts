@@ -33,6 +33,10 @@ export interface RunDetectionPipelineParams {
   runId?: string
   candidateDomains?: string[]
   source?: "static" | "runtime" | "general"
+  /** Force a specific run id (used by the background starter). Skips the in-flight guard. */
+  runIdOverride?: string
+  /** Skip the recent-run idempotency guard (used by the background starter). */
+  skipIdempotency?: boolean
 }
 
 export interface RunDetectionPipelineResult {
@@ -42,11 +46,10 @@ export interface RunDetectionPipelineResult {
 }
 
 function resolveModelId(): string {
-  // Default to claude-glm-5.2: this project's ANTHROPIC_API_KEY routes through a
-  // gateway whose allowed model list includes claude-glm-5.2 / glm-5.2 (not stock
-  // Claude model ids). Override per-stage via DETECTION_{RECON,FIND,DEDUPE,REPORT}_MODEL
-  // or globally via DETECTION_PIPELINE_MODEL.
-  return process.env.DETECTION_PIPELINE_MODEL?.trim() || "claude-glm-5.2"
+  // Honors the `default` convention. (Informational — the per-stage model actually
+  // used is resolved in agent.ts's resolveModelId(stage).)
+  const v = process.env.DETECTION_PIPELINE_MODEL?.trim()
+  return !v || v.toLowerCase() === "default" ? "claude-glm-5.2" : v
 }
 
 function candidateHash(params: RunDetectionPipelineParams): string {
@@ -140,12 +143,14 @@ export async function runDetectionPipeline(
   const modelId = resolveModelId()
   const hash = candidateHash(params)
 
-  // In-flight guard.
-  const recent = findRecentRun(params)
-  if (recent) {
-    logInfo("[detection-pipeline] skipping — recent identical run exists", { runDir: recent })
-    const manifest = RunManifestSchema.parse(JSON.parse(fs.readFileSync(getManifestPath(recent), "utf8")))
-    return { runDir: recent, runId: manifest.runId, manifest }
+  // In-flight guard (skip when forced by the background starter).
+  if (!params.skipIdempotency) {
+    const recent = findRecentRun(params)
+    if (recent) {
+      logInfo("[detection-pipeline] skipping — recent identical run exists", { runDir: recent })
+      const manifest = RunManifestSchema.parse(JSON.parse(fs.readFileSync(getManifestPath(recent), "utf8")))
+      return { runDir: recent, runId: manifest.runId, manifest }
+    }
   }
 
   const artifact = resolvePipelineArtifact(params.storeId, params.version, params.runId)
@@ -156,7 +161,7 @@ export async function runDetectionPipeline(
     runId: params.runId,
   })
 
-  const runId = buildRunId(params.runId)
+  const runId = params.runIdOverride ?? buildRunId(params.runId)
   const runDir = ensureRunDir(params.storeId, runId)
 
   let manifest = newManifest(params, runId, threatModel.ref, modelId, hash)
@@ -238,4 +243,39 @@ export async function runDetectionPipeline(
   })
 
   return { runDir: getPipelineRunDir(params.storeId, runId), runId, manifest }
+}
+
+/**
+ * Kick off a pipeline run in the BACKGROUND (do not await). Computes the runId +
+ * writes an initial "started" manifest so the run is immediately listable/pollable,
+ * then launches `runDetectionPipeline` as a floating promise. Returns immediately
+ * with { runId, runDir } so the HTTP trigger doesn't block for the (minutes-long) run.
+ *
+ * The pipeline runs in the Next.js server process (next start / pm2); the floating
+ * promise keeps it alive after the response is sent. Client polls
+ * GET /api/detection-pipeline/report?storeId= until the report stage completes.
+ */
+export function startDetectionPipelineBackground(
+  params: RunDetectionPipelineParams,
+): { runId: string; runDir: string } {
+  const modelId = resolveModelId()
+  const hash = candidateHash(params)
+  const runId = buildRunId(params.runId)
+  const runDir = ensureRunDir(params.storeId, runId)
+
+  // Write an initial manifest so the run is visible immediately (stages = pending).
+  const manifest = newManifest(params, runId, loadThreatModel(params.storeId).ref, modelId, hash)
+  writeManifest(runDir, manifest)
+
+  // Fire-and-forget. Errors are logged inside runDetectionPipeline.
+  void runDetectionPipeline({ ...params, runIdOverride: runId, skipIdempotency: true })
+    .catch((err) => {
+      logError("[detection-pipeline] background run failed", {
+        storeId: params.storeId,
+        runId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    })
+
+  return { runId, runDir: getPipelineRunDir(params.storeId, runId) }
 }

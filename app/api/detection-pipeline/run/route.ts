@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth-options"
-import { runDetectionPipeline } from "@/lib/detection-pipeline/orchestrator"
+import { startDetectionPipelineBackground } from "@/lib/detection-pipeline/orchestrator"
 
 export const runtime = "nodejs"
-// The pipeline runs N LLM `query()` calls and can take minutes. For v1 (manual admin
-// trigger) we await in-process on a long-running server. Production hardening should
-// move this to a background worker / ScanJob (see plan risk #1).
-export const maxDuration = 300
+// The trigger returns immediately; the minutes-long pipeline runs in the background
+// (floating promise in the Next.js server process). Client polls
+// GET /api/detection-pipeline/report?storeId= until the report stage completes.
+export const maxDuration = 30
 
 export async function GET() {
   return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
@@ -41,13 +41,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await runDetectionPipeline({ storeId, version, runId, source, candidateDomains })
+    const started = startDetectionPipelineBackground({ storeId, version, runId, source, candidateDomains })
     return NextResponse.json({
-      runDir: result.runDir,
-      runId: result.runId,
-      stages: Object.fromEntries(Object.entries(result.manifest.stages).map(([k, v]) => [k, v.status])),
-      sourceFidelity: result.manifest.sourceFidelity,
-      report: `${result.runDir}/report.md`,
+      runDir: started.runDir,
+      runId: started.runId,
+      status: "started",
     })
   } catch (err) {
     return NextResponse.json(
@@ -56,3 +54,4 @@ export async function POST(req: Request) {
     )
   }
 }
+

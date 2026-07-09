@@ -77,7 +77,7 @@ export async function runStageAgent(params: RunStageAgentParams): Promise<StageA
     mcpServer,
     runDir,
     builtinTools = ["Read", "Glob", "Grep"],
-    maxTurns = stage === "find" ? 40 : 15,
+    maxTurns = stage === "find" ? 20 : stage === "recon" ? 10 : 10,
   } = params
 
   const modelId = resolveModelId(stage)

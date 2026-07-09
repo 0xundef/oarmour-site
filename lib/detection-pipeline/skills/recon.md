@@ -33,14 +33,18 @@ slice. You do NOT assert findings here — you scope.
      surfaces in content scripts, one for network-sink/dataflow in background),
    - by candidate domain (when candidate domains are given, one partition per
      domain-cluster + the files that reference it).
-   Keep partitions **balanced** (≤ ~6 files each when possible) and **non-empty**.
-   Tag each partition with `candidateSignalClasses` (subset of: `permissions`,
-   `dataflow`, `remote-code`, `messaging`, `dom-injection`, `privacy`,
-   `supply-chain`) and the `targetFiles` (paths relative to the unpacked source
-   root) and a one-line `rationale`.
+   Keep partitions **small** (≤ ~6 files each) and **non-empty**. find agents
+   have a tight turn budget, so do NOT put 20 files in one partition — split
+   further. Tag each partition with `candidateSignalClasses` (subset of:
+   `permissions`, `dataflow`, `remote-code`, `messaging`, `dom-injection`,
+   `privacy`, `supply-chain`) and the `targetFiles` (paths relative to the
+   unpacked source root) and a one-line `rationale`.
 4. **Do not silently drop anything.** If a candidate domain or declared
    component is clearly out-of-scope (e.g. a well-known first-party CDN with no
    sensitive flow), put it in `droppedClusters` with a `reason` — never omit it.
+5. **Commit early.** You have a tight turn budget (~10). Do not over-read files;
+   the manifest + a quick Glob is usually enough to propose partitions. Your
+   final action MUST be `commit_stage_output`.
 
 ## Coverage invariant
 

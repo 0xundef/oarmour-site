@@ -162,3 +162,40 @@ export function readPipelineReportMarkdown(storeId: string): {
     markdown,
   }
 }
+
+/** Latest run's pollable state for the UI. status: running|completed|failed. */
+export function getLatestPipelineRunState(storeId: string): {
+  runId: string
+  startedAt: string
+  finishedAt: string | null
+  sourceFidelity: string
+  status: "running" | "completed" | "failed"
+  markdown: string | null
+} | null {
+  const latest = getLatestPipelineRun(storeId)
+  if (!latest) return null
+  const stages = latest.manifest.stages
+  let status: "running" | "completed" | "failed" = "running"
+  if (stages.report?.status === "completed") status = "completed"
+  else if (
+    stages.recon?.status === "failed" ||
+    stages.find?.status === "failed" ||
+    stages.dedupe?.status === "failed" ||
+    stages.report?.status === "failed"
+  ) {
+    status = "failed"
+  }
+  let markdown: string | null = null
+  if (status === "completed") {
+    const reportPath = getReportPath(latest.runDir)
+    if (fs.existsSync(reportPath)) markdown = fs.readFileSync(reportPath, "utf8")
+  }
+  return {
+    runId: latest.runId,
+    startedAt: latest.manifest.startedAt,
+    finishedAt: latest.manifest.finishedAt,
+    sourceFidelity: latest.manifest.sourceFidelity,
+    status,
+    markdown,
+  }
+}

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { IssueAiChatBox } from "@/components/dashboard/issue-ai-chat-box"
-import { AiReportView, type AiReport } from "@/components/dashboard/ai-report-view"
+import { AiReportView, type AiReportState } from "@/components/dashboard/ai-report-view"
 import { useSearchParams } from "next/navigation"
 import type { AiTestingLatestPayload } from "@/lib/ai-testing-display"
 import { formatFindingRunLabel } from "@/lib/format-finding-run-time"
@@ -61,12 +61,12 @@ export function SubscribedDetectionWorkbench({
   storeId,
   extensionName,
   extensionVersion: extensionVersionHint,
-  aiReport,
+  aiReportState,
 }: {
   storeId: string
   extensionName: string
   extensionVersion?: string | null
-  aiReport?: AiReport | null
+  aiReportState?: AiReportState | null
 }) {
   const searchParams = useSearchParams()
   const [tab, setTab] = useState<string>(
@@ -242,7 +242,7 @@ export function SubscribedDetectionWorkbench({
           {tab === "report" ? (
             <div className="h-[calc(100dvh-8rem)] min-h-0">
               <AiReportView
-                aiReport={aiReport ?? null}
+                aiReportState={aiReportState ?? null}
                 storeId={storeId}
                 onInvestigateInChat={() => {
                   setTab("findings")
@@ -278,7 +278,7 @@ export function SubscribedDetectionWorkbench({
                       onClick={() => setTab("report")}
                       className={tabButtonClass(tab === "report")}
                     >
-                      AI 分析报告
+                      AI Report
                     </button>
                   </div>
                 </div>
