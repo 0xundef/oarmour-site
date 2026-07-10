@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KelpDAO rsETH — Incident Timeline (off-chain + on-chain)</title>
+<style>
+  .viz-root{
+    --surface-1:#fcfcfb; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+    --link:#2a78d6;
+    --p1:#2a78d6; --p2:#1baf7a; --p3:#eda100; --p4:#008300; --p5:#4a3aa7; --p6:#e34948; --p7:#e87ba4;
+    font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    color:var(--ink); background:var(--page);
+    max-width:1040px; margin:0 auto; padding:28px 24px 48px;
+  }
+  @media (prefers-color-scheme:dark){
+    .viz-root[data-theme=auto], .viz-root:not([data-theme]){
+      --surface-1:#1a1a19; --page:#0d0d0d;
+      --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+      --link:#6aa8f5;
+      --p1:#3987e5; --p2:#199e70; --p3:#c98500; --p4:#008300; --p5:#9085e9; --p6:#e66767; --p7:#d55181;
+    }
+  }
+  .viz-root[data-theme=dark]{
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink:#fff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --link:#6aa8f5;
+    --p1:#3987e5; --p2:#199e70; --p3:#c98500; --p4:#008300; --p5:#9085e9; --p6:#e66767; --p7:#d55181;
+  }
+  .viz-root[data-theme=light]{
+    --surface-1:#fcfcfb; --page:#f9f9f7;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+    --link:#2a78d6;
+  }
+  .viz-root h1{font-size:24px; margin:0 0 4px; letter-spacing:-.01em}
+  .viz-root .sub{color:var(--ink-2); margin:0 0 14px; max-width:940px}
+  .viz-root .src{color:var(--muted); font-size:12.5px; margin:0 0 18px}
+  .viz-root .src a{color:var(--ink-2)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:7px 16px; margin:0 0 10px; align-items:center}
+  .legend .chip{display:inline-flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-2)}
+  .legend .sw{width:12px; height:12px; border-radius:3px; flex:none}
+  .legend .sep{width:1px; height:16px; background:var(--border); margin:0 6px}
+  .legend svg{display:block}
+
+  .bar{display:flex; gap:8px; align-items:center; margin:8px 0 18px}
+  .bar button{font:inherit; font-size:13px; color:var(--ink-2); background:var(--surface-1);
+    border:1px solid var(--border); border-radius:7px; padding:5px 11px; cursor:pointer}
+  .bar button[aria-pressed=true]{color:var(--ink); border-color:var(--axis)}
+
+  svg.tl{width:100%; height:auto; display:block; overflow:visible}
+  .seg{stroke-width:5; stroke-linecap:butt}
+  .lbl-b{fill:var(--ink); font-size:13px; font-weight:600}
+  .lbl-2{fill:var(--ink-2); font-size:12px}
+  .lbl-d{fill:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums}
+  .ph-name{fill:var(--ink); font-size:13px; font-weight:700; letter-spacing:.01em}
+  .leader{stroke:var(--axis); stroke-width:1; fill:none}
+  .mark{cursor:pointer}
+  .mark .hit{fill:transparent; pointer-events:all}
+  .mark:hover .dot,.mark:focus .dot{filter:brightness(1.07)}
+  .ring{stroke:var(--surface-1); stroke-width:2}
+  .phbar{rx:3}
+
+  /* on-chain address chips */
+  .chip-l{fill:var(--muted); font-size:11px}
+  a.addr{fill:var(--link); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px;
+         text-decoration:underline; text-underline-offset:2px}
+  a.addr:hover{fill:var(--ink)}
+  .ax{fill:var(--muted); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px}
+
+  table{width:100%; border-collapse:collapse; margin-top:14px; font-size:13px}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--grid); vertical-align:top}
+  th{color:var(--muted); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.03em}
+  td.d{white-space:nowrap; font-variant-numeric:tabular-nums}
+  td.p{white-space:nowrap; font-weight:600}
+  td.ch{white-space:nowrap; color:var(--ink-2)}
+  .sw-d{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:7px;vertical-align:middle}
+  td a{color:var(--link); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px}
+  details{margin-top:10px}
+  summary{cursor:pointer; color:var(--ink-2); font-size:13px; padding:6px 0}
+
+  .tip{position:fixed; z-index:50; pointer-events:none; max-width:340px;
+    background:var(--surface-1); color:var(--ink); border:1px solid var(--border);
+    border-radius:8px; padding:9px 11px; font-size:12.5px; line-height:1.45;
+    box-shadow:0 6px 22px rgba(0,0,0,.16); opacity:0; transition:opacity .08s}
+  .tip .t-d{color:var(--muted); font-variant-numeric:tabular-nums; font-size:11px; display:block; margin-bottom:3px}
+  .tip.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="viz-root" data-theme="auto">
+
+  <h1>KelpDAO rsETH bridge — full incident timeline</h1>
+  <p class="sub">Off-chain attack chain (LayerZero incident report, §2.3) combined with the on-chain events from the BlockSec analysis: pre-incident Aave parameters, the forged nonce-308 unlock, the DeFi cascade, the market freezes, the Arbitrum Security Council's forced transfer, and the laundering dispersal. Attribution: DPRK <b>UNC4899 / TraderTraitor</b>.</p>
+  <p class="src">Sources: <a href="https://layerzero.network/publications/kelpdao-incident-report.pdf">LayerZero Labs — KelpDAO Incident Report</a> · <a href="https://blocksec.com/blog/the-decentralization-dilemma-cascading-risk-and-emergency-power-in-the-kelp-dao-crisis">BlockSec — The Decentralization Dilemma</a>. Times in UTC · milestone view (not to scale) · on-chain addresses link to Etherscan / Arbiscan.</p>
+
+  <div class="legend" role="list">
+    <span class="chip"><span class="sw" style="background:var(--p1)"></span>Pre-incident · Aave parameters</span>
+    <span class="chip"><span class="sw" style="background:var(--p2)"></span>Intrusion &amp; dwell (off-chain)</span>
+    <span class="chip"><span class="sw" style="background:var(--p3)"></span>Exploit execution</span>
+    <span class="chip"><span class="sw" style="background:var(--p4)"></span>Cascade into DeFi</span>
+    <span class="chip"><span class="sw" style="background:var(--p5)"></span>Response · pauses &amp; freezes</span>
+    <span class="chip"><span class="sw" style="background:var(--p6)"></span>Emergency recovery</span>
+    <span class="chip"><span class="sw" style="background:var(--p7)"></span>Laundering &amp; status</span>
+    <span class="sep"></span>
+    <span class="chip"><svg width="22" height="16"><circle cx="11" cy="8" r="5" fill="var(--ink-2)"/></svg>off-chain</span>
+    <span class="chip"><svg width="22" height="16"><polygon points="11,2 19,8 11,14 3,8" fill="var(--ink-2)"/></svg>on-chain</span>
+  </div>
+
+  <div class="bar">
+    <button id="t-light" aria-pressed="false">Light</button>
+    <button id="t-auto"  aria-pressed="true">Auto</button>
+    <button id="t-dark"  aria-pressed="false">Dark</button>
+  </div>
+
+  <svg class="tl" viewBox="0 0 1000 1472" role="img" aria-label="Vertical incident timeline, January to April 22 2026, seven phases, off-chain and on-chain events with key addresses.">
+    <text x="210" y="36" class="lbl-d" text-anchor="middle">2026</text>
+
+    <!-- ===== spine segments (colored per phase) ===== -->
+    <line class="seg" x1="210" y1="72"  x2="210" y2="268"  stroke="var(--p1)"/>
+    <line class="seg" x1="210" y1="268" x2="210" y2="464"  stroke="var(--p2)"/>
+    <line class="seg" x1="210" y1="464" x2="210" y2="620"  stroke="var(--p3)"/>
+    <line class="seg" x1="210" y1="620" x2="210" y2="758"  stroke="var(--p4)"/>
+    <line class="seg" x1="210" y1="758" x2="210" y2="1012" stroke="var(--p5)"/>
+    <line class="seg" x1="210" y1="1012" x2="210" y2="1158" stroke="var(--p6)"/>
+    <line class="seg" x1="210" y1="1158" x2="210" y2="1456" stroke="var(--p7)"/>
+
+    <!-- ============ PHASE 1 (blue) ============ -->
+    <rect class="phbar" x="200" y="69" width="20" height="6" rx="3" fill="var(--p1)"/>
+    <text class="ph-name" x="250" y="76">Phase 1 · Pre-incident — Aave parameters</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Aave E-Mode LTV raised" data-tip-date="≈ 2026-01" data-tip-body="Aave governance raised rsETH E-Mode LTV from 92.5% to 93%, compressing the safety buffer from 2.5% to 2% (liquidation threshold 95%). Off-chain governance.">
+      <rect class="hit" x="194" y="96" width="32" height="32" rx="8"/>
+      <circle class="dot ring" cx="210" cy="112" r="6" fill="var(--p1)"/>
+    </g>
+    <line class="leader" x1="216" y1="112" x2="244" y2="112"/>
+    <text class="lbl-d" x="250" y="108">≈ Jan 2026</text>
+    <text class="lbl-b" x="250" y="124">Aave raised rsETH E-Mode LTV 92.5%→93% (buffer 2.5%→2%)</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Aave V4 launched" data-tip-date="2026-03-30" data-tip-body="Aave V4 launched on Ethereum. (Same day the attacker began using Developer1's session keys for cloud reconnaissance.)">
+      <rect class="hit" x="194" y="154" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,164 220,170 210,176 200,170" fill="var(--p1)"/>
+    </g>
+    <line class="leader" x1="220" y1="170" x2="244" y2="170"/>
+    <text class="lbl-d" x="250" y="166">Mar 30</text>
+    <text class="lbl-b" x="250" y="182">Aave V4 launched on Ethereum</text>
+
+    <g class="mark" tabindex="0" data-tip-title="rsETH supply caps raised" data-tip-date="2026-04-09" data-tip-body="Aave Risk Steward raised rsETH supply caps: Ethereum Core 480,000→530,000; Mantle 52,000→70,000. On-chain.">
+      <rect class="hit" x="194" y="212" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,222 220,228 210,234 200,228" fill="var(--p1)"/>
+    </g>
+    <line class="leader" x1="220" y1="228" x2="244" y2="228"/>
+    <text class="lbl-d" x="250" y="224">Apr 9</text>
+    <text class="lbl-b" x="250" y="240">rsETH supply caps raised (ETH Core 480k→530k, Mantle 52k→70k)</text>
+
+    <!-- ============ PHASE 2 (aqua) ============ -->
+    <rect class="phbar" x="200" y="265" width="20" height="6" rx="3" fill="var(--p2)"/>
+    <text class="ph-name" x="250" y="272">Phase 2 · Intrusion &amp; dwell — DPRK (off-chain)</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Social engineering — initial access" data-tip-date="2026-03-06 12:59:03–13:06:28" data-tip-body="Developer1 socially engineered into cloning a malicious GitHub repo; FLATROOF + ROOFDECK macOS backdoors dropped. Session keys harvested. EDR did not detect.">
+      <rect class="hit" x="194" y="292" width="32" height="32" rx="8"/>
+      <circle class="dot ring" cx="210" cy="308" r="6" fill="var(--p2)"/>
+    </g>
+    <line class="leader" x1="216" y1="308" x2="244" y2="308"/>
+    <text class="lbl-d" x="250" y="304">Mar 6 · 12:59–13:06</text>
+    <text class="lbl-b" x="250" y="320">Social engineering — FLATROOF + ROOFDECK malware</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Cloud reconnaissance &amp; persistence" data-tip-date="2026-03-30 → 2026-04-16" data-tip-body="Used Developer1's session keys to access LayerZero's GCP and GitHub (ExpressVPN / NordVPN / Mullvad). Reconnaissance and persistence established.">
+      <rect class="hit" x="194" y="350" width="32" height="32" rx="8"/>
+      <circle class="dot ring" cx="210" cy="366" r="6" fill="var(--p2)"/>
+    </g>
+    <line class="leader" x1="216" y1="366" x2="244" y2="366"/>
+    <text class="lbl-d" x="250" y="362">Mar 30 – Apr 16</text>
+    <text class="lbl-b" x="250" y="378">Cloud reconnaissance &amp; persistence (GCP + GitHub via VPN)</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Lateral movement &amp; RPC poisoning" data-tip-date="2026-04-16 → 2026-04-18" data-tip-body="Lateral movement across two GKE clusters (two regions). ELF PIE injected into op-geth: correct responses to monitoring, tampered RPC responses to the LayerZero Labs DVN.">
+      <rect class="hit" x="194" y="408" width="32" height="32" rx="8"/>
+      <circle class="dot ring" cx="210" cy="424" r="6" fill="var(--p2)"/>
+    </g>
+    <line class="leader" x1="216" y1="424" x2="244" y2="424"/>
+    <text class="lbl-d" x="250" y="420">Apr 16 – Apr 18</text>
+    <text class="lbl-b" x="250" y="436">Lateral movement &amp; RPC poisoning (op-geth ELF, 2 GKE regions)</text>
+
+    <!-- ============ PHASE 3 (yellow) ============ -->
+    <rect class="phbar" x="200" y="461" width="20" height="6" rx="3" fill="var(--p3)"/>
+    <text class="ph-name" x="250" y="468">Phase 3 · Exploit execution — Apr 18</text>
+
+    <g class="mark" tabindex="0" data-tip-title="DoS — failover forcing" data-tip-date="2026-04-18 16:30" data-tip-body="DoS against external RPC providers forced LayerZero's failover logic onto the two poisoned internal nodes only.">
+      <rect class="hit" x="194" y="488" width="32" height="32" rx="8"/>
+      <circle class="dot ring" cx="210" cy="504" r="6" fill="var(--p3)"/>
+    </g>
+    <line class="leader" x1="216" y1="504" x2="244" y2="504"/>
+    <text class="lbl-d" x="250" y="500">Apr 18 · 16:30</text>
+    <text class="lbl-b" x="250" y="516">DoS on external RPC → failover onto poisoned nodes</text>
+
+    <!-- CLIMAX: exploit unlock -->
+    <g class="mark" tabindex="0" data-tip-title="Forged attestation accepted — rsETH unlocked" data-tip-date="2026-04-18 17:35" data-tip-body="The DVN (reading only poisoned nodes) signed a forged attestation. The Ethereum destination endpoint accepted nonce 308, releasing 116,500 rsETH with no source-side burn — the Unichain source endpoint still reports max outbound nonce 307, the on-chain proof of the forge. KelpDAO rsETH adapter 0x85d456b2dff1fd8245387c0bfb64dfb700e98ef3. Tx 0x1ae232da212c45f35c1525f851e4c41d529bf18af862d9ce9fd40bf709db4222. The 1-of-1 single-verifier OApp config accepted the single attestation. Signer keys were not compromised.">
+      <rect class="hit" x="190" y="550" width="40" height="40" rx="10"/>
+      <polygon class="dot ring" points="210,556 224,566 210,576 196,566" fill="var(--p3)"/>
+    </g>
+    <line class="leader" x1="224" y1="566" x2="244" y2="566"/>
+    <text class="lbl-d" x="250" y="562">Apr 18 · 17:35</text>
+    <text class="lbl-b" x="250" y="578">Forged attestation accepted — nonce 308 (source nonce 307)</text>
+    <text x="250" y="596">
+      <tspan class="chip-l">116,500 rsETH released · adapter </tspan><a href="https://etherscan.io/address/0x85d456b2dff1fd8245387c0bfb64dfb700e98ef3" target="_blank" rel="noopener"><tspan class="addr">0x85d4…8ef3</tspan></a><tspan class="chip-l"> · tx </tspan><a href="https://etherscan.io/tx/0x1ae232da212c45f35c1525f851e4c41d529bf18af862d9ce9fd40bf709db4222" target="_blank" rel="noopener"><tspan class="addr">0x1ae2…4222</tspan></a>
+    </text>
+
+    <!-- ============ PHASE 4 (green) ============ -->
+    <rect class="phbar" x="200" y="617" width="20" height="6" rx="3" fill="var(--p4)"/>
+    <text class="ph-name" x="250" y="624">Phase 4 · Cascade into DeFi — Apr 18</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Dispersal + Aave deposits" data-tip-date="2026-04-18 (post-exploit)" data-tip-body="Attacker dispersed 116,500 rsETH across seven branch wallets and deposited 89,567.22 rsETH (~$227.6M) into Aave V3 lending markets on Ethereum Core and Arbitrum, using E-Mode for maximum LTV. Largest Ethereum-Core borrower 0x1f4c1c2e610f089d6914c4448e6f21cb0db3adef (52,440.58 WETH).">
+      <rect class="hit" x="194" y="644" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,654 220,660 210,666 200,660" fill="var(--p4)"/>
+    </g>
+    <line class="leader" x1="220" y1="660" x2="244" y2="660"/>
+    <text class="lbl-d" x="250" y="656">Apr 18 (post-exploit)</text>
+    <text class="lbl-b" x="250" y="672">116,500 rsETH dispersed to 7 wallets; 89,567 rsETH into Aave V3 (E-Mode)</text>
+    <text x="250" y="688">
+      <tspan class="chip-l">largest wallet </tspan><a href="https://etherscan.io/address/0x1f4c1c2e610f089d6914c4448e6f21cb0db3adef" target="_blank" rel="noopener"><tspan class="addr">0x1f4c…adef</tspan></a><tspan class="chip-l"> · +6 branch wallets</tspan>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="E-Mode borrows across ETH + Arbitrum" data-tip-date="2026-04-18" data-tip-body="Borrowed ~$200M: Ethereum Core 52,834.50 WETH (~$127M) and Arbitrum 29,785.98 WETH + 821.24 wstETH. Health factors 1.01–1.03 across seven addresses. Consolidation address 0x5d3919f12bcc35c26eee5f8226a9bee90c257ccc used on Ethereum + Arbitrum.">
+      <rect class="hit" x="194" y="708" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,718 220,724 210,730 200,724" fill="var(--p4)"/>
+    </g>
+    <line class="leader" x1="220" y1="724" x2="244" y2="724"/>
+    <text class="lbl-d" x="250" y="720">Apr 18</text>
+    <text class="lbl-b" x="250" y="736">Borrowed ~$200M (E-Mode): 52,835 WETH + 29,786 WETH + 821 wstETH; HF 1.01–1.03</text>
+    <text x="250" y="752">
+      <tspan class="chip-l">proceeds consolidated → </tspan><a href="https://etherscan.io/address/0x5d3919f12bcc35c26eee5f8226a9bee90c257ccc" target="_blank" rel="noopener"><tspan class="addr">0x5d39…7ccc</tspan></a>
+    </text>
+
+    <!-- ============ PHASE 5 (violet) ============ -->
+    <rect class="phbar" x="200" y="772" width="20" height="6" rx="3" fill="var(--p5)"/>
+    <text class="ph-name" x="250" y="779">Phase 5 · Response — pauses &amp; freezes</text>
+
+    <g class="mark" tabindex="0" data-tip-title="KelpDAO pauses contracts" data-tip-date="2026-04-18 (within 46 min)" data-tip-body="KelpDAO detected the anomaly and paused all relevant contracts within 46 minutes of the exploit, blocking a subsequent attempt targeting an additional 40,000 rsETH (~$95M).">
+      <rect class="hit" x="194" y="799" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,809 220,815 210,821 200,815" fill="var(--p5)"/>
+    </g>
+    <line class="leader" x1="220" y1="815" x2="244" y2="815"/>
+    <text class="lbl-d" x="250" y="811">Apr 18 (within 46 min)</text>
+    <text class="lbl-b" x="250" y="827">KelpDAO paused all contracts — blocked +40,000 rsETH (~$95M)</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Cross-chain transfer intercepted" data-tip-date="2026-04-18 18:30:31" data-tip-body="A cross-chain transfer of 3,575.57 rsETH by the attacker via LZMultiCall (0x8e60b7b64b63cd56b18ebcecadcb79b04919286e) failed — bridge-intercepted. Funds remained stuck at the LZMultiCall contract on Arbitrum.">
+      <rect class="hit" x="194" y="857" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,867 220,873 210,879 200,873" fill="var(--p5)"/>
+    </g>
+    <line class="leader" x1="220" y1="873" x2="244" y2="873"/>
+    <text class="lbl-d" x="250" y="869">Apr 18 · 18:30:31</text>
+    <text class="lbl-b" x="250" y="885">3,575.57 rsETH cross-chain transfer FAILED (LZMultiCall intercepted)</text>
+    <text x="250" y="901">
+      <tspan class="chip-l">intercepted at </tspan><a href="https://arbiscan.io/address/0x8e60b7b64b63cd56b18ebcecadcb79b04919286e" target="_blank" rel="noopener"><tspan class="addr">0x8e60…286e</tspan></a><tspan class="chip-l"> (Arbitrum)</tspan>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="Aave freezes rsETH / wrsETH" data-tip-date="2026-04-19" data-tip-body="Aave Protocol Guardian froze all rsETH and wrsETH markets across Aave V3 and V4, preventing new deposits and borrows against rsETH collateral.">
+      <rect class="hit" x="194" y="915" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,925 220,931 210,937 200,931" fill="var(--p5)"/>
+    </g>
+    <line class="leader" x1="220" y1="931" x2="244" y2="931"/>
+    <text class="lbl-d" x="250" y="927">Apr 19</text>
+    <text class="lbl-b" x="250" y="943">Aave froze rsETH &amp; wrsETH markets (V3 + V4)</text>
+
+    <g class="mark" tabindex="0" data-tip-title="Aave freezes WETH across 5 chains" data-tip-date="2026-04-20" data-tip-body="Aave froze WETH reserves across Ethereum, Arbitrum, Base, Mantle, Linea — combined WETH reserves exceeded $6.7B. Chains the attacker never touched (Base, Mantle, Linea) were frozen preventively due to latent bad-debt risk from rsETH collateral.">
+      <rect class="hit" x="194" y="973" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,983 220,989 210,995 200,989" fill="var(--p5)"/>
+    </g>
+    <line class="leader" x1="220" y1="989" x2="244" y2="989"/>
+    <text class="lbl-d" x="250" y="985">Apr 20</text>
+    <text class="lbl-b" x="250" y="1001">Aave froze WETH across 5 chains (&gt;$6.7B); untouched chains frozen preventively</text>
+
+    <!-- ============ PHASE 6 (red) ============ -->
+    <rect class="phbar" x="200" y="1026" width="20" height="6" rx="3" fill="var(--p6)"/>
+    <text class="ph-name" x="250" y="1033">Phase 6 · Emergency recovery — Apr 21</text>
+
+    <!-- CLIMAX: Security Council forced transfer -->
+    <g class="mark" tabindex="0" data-tip-title="Arbitrum Security Council forced transfer" data-tip-date="2026-04-21 03:35:08" data-tip-body="30,765.67 ETH force-transferred from the exploiter address to frozen address 0x0000000000000000000000000000000000000da0 on Arbitrum. Executed via an atomic three-step on the upgradable Arbitrum DelayedInbox: (1) upgrade Executor temporarily upgraded DelayedInbox adding sendUnsignedTransactionOverride; (2) Bridge.enqueueDelayedMessage kind=3 enabled an unsigned L2 tx with sender = exploiter (via L1→L2 aliasing); (3) inbox restored. No holder signature required. L1 tx 0x079984c56c5670108f5c6f664904178f9b364340351949a42e4637d1f645f770; L2 tx 0x5618044241dade84af6c41b7d84496dc9823700f98b79751e257608dac570f6b.">
+      <rect class="hit" x="190" y="1055" width="40" height="40" rx="10"/>
+      <polygon class="dot ring" points="210,1061 224,1071 210,1081 196,1071" fill="var(--p6)"/>
+    </g>
+    <line class="leader" x1="224" y1="1071" x2="244" y2="1071"/>
+    <text class="lbl-d" x="250" y="1067">Apr 21 · 03:35:08</text>
+    <text class="lbl-b" x="250" y="1083">Arbitrum Security Council forced transfer of 30,765.67 ETH → frozen addr</text>
+    <text x="250" y="1099">
+      <tspan class="chip-l">frozen </tspan><a href="https://arbiscan.io/address/0x0000000000000000000000000000000000000da0" target="_blank" rel="noopener"><tspan class="addr">0x…0da0</tspan></a>
+    </text>
+    <text x="250" y="1115">
+      <tspan class="chip-l">L1 tx </tspan><a href="https://etherscan.io/tx/0x079984c56c5670108f5c6f664904178f9b364340351949a42e4637d1f645f770" target="_blank" rel="noopener"><tspan class="addr">0x0799…f770</tspan></a><tspan class="chip-l"> · L2 tx </tspan><a href="https://arbiscan.io/tx/0x5618044241dade84af6c41b7d84496dc9823700f98b79751e257608dac570f6b" target="_blank" rel="noopener"><tspan class="addr">0x5618…0f6b</tspan></a>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="WETH partially unfrozen" data-tip-date="2026-04-21" data-tip-body="WETH unfrozen on Ethereum Core V3 only, with LTV kept at 0 as a precaution. WETH on Ethereum Prime, Arbitrum, Base, Mantle, and Linea remained frozen.">
+      <rect class="hit" x="194" y="1135" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,1145 220,1151 210,1157 200,1151" fill="var(--p6)"/>
+    </g>
+    <line class="leader" x1="220" y1="1151" x2="244" y2="1151"/>
+    <text class="lbl-d" x="250" y="1147">Apr 21</text>
+    <text class="lbl-b" x="250" y="1163">WETH unfrozen on Ethereum Core V3 only (LTV kept 0)</text>
+
+    <!-- ============ PHASE 7 (magenta) ============ -->
+    <rect class="phbar" x="200" y="1185" width="20" height="6" rx="3" fill="var(--p7)"/>
+    <text class="ph-name" x="250" y="1192">Phase 7 · Laundering &amp; status — Apr 21–22</text>
+
+    <g class="mark" tabindex="0" data-tip-title="First dispersal" data-tip-date="2026-04-21 08:05–20:21" data-tip-body="Dispersal address 0xf9802c5eb6b972ba686afa7ca615910ea8310b85 dispersed ~25,000 ETH across 103 first-hop addresses, then swept the final 8.989 ETH into 0x62c72510016732333e68177d388a8111643fc64e.">
+      <rect class="hit" x="194" y="1212" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,1222 220,1228 210,1234 200,1228" fill="var(--p7)"/>
+    </g>
+    <line class="leader" x1="220" y1="1228" x2="244" y2="1228"/>
+    <text class="lbl-d" x="250" y="1224">Apr 21 · 08:05–20:21</text>
+    <text class="lbl-b" x="250" y="1240">0xf980… dispersed ~25,000 ETH across 103 first-hop addresses</text>
+    <text x="250" y="1256">
+      <tspan class="chip-l">dispersal addr </tspan><a href="https://etherscan.io/address/0xf9802c5eb6b972ba686afa7ca615910ea8310b85" target="_blank" rel="noopener"><tspan class="addr">0xf980…0b85</tspan></a>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="Idle holding" data-tip-date="2026-04-21 11:16" data-tip-body="0xd4b87bab0ee142182f7f6da030aefe3e7f171530 received 25,701.76 ETH; untouched since.">
+      <rect class="hit" x="194" y="1278" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,1288 220,1294 210,1300 200,1294" fill="var(--p7)"/>
+    </g>
+    <line class="leader" x1="220" y1="1294" x2="244" y2="1294"/>
+    <text class="lbl-d" x="250" y="1290">Apr 21 · 11:16</text>
+    <text class="lbl-b" x="250" y="1306">0xd4b8…1530 received 25,701.76 ETH — idle since</text>
+    <text x="250" y="1322">
+      <tspan class="chip-l">idle addr </tspan><a href="https://etherscan.io/address/0xd4b87bab0ee142182f7f6da030aefe3e7f171530" target="_blank" rel="noopener"><tspan class="addr">0xd4b8…1530</tspan></a>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="Second dispersal" data-tip-date="2026-04-21 20:13" data-tip-body="0x62c72510016732333e68177d388a8111643fc64e began fanning out ETH to additional first-hop addresses; still active the next day.">
+      <rect class="hit" x="194" y="1344" width="32" height="32" rx="8"/>
+      <polygon class="dot ring" points="210,1354 220,1360 210,1366 200,1360" fill="var(--p7)"/>
+    </g>
+    <line class="leader" x1="220" y1="1360" x2="244" y2="1360"/>
+    <text class="lbl-d" x="250" y="1356">Apr 21 · 20:13</text>
+    <text class="lbl-b" x="250" y="1372">0x62c7…c64e began its own dispersal</text>
+    <text x="250" y="1388">
+      <tspan class="chip-l">dispersal addr </tspan><a href="https://etherscan.io/address/0x62c72510016732333e68177d388a8111643fc64e" target="_blank" rel="noopener"><tspan class="addr">0x62c7…c64e</tspan></a>
+    </text>
+
+    <g class="mark" tabindex="0" data-tip-title="Fund-status snapshot" data-tip-date="2026-04-22 05:42" data-tip-body="Frozen: 30,765.67 ETH at 0x…0da0 on Arbitrum. Bridge-intercepted: 3,575.57 rsETH at LZMultiCall 0x8e60…286e. Idle: 25,701.76 ETH at 0xd4b8…1530. Dispersed/dispersing: ~50,000 ETH from 0xf980… and 0x62c7… across 103 first-hop addresses. rsETH collateral on Aave still deposited; borrowed WETH/wstETH not repaid. Consolidation address 0x5d3919f1…0c257ccc used on Ethereum + Arbitrum.">
+      <rect class="hit" x="194" y="1404" width="32" height="40" rx="8"/>
+      <polygon class="dot ring" points="210,1414 220,1420 210,1426 200,1420" fill="var(--p7)"/>
+    </g>
+    <line class="leader" x1="220" y1="1420" x2="244" y2="1420"/>
+    <text class="lbl-d" x="250" y="1416">Apr 22 · 05:42</text>
+    <text class="lbl-b" x="250" y="1432">Status snapshot</text>
+    <text class="lbl-2" x="250" y="1448">30,766 ETH frozen · 3,576 rsETH intercepted · 25,702 ETH idle · ~50k ETH dispersing</text>
+  </svg>
+
+  <details>
+    <summary>All events — table view (off-chain + on-chain, with addresses)</summary>
+    <table>
+      <thead><tr><th>#</th><th>Date (UTC)</th><th>Phase</th><th>Ch.</th><th>Event &amp; key address</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td class="d">≈ 2026-01</td><td class="p"><span class="sw-d" style="background:var(--p1)"></span>Pre-incident</td><td class="ch">off</td><td>Aave raised rsETH E-Mode LTV 92.5%→93% (buffer 2.5%→2%).</td></tr>
+        <tr><td>2</td><td class="d">2026-03-30</td><td class="p"><span class="sw-d" style="background:var(--p1)"></span>Pre-incident</td><td class="ch">on</td><td>Aave V4 launched on Ethereum.</td></tr>
+        <tr><td>3</td><td class="d">2026-04-09</td><td class="p"><span class="sw-d" style="background:var(--p1)"></span>Pre-incident</td><td class="ch">on</td><td>rsETH supply caps raised (ETH Core 480k→530k; Mantle 52k→70k).</td></tr>
+        <tr><td>4</td><td class="d">2026-03-06 12:59–13:06</td><td class="p"><span class="sw-d" style="background:var(--p2)"></span>Intrusion</td><td class="ch">off</td><td>Social engineering — FLATROOF + ROOFDECK malware; session keys harvested.</td></tr>
+        <tr><td>5</td><td class="d">2026-03-30 → 04-16</td><td class="p"><span class="sw-d" style="background:var(--p2)"></span>Intrusion</td><td class="ch">off</td><td>Cloud reconnaissance &amp; persistence (GCP + GitHub via VPN).</td></tr>
+        <tr><td>6</td><td class="d">2026-04-16 → 04-18</td><td class="p"><span class="sw-d" style="background:var(--p2)"></span>Intrusion</td><td class="ch">off</td><td>Lateral movement &amp; RPC poisoning (op-geth ELF, 2 GKE regions).</td></tr>
+        <tr><td>7</td><td class="d">2026-04-18 16:30</td><td class="p"><span class="sw-d" style="background:var(--p3)"></span>Exploit</td><td class="ch">off</td><td>DoS on external RPC → failover onto poisoned nodes.</td></tr>
+        <tr><td>8</td><td class="d">2026-04-18 17:35</td><td class="p"><span class="sw-d" style="background:var(--p3)"></span>Exploit</td><td class="ch">on</td><td>Forged attestation accepted — nonce 308 (source 307); 116,500 rsETH released. Adapter <a href="https://etherscan.io/address/0x85d456b2dff1fd8245387c0bfb64dfb700e98ef3" target="_blank" rel="noopener">0x85d4…8ef3</a>; tx <a href="https://etherscan.io/tx/0x1ae232da212c45f35c1525f851e4c41d529bf18af862d9ce9fd40bf709db4222" target="_blank" rel="noopener">0x1ae2…4222</a>.</td></tr>
+        <tr><td>9</td><td class="d">2026-04-18 (post)</td><td class="p"><span class="sw-d" style="background:var(--p4)"></span>Cascade</td><td class="ch">on</td><td>116,500 rsETH dispersed to 7 wallets; 89,567 rsETH deposited to Aave V3. Largest wallet <a href="https://etherscan.io/address/0x1f4c1c2e610f089d6914c4448e6f21cb0db3adef" target="_blank" rel="noopener">0x1f4c…adef</a>.</td></tr>
+        <tr><td>10</td><td class="d">2026-04-18</td><td class="p"><span class="sw-d" style="background:var(--p4)"></span>Cascade</td><td class="ch">on</td><td>Borrowed ~$200M (E-Mode): 52,835 WETH + 29,786 WETH + 821 wstETH; HF 1.01–1.03. Consolidation <a href="https://etherscan.io/address/0x5d3919f12bcc35c26eee5f8226a9bee90c257ccc" target="_blank" rel="noopener">0x5d39…7ccc</a>.</td></tr>
+        <tr><td>11</td><td class="d">2026-04-18 (≤46 min)</td><td class="p"><span class="sw-d" style="background:var(--p5)"></span>Response</td><td class="ch">on</td><td>KelpDAO paused all contracts — blocked +40,000 rsETH (~$95M).</td></tr>
+        <tr><td>12</td><td class="d">2026-04-18 18:30:31</td><td class="p"><span class="sw-d" style="background:var(--p5)"></span>Response</td><td class="ch">on</td><td>3,575.57 rsETH cross-chain transfer FAILED — intercepted at LZMultiCall <a href="https://arbiscan.io/address/0x8e60b7b64b63cd56b18ebcecadcb79b04919286e" target="_blank" rel="noopener">0x8e60…286e</a> (Arbitrum).</td></tr>
+        <tr><td>13</td><td class="d">2026-04-19</td><td class="p"><span class="sw-d" style="background:var(--p5)"></span>Response</td><td class="ch">on</td><td>Aave froze rsETH &amp; wrsETH markets (V3 + V4).</td></tr>
+        <tr><td>14</td><td class="d">2026-04-20</td><td class="p"><span class="sw-d" style="background:var(--p5)"></span>Response</td><td class="ch">on</td><td>Aave froze WETH across 5 chains (&gt;$6.7B); untouched chains frozen preventively.</td></tr>
+        <tr><td>15</td><td class="d">2026-04-21 03:35:08</td><td class="p"><span class="sw-d" style="background:var(--p6)"></span>Recovery</td><td class="ch">on</td><td>Security Council forced transfer of 30,765.67 ETH → <a href="https://arbiscan.io/address/0x0000000000000000000000000000000000000da0" target="_blank" rel="noopener">0x…0da0</a>. L1 tx <a href="https://etherscan.io/tx/0x079984c56c5670108f5c6f664904178f9b364340351949a42e4637d1f645f770" target="_blank" rel="noopener">0x0799…f770</a>; L2 tx <a href="https://arbiscan.io/tx/0x5618044241dade84af6c41b7d84496dc9823700f98b79751e257608dac570f6b" target="_blank" rel="noopener">0x5618…0f6b</a>.</td></tr>
+        <tr><td>16</td><td class="d">2026-04-21</td><td class="p"><span class="sw-d" style="background:var(--p6)"></span>Recovery</td><td class="ch">on</td><td>WETH unfrozen on Ethereum Core V3 only (LTV kept 0).</td></tr>
+        <tr><td>17</td><td class="d">2026-04-21 08:05–20:21</td><td class="p"><span class="sw-d" style="background:var(--p7)"></span>Laundering</td><td class="ch">on</td><td><a href="https://etherscan.io/address/0xf9802c5eb6b972ba686afa7ca615910ea8310b85" target="_blank" rel="noopener">0xf980…0b85</a> dispersed ~25,000 ETH across 103 first-hop addresses.</td></tr>
+        <tr><td>18</td><td class="d">2026-04-21 11:16</td><td class="p"><span class="sw-d" style="background:var(--p7)"></span>Laundering</td><td class="ch">on</td><td><a href="https://etherscan.io/address/0xd4b87bab0ee142182f7f6da030aefe3e7f171530" target="_blank" rel="noopener">0xd4b8…1530</a> received 25,701.76 ETH — idle since.</td></tr>
+        <tr><td>19</td><td class="d">2026-04-21 20:13</td><td class="p"><span class="sw-d" style="background:var(--p7)"></span>Laundering</td><td class="ch">on</td><td><a href="https://etherscan.io/address/0x62c72510016732333e68177d388a8111643fc64e" target="_blank" rel="noopener">0x62c7…c64e</a> began its own dispersal.</td></tr>
+        <tr><td>20</td><td class="d">2026-04-22 05:42</td><td class="p"><span class="sw-d" style="background:var(--p7)"></span>Laundering</td><td class="ch">on</td><td>Status: 30,766 ETH frozen · 3,576 rsETH intercepted · 25,702 ETH idle · ~50k ETH dispersing.</td></tr>
+      </tbody>
+    </table>
+  </details>
+</div>
+
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script>
+  const root=document.querySelector('.viz-root');
+  const btns={light:document.getElementById('t-light'),auto:document.getElementById('t-auto'),dark:document.getElementById('t-dark')};
+  function setTheme(t){root.dataset.theme=t; for(const k in btns) btns[k].setAttribute('aria-pressed',k===t?'true':'false');}
+  btns.light.onclick=()=>setTheme('light'); btns.auto.onclick=()=>setTheme('auto'); btns.dark.onclick=()=>setTheme('dark');
+
+  const tip=document.getElementById('tip');
+  function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+  document.querySelectorAll('.mark').forEach(m=>{
+    m.addEventListener('mouseenter',show); m.addEventListener('focus',show);
+    m.addEventListener('mouseleave',hide); m.addEventListener('blur',hide);
+    m.addEventListener('mousemove',move);
+  });
+  function show(e){const t=e.currentTarget;
+    tip.innerHTML='<span class="t-d">'+esc(t.dataset.tipDate)+'</span><b>'+esc(t.dataset.tipTitle)+'</b><br>'+esc(t.dataset.tipBody);
+    tip.hidden=false; tip.classList.add('on');}
+  function move(e){tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}
+  function hide(){tip.hidden=true; tip.classList.remove('on');}
+</script>
+</body>
+</html>
