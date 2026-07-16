@@ -1,6 +1,6 @@
 ---
-title: "Phantom in the Packet: Investigating a LayerZero V2 DVN Source-RPC Spoof"
-description: "An on-chain forensics writeup tracing a LayerZero V2 message (Unichain → Ethereum, nonce 308) that was verified and delivered without a genuine source send — because the attacker fed a fabricated source-RPC response to a LayerZero DVN."
+title: "Phantom in the Packet: Investigating a LayerZero V2 DVN Source-RPC Spoof in a 24-Second Window"
+description: "An on-chain forensics writeup tracing a LayerZero V2 message (Unichain → Ethereum, nonce 308) that was verified and delivered without a genuine source send — because the attacker fed a fabricated source-RPC response to a LayerZero DVN, all within a 24-second verify→deliver window."
 date: "2026-07-12"
 author: "OArmour Team"
 category: "code"
@@ -21,7 +21,7 @@ tags:
 **OApp pair:** `0xc3eACf0612346366Db554C991D7858716db09f58` (Kelp DAO, source) → `0x85d456B2DfF1fd8245387C0BfB64Dfb700e98Ef3` (Kelp DAO, destination / Ethereum)
 **Headline timeline:**
 - `2026-04-18 17:35:11 UTC` — `PacketVerified` on Ethereum (block 24908283)
-- `2026-04-18 17:35:35 UTC` — `PacketDelivered` on Ethereum (block 24908285)
+- `2026-04-18 17:35:35 UTC` — `PacketDelivered` on Ethereum (block 24908285) — **a 24-second verify→deliver window (2 blocks)**
 - *"source send"* record: `2026-04-19 06:13:45 UTC` — **~13 hours *after* delivery. Impossible for a legitimate flow.**
 
 ---
