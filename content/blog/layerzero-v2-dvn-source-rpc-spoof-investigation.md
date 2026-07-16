@@ -234,6 +234,8 @@ The reusable queries produced during this investigation are saved to the Dune ac
 
 ### Decode recipe (destination side, any V2 packet on Ethereum)
 
+> This is a **Dune SQL** query — it runs on [Dune](https://dune.com) against the `ethereum.logs` dataset. View the live results and run it yourself: [kelpdao & layerzero exploit — Dune Query 8000246](https://dune.com/queries/8000246/).
+
 ```sql
 -- Filter ethereum.logs by the V2 Endpoint/delivery contract, the two event topics,
 -- the block_date window, and the 4-word packet identity encoded in the event data.
