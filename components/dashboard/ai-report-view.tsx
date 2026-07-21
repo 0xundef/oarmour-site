@@ -136,10 +136,16 @@ export function AiReportView({
             AI analysis in progress (recon → find → dedupe → report)…
           </div>
         ) : state.status === "failed" ? (
-          <div className="p-4 text-sm text-destructive">
-            {state.stale
-              ? "The previous analysis run stalled (the server was restarted mid-run). Go to the extension list and click “AI Analysis” to start a fresh run."
-              : "AI analysis failed. Please retry later or check the server logs."}
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <p className="max-w-md text-sm text-destructive">
+              {state.stale
+                ? "The previous analysis run stalled (the server was restarted mid-run). Go to the extension list and click “AI Analysis” to start a fresh run."
+                : "AI analysis failed. Please retry later or check the server logs."}
+            </p>
+            <Button variant="outline" size="sm" onClick={refetch} disabled={refetching}>
+              <RefreshCw className="h-4 w-4" />
+              Recheck
+            </Button>
           </div>
         ) : state.markdown ? (
           <article className="prose prose-sm dark:prose-invert max-w-none">
