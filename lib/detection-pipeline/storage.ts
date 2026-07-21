@@ -163,6 +163,16 @@ export function readPipelineReportMarkdown(storeId: string): {
   }
 }
 
+/**
+ * A healthy pipeline finishes in minutes (recon/find/dedupe/report, each
+ * turn-bounded). A run still non-terminal past this threshold was killed
+ * mid-stage (process restart / OOM / hard crash) before the orchestrator's
+ * catch block could mark the stage failed — so the manifest is stuck on
+ * "running"/"pending" forever. We treat such runs as failed so the UI stops
+ * spinning and the user can re-trigger.
+ */
+const STALE_RUN_MS = 30 * 60 * 1000 // 30 min
+
 /** Latest run's pollable state for the UI. status: running|completed|failed. */
 export function getLatestPipelineRunState(storeId: string): {
   runId: string
@@ -170,20 +180,33 @@ export function getLatestPipelineRunState(storeId: string): {
   finishedAt: string | null
   sourceFidelity: string
   status: "running" | "completed" | "failed"
+  /** True when status was flipped to "failed" because the run stalled (non-terminal past STALE_RUN_MS). */
+  stale: boolean
   markdown: string | null
 } | null {
   const latest = getLatestPipelineRun(storeId)
   if (!latest) return null
   const stages = latest.manifest.stages
   let status: "running" | "completed" | "failed" = "running"
-  if (stages.report?.status === "completed") status = "completed"
-  else if (
+  let stale = false
+  if (stages.report?.status === "completed") {
+    status = "completed"
+  } else if (
     stages.recon?.status === "failed" ||
     stages.find?.status === "failed" ||
     stages.dedupe?.status === "failed" ||
     stages.report?.status === "failed"
   ) {
     status = "failed"
+  } else {
+    // Non-terminal, no explicit failure. Detect a stalled/dead run: a healthy
+    // run finishes in minutes, so one still "running" past STALE_RUN_MS was
+    // killed hard (the orchestrator never got to mark the stage failed).
+    const startedMs = Date.parse(latest.manifest.startedAt ?? "")
+    if (Number.isFinite(startedMs) && Date.now() - startedMs > STALE_RUN_MS) {
+      status = "failed"
+      stale = true
+    }
   }
   let markdown: string | null = null
   if (status === "completed") {
@@ -196,6 +219,7 @@ export function getLatestPipelineRunState(storeId: string): {
     finishedAt: latest.manifest.finishedAt,
     sourceFidelity: latest.manifest.sourceFidelity,
     status,
+    stale,
     markdown,
   }
 }

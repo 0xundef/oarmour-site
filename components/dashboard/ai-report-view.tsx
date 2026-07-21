@@ -14,6 +14,8 @@ export type AiReportState = {
   finishedAt: string | null
   sourceFidelity: string
   status: "running" | "completed" | "failed"
+  /** True when the run was marked failed because it stalled (killed mid-stage). */
+  stale?: boolean
   markdown: string | null
 }
 
@@ -104,7 +106,7 @@ export function AiReportView({
           </Badge>
         ) : state.status === "failed" ? (
           <Badge variant="destructive" className="h-5 px-1.5 text-[10px] leading-none">
-            Failed
+            {state.stale ? "Stalled" : "Failed"}
           </Badge>
         ) : (
           <Badge variant="outline" className="h-5 px-1.5 text-[10px] leading-none">
@@ -135,7 +137,9 @@ export function AiReportView({
           </div>
         ) : state.status === "failed" ? (
           <div className="p-4 text-sm text-destructive">
-            AI analysis failed. Please retry later or check the server logs.
+            {state.stale
+              ? "The previous analysis run stalled (the server was restarted mid-run). Go to the extension list and click “AI Analysis” to start a fresh run."
+              : "AI analysis failed. Please retry later or check the server logs."}
           </div>
         ) : state.markdown ? (
           <article className="prose prose-sm dark:prose-invert max-w-none">
