@@ -13,9 +13,12 @@ import {
 import { mapWithConcurrencyLimit } from "../concurrency"
 import {
   FindingSchema,
+  FindingsCoverageSchema,
   MergedFindingsFileSchema,
   type Finding,
+  type FindingsCoverage,
   type MergedFindingsFile,
+  type MergedCoverage,
   type Partition,
   type ReconOutput,
   type SourceFidelity,
@@ -31,16 +34,27 @@ function buildPartitionPrompt(ctx: StageContext, partition: Partition): string {
   const evidence = ctx.evidence
   const parts = [
     "# Task",
-    `Audit partition \`${partition.id}\` (${partition.label}) against the 7-class threat model.`,
-    "Grep for anchors, Read context, trace source→sink taint. Emit evidence-backed findings",
-    "OR commit an empty findings array if the partition is clean. Your final action MUST be",
-    "`mcp__oarmour__commit_stage_output` with stage=\"findings\".",
+    `Audit partition \`${partition.id}\` (${partition.label}) against the threat model`,
+    "(the generic chrome-ext-audit classes; PLUS the wallet-ext-audit classes if this is a",
+    "wallet/web3 extension). Grep for anchors, Read context, trace source→sink taint. Emit",
+    "evidence-backed findings OR commit an empty findings array if the partition is clean.",
+    "Your final action MUST be `mcp__oarmour__commit_stage_output` with stage=\"findings\".",
+    "",
+    "## Coverage attestation (REQUIRED)",
+    "Your payload MUST include a `coverage` object declaring what you actually inspected, so a",
+    "\"clean\" partition is never silently trusted:",
+    "- `inspectedFiles`: every targetFile you grepped/read.",
+    "- `skippedFiles`: targetFiles you did NOT inspect (ran out of budget).",
+    "- `classesApplied`: the signal classes you actively checked.",
+    "- `complete`: true ONLY if you audited every targetFile for every relevant class.",
+    "If you could not finish, commit what you have with complete=false and the un-audited",
+    "files in skippedFiles. Do NOT assert \"clean\" for files you did not inspect.",
     "",
     `## Partition ${partition.id}`,
     `- targetFiles: ${JSON.stringify(partition.targetFiles)}`,
     `- candidateSignalClasses: ${JSON.stringify(partition.candidateSignalClasses)}`,
     partition.candidateDomains ? `- candidateDomains: ${JSON.stringify(partition.candidateDomains)}` : "",
-    `- sourceFidelity: ${evidence.fileTree.some((f) => /\.min\.|bundle/i.test(f.path)) ? "raw" : "raw"} (v1: no preprocessing; high-severity findings → needsManualConfirmation)`,
+    `- sourceFidelity: raw (v1: no preprocessing; high-severity findings → needsManualConfirmation)`,
     ctx.runId ? `- ai_testing runId for runtime confirmation: ${ctx.runId}` : "",
     "",
     "## Extension context",
@@ -68,7 +82,13 @@ function buildPartitionPrompt(ctx: StageContext, partition: Partition): string {
   return parts.filter((l) => l !== "").join("\n")
 }
 
-async function runFindAgentForPartition(ctx: StageContext, partition: Partition): Promise<Finding[]> {
+interface PartitionResult {
+  findings: Finding[]
+  coverage: FindingsCoverage | null
+  committed: boolean
+}
+
+async function runFindAgentForPartition(ctx: StageContext, partition: Partition): Promise<PartitionResult> {
   const mcpServer = createOarmourMcpServer({
     storeId: ctx.storeId,
     version: ctx.version,
@@ -90,22 +110,27 @@ async function runFindAgentForPartition(ctx: StageContext, partition: Partition)
       ok: result.ok,
       error: result.error,
     })
-    return []
+    return { findings: [], coverage: null, committed: false }
   }
   try {
     const raw = JSON.parse(fs.readFileSync(partPath, "utf8"))
-    const findings = Array.isArray(raw.findings) ? raw.findings : []
-    // Validate each finding.
-    return findings
+    const rawFindings = Array.isArray(raw.findings) ? raw.findings : []
+    const findings = rawFindings
       .map((f: unknown) => FindingSchema.safeParse(f))
       .filter((r: { success: boolean }) => r.success)
       .map((r: { success: boolean; data: Finding }) => r.data)
+    const coverageParse = FindingsCoverageSchema.safeParse(raw.coverage)
+    return {
+      findings,
+      coverage: coverageParse.success ? coverageParse.data : null,
+      committed: true,
+    }
   } catch (err) {
     logError("[detection-pipeline] find partition parse failed", {
       partitionId: partition.id,
       error: err instanceof Error ? err.message : String(err),
     })
-    return []
+    return { findings: [], coverage: null, committed: true }
   }
 }
 
@@ -119,7 +144,7 @@ export async function runFind(ctx: StageContext, recon: ReconOutput): Promise<Me
     (p) => runFindAgentForPartition(ctx, p),
   )
 
-  const allFindings: Finding[] = perPartition.flat()
+  const allFindings: Finding[] = perPartition.flatMap((r) => r.findings)
 
   // Deduplicate within the run by findingId (same anchor from two partitions).
   const seen = new Set<string>()
@@ -139,10 +164,14 @@ export async function runFind(ctx: StageContext, recon: ReconOutput): Promise<Me
     if (v > max) { max = v; sourceFidelity = k as SourceFidelity }
   }
 
+  // Aggregate per-partition coverage → audit-completeness signal for the report.
+  const coverage: MergedCoverage = aggregateCoverage(partitions, perPartition)
+
   const merged: MergedFindingsFile = {
     partitionsProcessed: partitions.map((p) => p.id),
     sourceFidelity,
     findings: deduped,
+    coverage,
   }
 
   const outPath = getPipelineStagePath(ctx.runDir, "findings")
@@ -158,6 +187,9 @@ export async function runFind(ctx: StageContext, recon: ReconOutput): Promise<Me
     partitions: partitions.length,
     findings: deduped.length,
     fidelity: sourceFidelity,
+    audited: coverage.auditedPartitions,
+    incomplete: coverage.incompletePartitions,
+    missingCoverage: coverage.missingCoveragePartitions.length,
   })
 
   // Clean up per-partition files after merge (keep the merged file canonical).
@@ -166,4 +198,42 @@ export async function runFind(ctx: StageContext, recon: ReconOutput): Promise<Me
   }
 
   return merged
+}
+
+/**
+ * Roll up per-partition coverage into a run-wide audit-completeness summary.
+ * A partition is "audited" only if it committed a coverage attestation marked
+ * complete. Partitions that didn't commit, or committed incomplete coverage,
+ * are surfaced so the report can flag their "clean" results as UNVERIFIED.
+ */
+function aggregateCoverage(
+  partitions: Partition[],
+  results: PartitionResult[],
+): MergedCoverage {
+  const byId = new Map(results.map((r, i) => [partitions[i]?.id ?? `__${i}`, r]))
+  let audited = 0
+  let incomplete = 0
+  const missing: string[] = []
+  let inspected = 0
+  let skipped = 0
+  for (const p of partitions) {
+    const r = byId.get(p.id)
+    if (!r || !r.committed || !r.coverage) {
+      missing.push(p.id)
+      incomplete += 1
+      continue
+    }
+    inspected += r.coverage.inspectedFiles.length
+    skipped += r.coverage.skippedFiles.length
+    if (r.coverage.complete) audited += 1
+    else incomplete += 1
+  }
+  return {
+    totalPartitions: partitions.length,
+    auditedPartitions: audited,
+    incompletePartitions: incomplete,
+    missingCoveragePartitions: missing,
+    inspectedFileCount: inspected,
+    skippedFileCount: skipped,
+  }
 }

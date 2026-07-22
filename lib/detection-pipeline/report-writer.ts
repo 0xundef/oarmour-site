@@ -1,6 +1,6 @@
 import "server-only"
 
-import type { ReportOutput } from "./schemas"
+import type { MergedCoverage, ReportOutput } from "./schemas"
 
 const SEVERITY_EMOJI: Record<string, string> = {
   CRITICAL: "🔴",
@@ -16,7 +16,11 @@ const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
  * `04-report.json`; regenerable on demand via `GET /api/detection-pipeline/.../report.md`.
  * Markdown is NOT the source of truth.
  */
-export function renderReportMarkdown(report: ReportOutput, header?: { storeId: string; version: string; runId: string }): string {
+export function renderReportMarkdown(
+  report: ReportOutput,
+  header?: { storeId: string; version: string; runId: string },
+  coverage?: MergedCoverage | null,
+): string {
   const lines: string[] = []
   if (header) {
     lines.push(`# Detection report — ${header.storeId}`)
@@ -34,6 +38,23 @@ export function renderReportMarkdown(report: ReportOutput, header?: { storeId: s
   lines.push("")
   lines.push(`**Total:** ${summary.total} · **New:** ${summary.newCount} · **Needs manual confirmation:** ${summary.needsManualConfirmationCount}`)
   lines.push("")
+
+  if (coverage) {
+    const complete = coverage.incompletePartitions === 0
+    lines.push("## Audit coverage")
+    lines.push("")
+    lines.push(`- ${coverage.auditedPartitions}/${coverage.totalPartitions} partitions fully audited · ${coverage.incompletePartitions} incomplete`)
+    lines.push(`- ${coverage.inspectedFileCount} files inspected · ${coverage.skippedFileCount} skipped`)
+    if (coverage.missingCoveragePartitions.length > 0) {
+      lines.push(`- Partitions with no coverage attestation: ${coverage.missingCoveragePartitions.join(", ")}`)
+    }
+    if (complete) {
+      lines.push("- Every partition was audited to completion.")
+    } else {
+      lines.push("- ⚠️ \"Clean\" results in incomplete/missing partitions are **UNVERIFIED**, not confirmed-safe — re-run or raise the find budget to cover them.")
+    }
+    lines.push("")
+  }
 
   if (findings.length === 0) {
     lines.push("## ✅ Clean")

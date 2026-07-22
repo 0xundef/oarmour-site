@@ -33,12 +33,27 @@ slice. You do NOT assert findings here — you scope.
      surfaces in content scripts, one for network-sink/dataflow in background),
    - by candidate domain (when candidate domains are given, one partition per
      domain-cluster + the files that reference it).
-   Keep partitions **small** (≤ ~6 files each) and **non-empty**. find agents
-   have a tight turn budget, so do NOT put 20 files in one partition — split
-   further. Tag each partition with `candidateSignalClasses` (subset of:
-   `permissions`, `dataflow`, `remote-code`, `messaging`, `dom-injection`,
-   `privacy`, `supply-chain`) and the `targetFiles` (paths relative to the
+   Keep partitions **small (≤ 8 files each — this is a HARD maximum; the commit
+   tool rejects larger partitions)** and **non-empty**. find agents have a
+   per-file turn budget, so a 20-file partition cannot be audited — split it.
+   Tag each partition with `candidateSignalClasses` (a subset of the threat-model
+   signal classes — see below) and the `targetFiles` (paths relative to the
    unpacked source root) and a one-line `rationale`.
+
+   `candidateSignalClasses` values (generic + wallet layer):
+   - generic: `permissions`, `dataflow`, `remote-code`, `messaging`,
+     `dom-injection`, `privacy`, `supply-chain`
+   - wallet/web3 (use these when the target is a wallet — MetaMask, Trust Wallet,
+     Phantom, …): `secret-exposure`, `clickjacking`, `signing-trust`,
+     `signature-phishing`, `clipboard-swap`, `tx-tampering`, `impersonation`,
+     `session-theft`
+
+   **Wallet targets:** partition around the crown-jewel surfaces — the encrypted
+   vault / keyring, the signing path (`signTransaction`, `personal_sign`,
+   `signTypedData`), the dApp↔wallet RPC/provider boundary (`window.ethereum`,
+   `onMessageExternal`, EIP-6963), and any telemetry on the unlock/decrypt path.
+   Put the files touching those surfaces into their own partitions tagged with
+   the relevant wallet classes; do not bury them in a generic "background" partition.
 4. **Do not silently drop anything.** If a candidate domain or declared
    component is clearly out-of-scope (e.g. a well-known first-party CDN with no
    sensitive flow), put it in `droppedClusters` with a `reason` — never omit it.

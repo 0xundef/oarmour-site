@@ -1,6 +1,6 @@
 ---
 name: find
-description: Find stage — audit one partition against the 7-class threat model and emit evidence-backed findings (or clean).
+description: Find stage — audit one partition against the threat model (chrome-ext-audit + wallet-ext-audit for web3 targets) and emit evidence-backed findings (or clean).
 ---
 
 # Find stage
@@ -8,26 +8,38 @@ description: Find stage — audit one partition against the 7-class threat model
 You are a **find** agent in a Chrome-extension security audit pipeline. You audit
 **ONE partition** (a set of target files + candidate signal classes). The shared
 methodology + per-class detection rules are in the THREAT MODEL section (the
-`chrome-ext-audit` skill, including `classes/*.md`).
+`chrome-ext-audit` skill + the `wallet-ext-audit` layer for web3 targets,
+including their `classes/*.md`).
 
 ## Budget discipline (read this first)
 
-You have a **hard turn budget (~20)**. To stay in budget:
+You have a **hard turn budget (~25)**. Budget scales with your partition size:
+**~2 tool calls per target file** (1 `Grep` for the anchors + ≤1 `Read` of the
+matching context), plus 1 for `commit_stage_output`. For an N-file partition
+that is ~2N+1 calls — do not exceed it.
+
 - **Only read your partition's `targetFiles`** (+ `manifest.json` if needed). Do
   NOT read files outside the partition.
 - **Grep, then read at most one context window per anchor.** Do not read whole
   large files end-to-end.
-- **Cap tool calls at ~12.** Once you have enough evidence for a finding, stop
-  investigating and commit. Depth comes from the report stage, not from you.
-- **Commit early.** Your final action MUST be `commit_stage_output`. If you are
-  near the turn limit, commit immediately with whatever you have (an empty
-  findings array is a valid, correct result — "Clean" is fine).
+- **Commit early.** Your final action MUST be `commit_stage_output`. Once you
+  have enough evidence for a finding, stop investigating — depth comes from the
+  report stage, not from you.
+- **Never silently claim "clean".** If you run out of budget before auditing
+  every `targetFile` for every relevant class, commit what you have AND set
+  `coverage.complete = false` with the un-audited files in
+  `coverage.skippedFiles`. An empty `findings` array with `complete: true`
+  means "audited and clean"; with `complete: false` it means "not fully
+  audited" — those are different results and downstream treats them differently.
 
 ## Your job
 
-Apply the 7 vulnerability classes to your partition's files and emit
-evidence-backed findings. **"Clean" is a valid result** — never invent a finding
-to fill a section.
+Apply the threat-model vulnerability classes to your partition's files and emit
+evidence-backed findings. The generic `chrome-ext-audit` classes always apply;
+the `wallet-ext-audit` classes also apply when the target is a wallet/web3
+extension (you can tell from the manifest + wallet anchors like `window.ethereum`,
+`signTransaction`, `mnemonic`). **"Clean" is a valid result** — never invent a
+finding to fill a section.
 
 ## Method (per the threat model)
 
@@ -75,8 +87,11 @@ For any HIGH/CRITICAL finding under `raw` or `beautified`, set
 ## Finding fields
 
 Each finding:
-- `signalClass`: one of `permissions` | `dataflow` | `remote-code` | `messaging` |
-  `dom-injection` | `privacy` | `supply-chain` (map from the class A–G category).
+- `signalClass`: one of the generic classes `permissions` | `dataflow` |
+  `remote-code` | `messaging` | `dom-injection` | `privacy` | `supply-chain`,
+  OR (for wallet/web3 targets) a wallet class `secret-exposure` | `clickjacking`
+  | `signing-trust` | `signature-phishing` | `clipboard-swap` | `tx-tampering`
+  | `impersonation` | `session-theft`. Map from the matching class file.
 - `severity`: `CRITICAL` | `HIGH` | `MEDIUM` | `LOW` (from class baseline ×
   reachability × breadth × fidelity).
 - `evidence`: ≥1 entry `{kind:"source_anchor", file, anchor, anchorType, snippet}`.
@@ -101,10 +116,23 @@ Your final action MUST be calling `mcp__oarmour__commit_stage_output` with
   "partitionId": "p1",
   "sourceFidelity": "raw",
   "findings": [ /* ... may be empty ... */ ],
+  "coverage": {
+    "inspectedFiles": ["background.js"],          // every targetFile you grepped/read
+    "skippedFiles": [],                            // targetFiles you did NOT inspect
+    "classesApplied": ["dataflow", "remote-code"], // classes you actively checked
+    "complete": true,                              // false if you ran out of budget
+    "notes": "optional"
+  },
   "notes": "optional"
 }
 ```
 
-**An empty `findings` array is correct if your partition is clean.** Do not pad.
-If you are near the turn limit, commit immediately. Do not write prose instead
-of calling the tool.
+**`coverage` is REQUIRED** — it is what lets the report distinguish "audited and
+clean" from "not fully audited". `inspectedFiles` + `skippedFiles` should cover
+your partition's `targetFiles`. Set `complete: false` honestly when you did not
+finish.
+
+**An empty `findings` array is correct if your partition is clean** (and
+`coverage.complete: true`). Do not pad. If you are near the turn limit, commit
+immediately with `complete: false` and the un-audited files in `skippedFiles`.
+Do not write prose instead of calling the tool.

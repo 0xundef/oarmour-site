@@ -213,7 +213,7 @@ export async function runDetectionPipeline(
     // 5. render report.md (cached)
     fs.writeFileSync(
       getReportPath(runDir),
-      renderReportMarkdown(report, { storeId: params.storeId, version: params.version, runId }),
+      renderReportMarkdown(report, { storeId: params.storeId, version: params.version, runId }, findings.coverage),
       "utf-8",
     )
   } catch (err) {
