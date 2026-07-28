@@ -2,7 +2,9 @@
  * Issue investigation chatbox (Anthropic-compatible).
  * Runtime uses `@ai-sdk/anthropic` pointed at an Anthropic-compatible endpoint
  * (default: DeepSeek's Anthropic endpoint at https://api.deepseek.com/anthropic).
- * The Anthropic SDK appends `/v1/messages` itself, so baseURL has no `/v1`.
+ * `@ai-sdk/anthropic` appends `/messages` to baseURL, so we ensure the base ends
+ * in `/v1` (see ensureV1Suffix) — configure the base WITH or WITHOUT `/v1`, it is
+ * normalized. e.g. z.ai: `https://api.z.ai/api/anthropic` → `.../anthropic/v1/messages`.
  *
  * Env convention: an env value of `default` (or empty/absent) means "use the
  * built-in default" — so GitHub vars can be created with the literal word
@@ -29,6 +31,21 @@ const DEFAULT_CHATBOX_BASE_URL = "https://api.deepseek.com/anthropic"
 function envOr(raw: string | undefined, builtin: string): string {
   const v = raw?.trim()
   return !v || v.toLowerCase() === "default" ? builtin : v
+}
+
+/**
+ * `@ai-sdk/anthropic` appends `/messages` (NOT `/v1/messages`) to `baseURL`, so
+ * the base MUST end in `/v1` for Anthropic-compatible gateways — e.g. z.ai needs
+ * `https://api.z.ai/api/anthropic/v1` so the final request URL is `.../v1/messages`.
+ * A base configured as `.../anthropic` would otherwise hit `.../anthropic/messages`
+ * → 404 → empty reply. Ensures the `/v1` suffix; idempotent + trailing-slash-safe.
+ *
+ * CHAT-ONLY: the detection pipeline's Claude Agent SDK binary appends
+ * `/v1/messages` itself, so its `ANTHROPIC_BASE_URL` must NOT get this suffix.
+ */
+function ensureV1Suffix(baseURL: string): string {
+  const trimmed = baseURL.replace(/\/+$/, "")
+  return /\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/v1`
 }
 
 /** Parse ANTHROPIC_CHATBOX_MODEL (comma-separated) into an allowlist; `default`/empty → [default model]. */
@@ -67,7 +84,7 @@ export function getAnthropicChatboxConfig(modelId?: string | null): AnthropicCha
 
   return {
     apiKey,
-    baseURL: envOr(process.env.ANTHROPIC_CHATBOX_BASE_URL, DEFAULT_CHATBOX_BASE_URL),
+    baseURL: ensureV1Suffix(envOr(process.env.ANTHROPIC_CHATBOX_BASE_URL, DEFAULT_CHATBOX_BASE_URL)),
     model: resolveAnthropicChatboxModelId(modelId),
   }
 }
