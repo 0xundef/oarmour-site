@@ -42,13 +42,6 @@ interface UserRow {
   role: string;
   disabled: boolean;
   createdAt: Date;
-  submissions: {
-    id: string;
-    status: string;
-  }[];
-  _count: {
-    notificationSubscriptions: number;
-  };
 }
 
 interface UsersTableProps {
@@ -118,13 +111,11 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
       <div className="rounded-md border">
         <Table className="table-fixed">
           <colgroup>
-            <col className="w-[11%]" />
+            <col className="w-[14%]" />
             <col />
-            <col className="w-[8%]" />
-            <col className="w-[9%]" />
-            <col className="w-[9%]" />
             <col className="w-[10%]" />
             <col className="w-[12%]" />
+            <col className="w-[15%]" />
             <col className="w-[10rem]" />
           </colgroup>
           <TableHeader>
@@ -133,8 +124,6 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
               <TableHead className="px-4">Email</TableHead>
               <TableHead className="px-4">Role</TableHead>
               <TableHead className="px-4">Status</TableHead>
-              <TableHead className="px-4 text-right">Submissions</TableHead>
-              <TableHead className="px-4 text-right">Subscriptions</TableHead>
               <TableHead className="whitespace-nowrap px-4">Joined</TableHead>
               <TableHead className="whitespace-nowrap px-4">Operation</TableHead>
             </TableRow>
@@ -142,7 +131,7 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center">
+                <TableCell colSpan={6} className="text-center">
                   No users found.
                 </TableCell>
               </TableRow>
@@ -164,12 +153,6 @@ export function UsersTable({ users, currentAdminId }: UsersTableProps) {
                     ) : (
                       <Badge variant="secondary">Active</Badge>
                     )}
-                  </TableCell>
-                  <TableCell className="px-4 text-right tabular-nums">
-                    {user.submissions.length}
-                  </TableCell>
-                  <TableCell className="px-4 text-right tabular-nums">
-                    {user._count.notificationSubscriptions}
                   </TableCell>
                   <TableCell className="whitespace-nowrap px-4 text-muted-foreground">
                     {formatDate(user.createdAt)}

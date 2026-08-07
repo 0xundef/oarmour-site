@@ -1,17 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { SubmissionsTable } from "@/components/admin/submissions-table";
 import { LoginActivitiesTable } from "@/components/admin/login-activities-table";
 import { UsersTable } from "@/components/admin/users-table";
-import { ExtensionsTable } from "@/components/admin/extensions-table";
-import { MonitorJobsDashboard } from "@/components/admin/monitor-jobs-dashboard";
-import { getLatestPublisherPublishedAtByStoreIds } from "@/lib/extension-publisher-versions";
-import { BrowserAgentDashboard } from "@/components/admin/browser-agent-dashboard";
-import { ExtensionVersionHistoryDashboard } from "@/components/admin/extension-version-history-dashboard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type AdminSection = "users" | "audit" | "monitoring";
+type AdminSection = "users" | "audit";
 
 export default async function AdminPage({
   searchParams,
@@ -26,13 +19,7 @@ export default async function AdminPage({
 
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const rawSection = resolvedSearchParams.section || "";
-  const section = (
-    rawSection === "submissions" || rawSection === "extensions" || rawSection === "monitor"
-      ? rawSection === "monitor" ? "monitoring" : "audit"
-      : ["users", "audit", "monitoring"].includes(rawSection)
-        ? rawSection
-        : "users"
-  ) as AdminSection;
+  const section: AdminSection = rawSection === "audit" ? "audit" : "users";
 
   let title = "";
   let description = "";
@@ -41,143 +28,28 @@ export default async function AdminPage({
   if (section === "users") {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
-        submissions: {
-          select: {
-            id: true,
-            status: true,
-          },
-        },
-        _count: {
-          select: { notificationSubscriptions: true },
-        },
-      },
     });
     title = "Users";
-    description = "Review registered users, roles, and submission activity.";
+    description = "Review registered users, roles, and access.";
     content = <UsersTable users={users} currentAdminId={user.id} />;
   }
 
   if (section === "audit") {
-    const [submissions, loginActivities] = await Promise.all([
-      prisma.submission.findMany({
-        orderBy: { createdAt: "desc" },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
+    const loginActivities = await prisma.loginActivity.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
           },
         },
-      }),
-      prisma.loginActivity.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 500,
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      }),
-    ]);
+      },
+    });
     title = "Audit";
-    description = "Review user login activity and extension analysis submissions.";
-    content = (
-      <Tabs key="audit-tabs" defaultValue="extension-submissions" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="extension-submissions">Extension Submissions</TabsTrigger>
-          <TabsTrigger value="login-activity">Login Activity</TabsTrigger>
-        </TabsList>
-        <TabsContent value="extension-submissions" className="space-y-4">
-          <SubmissionsTable submissions={submissions} />
-        </TabsContent>
-        <TabsContent value="login-activity" className="space-y-4">
-          <LoginActivitiesTable activities={loginActivities} />
-        </TabsContent>
-      </Tabs>
-    );
-  }
-
-  if (section === "monitoring") {
-    let rawExtensions: Array<{ id: string; name: string; storeId: string; version: string | null; pendingVersion: string | null; isMonitored: boolean; aiBrowserTestingEnabled: boolean; packageDownloadPrefix: string | null; packageDownloadSuffix: string | null; checkFrequencyMinutes: number | null; promptMarkdown: string | null; updatedAt: Date }> = []
-    try {
-      rawExtensions = await prisma.$queryRaw`
-        SELECT "id","name","storeId","version","pendingVersion","isMonitored","aiBrowserTestingEnabled","packageDownloadPrefix","packageDownloadSuffix","checkFrequencyMinutes","promptMarkdown","updatedAt"
-        FROM "GlobalExtension"
-        ORDER BY "updatedAt" DESC
-      `;
-    } catch {
-      const legacyExtensions = await prisma.$queryRaw<Array<{ id: string; name: string; storeId: string; version: string | null; isMonitored: boolean; checkFrequencyMinutes: number | null; updatedAt: Date }>>`
-        SELECT "id","name","storeId","version","isMonitored","checkFrequencyMinutes","updatedAt"
-        FROM "GlobalExtension"
-        ORDER BY "updatedAt" DESC
-      `;
-      rawExtensions = legacyExtensions.map((e) => ({
-        ...e,
-        pendingVersion: null,
-        aiBrowserTestingEnabled: false,
-        packageDownloadPrefix: null,
-        packageDownloadSuffix: '.zip',
-        promptMarkdown: null,
-      }))
-    }
-    const storeIds = rawExtensions.map((e) => e.storeId);
-    let latestPublisherByStoreId: Record<string, string> = {};
-    try {
-      latestPublisherByStoreId = await getLatestPublisherPublishedAtByStoreIds(storeIds);
-    } catch {
-      latestPublisherByStoreId = {};
-    }
-    const extensions = rawExtensions.map((e) => ({
-      id: e.id,
-      name: e.name,
-      storeId: e.storeId,
-      version: e.version,
-      pendingVersion: e.pendingVersion,
-      isMonitored: e.isMonitored,
-      aiBrowserTestingEnabled: e.aiBrowserTestingEnabled,
-      packageDownloadPrefix: e.packageDownloadPrefix,
-      packageDownloadSuffix: e.packageDownloadSuffix,
-      checkFrequencyMinutes: e.checkFrequencyMinutes ?? undefined,
-      promptMarkdown: e.promptMarkdown ?? undefined,
-      updatedAt: e.updatedAt ? new Date(e.updatedAt).toISOString() : null,
-      lastPublisherUpdateAt: latestPublisherByStoreId[e.storeId] ?? null,
-    }));
-    title = "Monitoring";
-    description = "Manage extension monitoring and monitor service health in one place.";
-    const defaultTab = "extensions";
-    content = (
-      <Tabs key="monitoring-tabs" defaultValue={defaultTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="extensions">Extension Management</TabsTrigger>
-          <TabsTrigger value="browser-agent">Browser Agent</TabsTrigger>
-          <TabsTrigger value="service-health">Service Health</TabsTrigger>
-          <TabsTrigger value="version-history">Version History</TabsTrigger>
-        </TabsList>
-        <TabsContent value="extensions" className="space-y-4">
-          <ExtensionsTable extensions={extensions} />
-        </TabsContent>
-        <TabsContent value="browser-agent" className="space-y-4">
-          <BrowserAgentDashboard extensions={extensions} />
-        </TabsContent>
-        <TabsContent value="service-health" className="space-y-4">
-          <MonitorJobsDashboard />
-        </TabsContent>
-        <TabsContent value="version-history" className="space-y-4">
-          <ExtensionVersionHistoryDashboard
-            extensions={extensions.map((e) => ({
-              id: e.id,
-              name: e.name,
-              storeId: e.storeId,
-            }))}
-          />
-        </TabsContent>
-      </Tabs>
-    );
+    description = "Review user login activity.";
+    content = <LoginActivitiesTable activities={loginActivities} />;
   }
 
   return (

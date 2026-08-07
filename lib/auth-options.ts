@@ -13,7 +13,7 @@ import { logError } from "@/lib/app-logger";
 
 const enableAdapter =
   process.env.NEXTAUTH_USE_ADAPTER === "1" ||
-  (process.env.NODE_ENV === "production" && !!process.env.db1_POSTGRES_PRISMA_URL);
+  (process.env.NODE_ENV === "production" && !!process.env.REALTIME_DATABASE_URL);
 
 export const authOptions: NextAuthOptions = {
   ...(enableAdapter ? { adapter: PrismaAdapter(prisma) } : {}),

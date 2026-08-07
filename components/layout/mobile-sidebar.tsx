@@ -2,19 +2,13 @@
 import { DashboardNav } from "@/components/dashboard-nav";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { buildDashboardNavItems } from "@/lib/dashboard-nav-items";
-import {
-  patchNavItemsWithSubscribedChildren,
-  SUBSCRIPTIONS_NAV_REFRESH_EVENT,
-} from "@/lib/subscriptions-nav-events";
 import type { NavItem } from "@/types";
 import { MenuIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { UserNav } from "./user-nav";
 
-type SidebarProps = React.HTMLAttributes<HTMLDivElement>
-
-export function MobileSidebar({ className }: SidebarProps) {
+export function MobileSidebar() {
   const [open, setOpen] = useState(false);
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -26,31 +20,6 @@ export function MobileSidebar({ className }: SidebarProps) {
   useEffect(() => {
     setNavItemsState(buildDashboardNavItems({ isAdmin }));
   }, [isAdmin]);
-
-  const refreshSubscribedNav = useCallback(async () => {
-    try {
-      const res = await fetch("/api/notifications/subscriptions", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { items?: NavItem[] };
-      const subscribedItems = data.items;
-      if (!Array.isArray(subscribedItems)) return;
-      setNavItemsState((prev) => patchNavItemsWithSubscribedChildren(prev, subscribedItems));
-    } catch {
-      // Keep current nav if refresh fails.
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshSubscribedNav();
-  }, [refreshSubscribedNav]);
-
-  useEffect(() => {
-    const handler = () => {
-      void refreshSubscribedNav();
-    };
-    window.addEventListener(SUBSCRIPTIONS_NAV_REFRESH_EVENT, handler);
-    return () => window.removeEventListener(SUBSCRIPTIONS_NAV_REFRESH_EVENT, handler);
-  }, [refreshSubscribedNav]);
 
   return (
     <>

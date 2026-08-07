@@ -11,15 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut, useSession } from "next-auth/react";
-import { 
-  Settings, 
-  FileText, 
-  MessageSquare, 
-  LifeBuoy, 
+import {
+  FileText,
+  MessageSquare,
+  LifeBuoy,
   LogOut,
   User
 } from "lucide-react";
-import Link from "next/link";
 
 type UserNavProps = {
   variant?: "header" | "sidebar";
@@ -66,13 +64,6 @@ export function UserNav({ variant = "header", isMinimized = false }: UserNavProp
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/settings">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Account Settings</span>
-              </Link>
-            </DropdownMenuItem>
-            
             <DropdownMenuItem>
               <FileText className="mr-2 h-4 w-4" />
               <span>Documentation</span>

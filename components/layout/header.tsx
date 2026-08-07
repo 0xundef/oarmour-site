@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 const MobileSidebar = dynamic(() => import("./mobile-sidebar").then(m => m.MobileSidebar), { ssr: false });
 import Link from "next/link";
 import Logo from "@/components/logo";
-const GlobalSearch = dynamic(() => import("@/components/global-search").then(m => m.GlobalSearch), { ssr: false });
 
 export default function Header() {
   return (
@@ -22,9 +21,7 @@ export default function Header() {
           <MobileSidebar />
         </div>
 
-        <div className="flex-1 flex justify-center px-4">
-          <GlobalSearch />
-        </div>
+        <div className="flex-1" />
       </nav>
     </div>
   );

@@ -1,7 +1,6 @@
 import Providers from "@/components/layout/providers";
 import { ChunkLoadRecovery } from "@/components/chunk-load-recovery";
 import { Toaster } from "@/components/ui/toaster";
-import "@uploadthing/react/styles.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
