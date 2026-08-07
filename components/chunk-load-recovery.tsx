@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 
-const RELOAD_KEY = "oarmour:chunk-reload"
+const RELOAD_KEY = "realtime:chunk-reload"
 
 function isChunkLoadFailure(message: string): boolean {
   const lower = message.toLowerCase()

@@ -3,8 +3,8 @@ import Sidebar from "@/components/layout/sidebar";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "OArmour - The Armour of Blockchain",
-  description: "Foucus on AML|Auditing|Real-time detection",
+  title: "Realtime",
+  description: "Realtime dashboard.",
   robots: {
     index: false,
     follow: false,

@@ -18,7 +18,7 @@ export default function AuthenticationPage() {
               <Logo />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">
-              Welcome to OArmour
+              Welcome to Realtime
             </h1>
             <p className="text-sm text-muted-foreground">
               Unlock all features by logging in
@@ -42,7 +42,7 @@ export default function AuthenticationPage() {
             </Link>
           </p>
           <p className="text-center text-xs text-muted-foreground mt-4">
-             copyright © 2025 Powered by Open WebUI
+             © 2026 Realtime. All rights reserved.
           </p>
         </div>
       </div>

@@ -11,43 +11,43 @@ import Script from "next/script";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://oarmour.com"),
+  metadataBase: new URL("https://realtime.app"),
   alternates: {
     canonical: "/",
   },
   title: {
-    default: "OArmour - Web3 Access Point Security",
-    template: "%s | OArmour"
+    default: "Realtime",
+    template: "%s | Realtime"
   },
-  description: "OArmour provides real-time monitoring for browser extension wallets and web portals. Detect malicious code injection, unauthorized changes, and secure your Web3 access points.",
-  keywords: ["Web3 Security", "Browser Extension Wallet", "Malicious Code Detection", "Blockchain Security", "OArmour", "Real-time Monitoring"],
-  authors: [{ name: "OArmour Team" }],
-  creator: "OArmour",
+  description: "Realtime — sign in to manage your account.",
+  keywords: ["Realtime"],
+  authors: [{ name: "Realtime" }],
+  creator: "Realtime",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://oarmour.com",
-    title: "OArmour - Web3 Access Point Security",
-    description: "Real-time detection of malicious code in browser extensions and web portals.",
-    siteName: "OArmour",
+    url: "https://realtime.app",
+    title: "Realtime",
+    description: "Realtime — sign in to manage your account.",
+    siteName: "Realtime",
     images: [
       {
         url: "/icon-512x512.png",
         width: 512,
         height: 512,
-        alt: "OArmour"
+        alt: "Realtime"
       }
     ]
   },
   twitter: {
     card: "summary_large_image",
-    title: "OArmour - Web3 Access Point Security",
-    description: "Protect your users from malicious extension upgrades and web portal injections.",
+    title: "Realtime",
+    description: "Realtime — sign in to manage your account.",
     images: ["/icon-512x512.png"]
   },
   icons: {
     icon: '/favicon.ico',
-    shortcut: '/favicon.ico', 
+    shortcut: '/favicon.ico',
   }
 };
 
@@ -57,22 +57,19 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerSession();
-  
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": "OArmour",
-    "url": "https://oarmour.com",
-    "logo": "https://oarmour.com/logo.png",
-    "description": "OArmour monitors Chrome extension upgrades and web portal changes to detect malicious code injection.",
-    "sameAs": [
-      "https://twitter.com/oarmour",
-      "https://github.com/oarmour"
-    ],
+    "name": "Realtime",
+    "url": "https://realtime.app",
+    "logo": "https://realtime.app/logo.png",
+    "description": "Realtime.",
+    "sameAs": [],
     "contactPoint": {
       "@type": "ContactPoint",
       "contactType": "customer support",
-      "email": "support@oarmour.com"
+      "email": "support@realtime.app"
     }
   };
 
@@ -100,11 +97,11 @@ export default async function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "WebSite",
-              "url": "https://oarmour.com",
-              "name": "OArmour",
+              "url": "https://realtime.app",
+              "name": "Realtime",
               "potentialAction": {
                 "@type": "SearchAction",
-                "target": "https://oarmour.com/?q={search_term_string}",
+                "target": "https://realtime.app/?q={search_term_string}",
                 "query-input": "required name=search_term_string"
               }
             })
