@@ -8,12 +8,12 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("db1_POSTGRES_PRISMA_URL")
-  directUrl = env("db1_POSTGRES_URL_NON_POOLING")
+  url       = env("REALTIME_DATABASE_URL")
+  directUrl = env("REALTIME_DIRECT_URL")
 }
 
 // ==========================================
-// 1. Identity & Integration
+// Identity & Auth
 // ==========================================
 
 enum UserRole {
@@ -34,20 +34,9 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // NextAuth.js Relations
-  accounts      Account[]
-  sessions      Session[]
-
-  // App Relations
-  apiKeys       ApiKey[]
-  subscriptions AssetSubscription[]
-  submissions   Submission[]
+  accounts        Account[]
+  sessions        Session[]
   loginActivities LoginActivity[]
-  issueInvestigationChats IssueInvestigationChat[]
-  issueInvestigationShares IssueInvestigationShare[]
-  notificationSubscriptions NotificationSubscription[]
-  findingDismissals FindingDismissal[]
-  extensionDomainAllowlistEntries ExtensionDomainAllowlist[]
-  pipelineReportShares PipelineReportShare[]
 
   // Stripe Subscription
   stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
@@ -56,102 +45,20 @@ model User {
   stripeCurrentPeriodEnd DateTime? @map(name: "stripe_current_period_end")
 }
 
-model Submission {
-  id          String           @id @default(uuid())
-  userId      String
-  input       String           // Extension ID or URL
-  status      SubmissionStatus @default(PENDING)
-  feedback    String?          // For storing analysis result later
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-enum SubmissionStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-model LoginActivity {
-  id        String   @id @default(uuid())
-  userId    String
-  ipAddress String?
-  provider  String?
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([createdAt(sort: Desc)])
-}
-
-model IssueInvestigationChat {
-  id        String   @id @default(uuid())
-  userId    String
-  storeId   String
-  issueId   String
-  messages  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, storeId, issueId])
-  @@index([userId, storeId])
-}
-
-model IssueInvestigationShare {
-  id              String    @id @default(uuid())
-  shareToken      String    @unique
-  createdByUserId String
-  storeId         String
-  issueId         String
-  issueSnapshot   Json
-  messages        Json
-  expiresAt       DateTime?
-  createdAt       DateTime  @default(now())
-
-  user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
-
-  @@index([createdByUserId, createdAt(sort: Desc)])
-}
-
-/// Read-only share of a detection-pipeline report (the AI report page).
-model PipelineReportShare {
-  id              String    @id @default(uuid())
-  shareToken      String    @unique
-  createdByUserId String
-  storeId         String
-  extensionName   String?
-  version         String?
-  runId           String
-  reportMarkdown  String    @db.Text
-  reportJson      Json?
-  createdAt       DateTime  @default(now())
-  expiresAt       DateTime?
-
-  user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
-
-  @@index([createdByUserId, createdAt(sort: Desc)])
-  @@index([storeId, createdAt(sort: Desc)])
-}
-
 model Account {
-  id                 String  @id @default(uuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?  @db.Text
-  access_token       String?  @db.Text
-  expires_at         Int?
+  id                       String  @id @default(uuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
   refresh_token_expires_in Int?
-  token_type         String?
-  scope              String?
-  id_token           String?  @db.Text
-  session_state      String?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -174,411 +81,15 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// For "Open-source endpoint monitoring tools" to fetch data
-model ApiKey {
-  id          String    @id @default(uuid())
-  userId      String
-  keyHash     String    // Hashed API Key
-  label       String?   // e.g. "My Local Firewall Agent"
-  permissions Json?     // ["read:threats", "read:extensions"]
-  lastUsedAt  DateTime?
-  createdAt   DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-// ==========================================
-// 2. Global Asset Registry (The "Public Goods")
-// ==========================================
-
-enum Platform {
-  CHROME
-  FIREFOX
-  EDGE
-}
-
-enum RiskLevel {
-  UNKNOWN
-  SAFE
-  CAUTION
-  HIGH
-}
-
-// A. The Library of Extensions (e.g., MetaMask, Phantom)
-model GlobalExtension {
-  id          String   @id @default(uuid())
-  
-  // Identity
-  storeId     String   @unique // Chrome Web Store ID
-  name        String
-  platform    Platform @default(CHROME)
-  
-  // Metadata
-  version         String?  // Latest COMPLETED static analysis version (detected)
-  pendingVersion  String?  // Target version queued for download/analysis
-  publisher       String?  // New field
-  developerEmail  String?
-  officialWebsite String?
-  description     String?
-  iconUrl         String?
-  
-  // Monitoring Config
-  isMonitored               Boolean   @default(false)
-  aiBrowserTestingEnabled   Boolean   @default(false)
-  // CDN-style prefix from first allowed download URL, e.g. https://cdn.oarmour.com/{storeId}/
-  packageDownloadPrefix     String?
-  packageDownloadSuffix   String?   @default(".zip")
-  checkFrequencyMinutes   Int       @default(30)
-  riskLevel             RiskLevel @default(UNKNOWN)
-  promptMarkdown        String?  @db.Text
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  subscriptions AssetSubscription[]
-  analysisResults ExtensionAnalysisResult[]
-  aiAnalysisResults AiExtensionAnalysisResult[]
-  notificationSubscriptions NotificationSubscription[]
-  domainAllowlistEntries ExtensionDomainAllowlist[]
-}
-
-/// Append-only log: first time monitor observed each published (storeId, version).
-/// Not tied to analysis rows; survives version/analysis cleanup.
-model ExtensionPublisherVersion {
-  id            String   @id @default(uuid())
-  extensionId   String
-  storeId       String
-  extensionName String?
-  version       String
-  publishedAt   DateTime
-
-  @@unique([storeId, version])
-  @@index([storeId, publishedAt(sort: Desc)])
-  @@index([extensionId, publishedAt(sort: Desc)])
-}
-
-enum BrowserAgentTaskStatus {
-  QUEUED
-  DISPATCHED
-  RUNNING
-  COMPLETE
-  ERROR
-  CANCELLED
-}
-
-/// OArmour-owned dispatch queue for browser agent AI test runs.
-model BrowserAgentTask {
-  id            String                 @id @default(uuid())
-  sessionId     String                 @unique
-  storeId       String
-  version       String
-  extensionName String?
-  reason        String
-  status        BrowserAgentTaskStatus @default(QUEUED)
-  error         String?                @db.Text
-  dispatchedAt  DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-
-  @@index([status, createdAt])
-  @@index([storeId, version])
-}
-
-model FindingDismissal {
-  id               String   @id @default(uuid())
-  userId           String
-  storeId          String
-  issueId          String
-  extensionVersion String?
-  reason           String
-  note             String?  @db.Text
-  createdAt        DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, storeId, issueId])
-  @@index([userId, storeId])
-}
-
-model ExtensionDomainAllowlist {
-  id            String   @id @default(uuid())
-  storeId       String
-  domain        String
-  note          String?  @db.Text
-  addedByUserId String
-  createdAt     DateTime @default(now())
-
-  extension GlobalExtension @relation(fields: [storeId], references: [storeId], onDelete: Cascade)
-  addedBy   User            @relation(fields: [addedByUserId], references: [id], onDelete: Cascade)
-
-  @@unique([storeId, domain])
-  @@index([storeId])
-}
-
-// Extension Analysis Results
-model ExtensionAnalysisResult {
-  id          String   @id @default(uuid())
-  extensionId String
-  
-  // Status
-  status      JobStatus @default(PENDING)
-  /// Package version this analysis run targeted (matches GlobalExtension.version when completed).
-  version     String?
-
-  // Extracted Intelligence
-  domains     String[] // Stored as array of strings
-  ips         String[]
-  urls        String[]
-  filesScanned Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
-  domainEnrichments DomainEnrichment[]
-  aiAnalysisResults AiExtensionAnalysisResult[]
-
-  @@index([extensionId, version, status])
-}
-
-// Runtime network analysis after AI browser testing (diff vs same-batch static domains)
-model AiExtensionAnalysisResult {
-  id               String    @id @default(uuid())
-  extensionId      String
-  staticAnalysisId String
-  storeId          String
-  version          String
-  runId            String
-
-  status           JobStatus @default(PENDING)
-  error            String?
-
-  runtimeDomains   String[]
-  novelDomains     String[]
-
-  networkRequestCount Int?
-  networkCapturedAt   DateTime?
-  riskLevel           RiskLevel?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  extension        GlobalExtension         @relation(fields: [extensionId], references: [id], onDelete: Cascade)
-  staticAnalysis   ExtensionAnalysisResult @relation(fields: [staticAnalysisId], references: [id], onDelete: Cascade)
-  domainEnrichments AiDomainEnrichment[]
-
-  @@unique([extensionId, runId])
-  @@index([staticAnalysisId])
-  @@index([storeId, version])
-}
-
-model AiDomainEnrichment {
-  id          String   @id @default(uuid())
-  analysisId  String
-  domain      String
-  isMalicious Boolean?
-  registrar   String?
-  status      String?
-  nameservers String[]
-  createdDate DateTime?
-  expiresDate DateTime?
-  fetchedAt   DateTime @default(now())
-
-  analysis AiExtensionAnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-
-  @@unique([analysisId, domain])
-}
-
-// B. The Library of Web Portals (e.g., Uniswap App, OpenSea)
-model GlobalWebPage {
-  id          String   @id @default(uuid())
-  
-  // Identity
-  url         String   @unique
-  name        String
-  domain      String   // Extracted domain for easier searching
-  
-  // Monitoring Config
-  checkFrequencyMinutes Int       @default(15)
-  riskLevel             RiskLevel @default(UNKNOWN)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  subscriptions AssetSubscription[]
-}
-
-// ==========================================
-// 3. Subscriptions (The "User Interest")
-// ==========================================
-
-enum TargetType {
-  EXTENSION
-  WEB_PAGE
-}
-
-// "I want to be alerted if MetaMask is compromised"
-model AssetSubscription {
-  id        String     @id @default(uuid())
-  userId    String
-  
-  // Polymorphic Target
-  targetType TargetType
-  targetId   String     // ID from GlobalExtension or GlobalWebPage
-  
-  // Preferences
-  notifyViaEmail   Boolean @default(true)
-  notifyViaWebhook Boolean @default(false)
-  webhookUrl       String?
-  
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Relations to Global Assets (Optional relations for polymorphism)
-  extension GlobalExtension? @relation(fields: [extensionId], references: [id])
-  extensionId String?
-  
-  webPage   GlobalWebPage?   @relation(fields: [webPageId], references: [id])
-  webPageId String?
-
-  // Ensure unique subscription per user per asset
-  @@unique([userId, targetType, targetId])
-}
-
-model DomainEnrichment {
+model LoginActivity {
   id        String   @id @default(uuid())
-  analysis  ExtensionAnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  analysisId String
-  domain    String
-  isMalicious Boolean?
-  registrar String?
-  status    String?
-  nameservers String[]
-  createdDate DateTime?
-  expiresDate DateTime?
-  fetchedAt DateTime @default(now())
-}
+  userId    String
+  ipAddress String?
+  provider  String?
+  createdAt DateTime @default(now())
 
-model NotificationSubscription {
-  id          String   @id @default(uuid())
-  userId      String
-  extensionId String
-  createdAt   DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  extension   GlobalExtension @relation(fields: [extensionId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, extensionId])
-}
-
-model MonitorRun {
-  id             String   @id @default(uuid())
-  status         JobStatus
-  checkedCount   Int      @default(0)
-  succeededCount Int      @default(0)
-  failedCount    Int      @default(0)
-  updatedCount   Int      @default(0)
-  error          String?
-  startedAt      DateTime @default(now())
-  endedAt        DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-// ==========================================
-// 4. Security Intelligence (The "Brain")
-// ==========================================
-
-// A. Historical State (Baselines)
-model AssetSnapshot {
-  id          String     @id @default(uuid())
-  targetType  TargetType
-  targetId    String
-  
-  version     String?    // For Extensions
-  contentHash String?    // Merkle Root or DOM Hash
-  metadata    Json?      // Permissions, Script Srcs, etc.
-  
-  capturedAt  DateTime   @default(now())
-}
-
-// B. Analysis Jobs
-enum JobStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-}
-
-model ScanJob {
-  id         String     @id @default(uuid())
-  targetType TargetType
-  targetId   String
-  
-  status     JobStatus
-  startedAt  DateTime   @default(now())
-  durationMs Int?
-  
-  // Relations
-  threatEvents ThreatEvent[]
-}
-
-// C. Threat Events (The "News")
-enum ThreatSeverity {
-  CRITICAL
-  HIGH
-  MEDIUM
-  LOW
-}
-
-enum ThreatType {
-  CODE_INJECTION
-  VERSION_ROLLBACK
-  PERMISSION_ESCALATION
-  MALICIOUS_DOMAIN
-  UNKNOWN
-}
-
-model ThreatEvent {
-  id          String         @id @default(uuid())
-  scanJobId   String?
-  
-  severity    ThreatSeverity
-  type        ThreatType
-  title       String
-  description String?
-  
-  publishedAt DateTime       @default(now())
-  
-  // Relations
-  scanJob     ScanJob?       @relation(fields: [scanJobId], references: [id])
-  iocs        IndicatorOfCompromise[]
-}
-
-// D. Indicators of Compromise (The "Block List")
-enum IocType {
-  DOMAIN
-  IP
-  FILE_HASH_SHA256
-  URL_REGEX
-}
-
-model IndicatorOfCompromise {
-  id            String   @id @default(uuid())
-  threatEventId String?
-  
-  // Actionable Data
-  iocType       IocType
-  iocValue      String
-  
-  confidenceScore Int     @default(100)
-  isActive        Boolean @default(true)
-  
-  createdAt     DateTime @default(now())
-  
-  // Relations
-  threatEvent   ThreatEvent? @relation(fields: [threatEventId], references: [id])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
