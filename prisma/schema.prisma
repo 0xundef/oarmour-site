@@ -47,6 +47,7 @@ model User {
   notificationSubscriptions NotificationSubscription[]
   findingDismissals FindingDismissal[]
   extensionDomainAllowlistEntries ExtensionDomainAllowlist[]
+  pipelineReportShares PipelineReportShare[]
 
   // Stripe Subscription
   stripeCustomerId       String?   @unique @map(name: "stripe_customer_id")
@@ -115,6 +116,26 @@ model IssueInvestigationShare {
   user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
 
   @@index([createdByUserId, createdAt(sort: Desc)])
+}
+
+/// Read-only share of a detection-pipeline report (the AI report page).
+model PipelineReportShare {
+  id              String    @id @default(uuid())
+  shareToken      String    @unique
+  createdByUserId String
+  storeId         String
+  extensionName   String?
+  version         String?
+  runId           String
+  reportMarkdown  String    @db.Text
+  reportJson      Json?
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime?
+
+  user User @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([createdByUserId, createdAt(sort: Desc)])
+  @@index([storeId, createdAt(sort: Desc)])
 }
 
 model Account {

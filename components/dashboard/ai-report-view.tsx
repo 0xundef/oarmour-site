@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw, MessageSquareText } from "lucide-react"
+import { Loader2, RefreshCw, MessageSquareText, Share2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 export type AiReportState = {
@@ -31,7 +31,34 @@ export function AiReportView({
   const { toast } = useToast()
   const [state, setState] = useState<AiReportState | null>(aiReportState)
   const [refetching, setRefetching] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const handleShare = async () => {
+    setSharing(true)
+    try {
+      const res = await fetch("/api/detection-pipeline/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId, expiresInDays: 30 }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error ?? `Share failed (${res.status})`)
+      }
+      const data = (await res.json()) as { shareToken: string }
+      const url = `${window.location.origin}/report-share/${data.shareToken}`
+      await navigator.clipboard.writeText(url)
+      toast({ description: "Share link copied to clipboard." })
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        description: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setSharing(false)
+    }
+  }
 
   const refetch = async () => {
     setRefetching(true)
@@ -117,15 +144,17 @@ export function AiReportView({
         <span>·</span>
         <span>{state.startedAt ? new Date(state.startedAt).toLocaleString() : ""}</span>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={refetch} disabled={refetching}>
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
           {state.status === "completed" && state.markdown ? (
-            <Button variant="default" size="sm" onClick={onInvestigateInChat}>
-              <MessageSquareText className="h-4 w-4" />
-              Investigate in chat
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={handleShare} disabled={sharing}>
+                <Share2 className="h-4 w-4" />
+                {sharing ? "Sharing…" : "Share"}
+              </Button>
+              <Button variant="default" size="sm" onClick={onInvestigateInChat}>
+                <MessageSquareText className="h-4 w-4" />
+                Investigate in chat
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
