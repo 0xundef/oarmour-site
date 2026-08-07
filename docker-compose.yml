@@ -31,8 +31,8 @@ services:
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: change-me-for-local-dev
       NEXTAUTH_USE_ADAPTER: "1"
-      db1_POSTGRES_PRISMA_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=public
-      db1_POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@db:5432/oarmour?schema=public
+      REALTIME_DATABASE_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime
+      REALTIME_DIRECT_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime
       GOOGLE_CLIENT_ID: ""
       GOOGLE_CLIENT_SECRET: ""
       OAUTH_GITHUB_ID: ""
@@ -42,13 +42,6 @@ services:
       STRIPE_WEBHOOK_SECRET: ""
       NEXT_PUBLIC_POSTHOG_KEY: ""
       NEXT_PUBLIC_POSTHOG_HOST: ""
-      UPLOADTHING_SECRET: ""
-      UPLOADTHING_APP_ID: ""
-      VIRUSTOTAL_API_KEY: ""
-      EXT_MONITOR_ENABLED: "1"
-      EXT_MONITOR_PERIOD_MINUTES: "30"
-      EXT_LOOKUP_ENABLED: "1"
-      EXT_LOOKUP_PERIOD_SECONDS: "8"
 
 volumes:
   postgres-data:
