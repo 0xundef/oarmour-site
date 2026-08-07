@@ -42,3 +42,6 @@ docs/
 .qoder/
 oarmour.code-workspace
 components/admin/pi-agent-browser.code-workspace
+
+# FYP report materials (student submission drafts — do not commit)
+/FYP/
