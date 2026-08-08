@@ -31,8 +31,8 @@ services:
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: change-me-for-local-dev
       NEXTAUTH_USE_ADAPTER: "1"
-      REALTIME_DATABASE_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime
-      REALTIME_DIRECT_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime
+      REALTIME_DATABASE_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime_app
+      REALTIME_DIRECT_URL: postgresql://postgres:postgres@db:5432/oarmour?schema=realtime_app
       GOOGLE_CLIENT_ID: ""
       GOOGLE_CLIENT_SECRET: ""
       OAUTH_GITHUB_ID: ""

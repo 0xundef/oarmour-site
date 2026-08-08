@@ -21,11 +21,11 @@ Realtime — a Next.js application shell with authentication and user management
 ## Database
 
 Realtime shares a Postgres instance with other apps but lives in its own schema
-(`?schema=realtime`). Configure:
+(`?schema=realtime_app`). Configure:
 
 ```
-REALTIME_DATABASE_URL="postgresql://user:password@host:5432/db?schema=realtime"
-REALTIME_DIRECT_URL="postgresql://user:password@host:5432/db?schema=realtime"
+REALTIME_DATABASE_URL="postgresql://user:password@host:5432/db?schema=realtime_app"
+REALTIME_DIRECT_URL="postgresql://user:password@host:5432/db?schema=realtime_app"
 ```
 
 Apply the schema (no reset of other apps' data):

@@ -1,5 +1,5 @@
 -- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "realtime";
+CREATE SCHEMA IF NOT EXISTS "realtime_app";
 
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('USER', 'ADMIN');
