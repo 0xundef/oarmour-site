@@ -1,24 +1,33 @@
-name: CI & Deploy
+name: CI & Deploy (realtime)
+
+# NOTE: This workflow lives on the `realtime` branch and only governs pushes to
+# `realtime`. The `main` branch keeps its own ci.yml and is unaffected.
+# Realtime deploys as a SEPARATE instance on the self-hosted runner (claw1):
+# its own deploy dir, port, pm2 process name, NEXTAUTH_URL, and DB schema
+# (?schema=realtime). Configure the repo vars/secrets listed below.
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+    branches: [ realtime ]
   workflow_dispatch:
     inputs:
       target_ref:
-        description: 'Git ref to deploy (commit SHA, branch, or tag). Leave empty to use main.'
+        description: 'Git ref to deploy (commit SHA, branch, or tag). Default: realtime.'
         required: false
-        default: ''
+        default: 'realtime'
 
 concurrency:
-  group: ci-deploy-${{ github.ref }}
+  group: ci-deploy-realtime
   cancel-in-progress: true
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      # Dummy values so `prisma generate` (run by `npm run build`) can resolve the
+      # datasource env at build time. Not used; no DB connection happens at build.
+      REALTIME_DATABASE_URL: postgresql://user:password@localhost:5432/db?schema=realtime
+      REALTIME_DIRECT_URL: postgresql://user:password@localhost:5432/db?schema=realtime
     steps:
       - uses: actions/checkout@v4
 
@@ -38,62 +47,40 @@ jobs:
         run: npm test || echo "No tests specified"
 
   deploy:
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event_name == 'workflow_dispatch'
+    # Skipped (not failed) until REALTIME_DEPLOY_PATH is configured in repo vars.
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && vars.REALTIME_DEPLOY_PATH != '' }}
     runs-on: self-hosted
+    env:
+      DEPLOY_PATH: ${{ vars.REALTIME_DEPLOY_PATH }}
+      APP_PORT: ${{ vars.REALTIME_APP_PORT }}
+      TARGET_REF: ${{ github.event.inputs.target_ref || 'realtime' }}
+      REALTIME_DATABASE_URL: ${{ secrets.REALTIME_DATABASE_URL }}
+      REALTIME_DIRECT_URL: ${{ secrets.REALTIME_DIRECT_URL }}
+      NEXTAUTH_URL: ${{ vars.REALTIME_NEXTAUTH_URL }}
+      NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+      NEXTAUTH_USE_ADAPTER: ${{ vars.NEXTAUTH_USE_ADAPTER }}
+      NEXTAUTH_DEV_ADMIN_EMAILS: ${{ vars.NEXTAUTH_DEV_ADMIN_EMAILS }}
+      GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      OAUTH_GITHUB_ID: ${{ vars.OAUTH_GITHUB_ID }}
+      OAUTH_GITHUB_SECRET: ${{ secrets.OAUTH_GITHUB_SECRET }}
+      STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+      NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
+      SMTP_SERVER: ${{ vars.SMTP_SERVER }}
+      SMTP_PORT: ${{ vars.SMTP_PORT }}
+      SMTP_SECURE: ${{ vars.SMTP_SECURE }}
+      SMTP_USER: ${{ vars.SMTP_USER }}
+      EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_FROM: ${{ vars.EMAIL_FROM }}
     steps:
-      - name: Deploy on server
+      - name: Deploy realtime on server
         shell: bash
-        env:
-          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-          APP_PORT: ${{ vars.APP_PORT }}
-          TARGET_REF: ${{ github.event.inputs.target_ref || 'main' }}
-          db1_POSTGRES_PRISMA_URL: ${{ secrets.DB1_POSTGRES_PRISMA_URL }}
-          db1_POSTGRES_URL_NON_POOLING: ${{ secrets.DB1_POSTGRES_URL_NON_POOLING }}
-          NEXTAUTH_URL: ${{ vars.NEXTAUTH_URL }}
-          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
-          NEXTAUTH_USE_ADAPTER: ${{ vars.NEXTAUTH_USE_ADAPTER }}
-          NEXTAUTH_DEV_ADMIN_EMAILS: ${{ vars.NEXTAUTH_DEV_ADMIN_EMAILS }}
-          EXTENSION_STORAGE_ROOT: ${{ vars.EXTENSION_STORAGE_ROOT }}
-          AGENT_QUEUE_ROOT: ${{ vars.AGENT_QUEUE_ROOT }}
-          AGENT_TESTING_ENABLED: ${{ vars.AGENT_TESTING_ENABLED }}
-          BROWSER_AGENT_API_URL: ${{ vars.BROWSER_AGENT_API_URL }}
-          BROWSER_AGENT_API_KEY: ${{ secrets.BROWSER_AGENT_API_KEY }}
-          BROWSER_AGENT_MAX_CONCURRENT: ${{ vars.BROWSER_AGENT_MAX_CONCURRENT }}
-          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          OAUTH_GITHUB_ID: ${{ vars.OAUTH_GITHUB_ID }}
-          OAUTH_GITHUB_SECRET: ${{ secrets.OAUTH_GITHUB_SECRET }}
-          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
-          NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}
-          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
-          UPLOADTHING_SECRET: ${{ secrets.UPLOADTHING_SECRET }}
-          SMTP_SERVER: ${{ vars.SMTP_SERVER }}
-          SMTP_PORT: ${{ vars.SMTP_PORT }}
-          SMTP_SECURE: ${{ vars.SMTP_SECURE }}
-          SMTP_USER: ${{ vars.SMTP_USER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
-          SLACK_ALERT_WEBHOOK_URL: ${{ secrets.SLACK_ALERT_WEBHOOK_URL }}
-          SLACK_ALERT_MIN_RISK: ${{ vars.SLACK_ALERT_MIN_RISK }}
-          ANTHROPIC_CHATBOX_API_KEY: ${{ secrets.ANTHROPIC_CHATBOX_API_KEY }}
-          ANTHROPIC_CHATBOX_BASE_URL: ${{ vars.ANTHROPIC_CHATBOX_BASE_URL }}
-          # Comma-separated allowlist for issue chatbox model picker, e.g. deepseek-chat,deepseek-v4-pro
-          ANTHROPIC_CHATBOX_MODEL: ${{ vars.ANTHROPIC_CHATBOX_MODEL }}
-          ANTHROPIC_CHATBOX_THINKING: ${{ vars.ANTHROPIC_CHATBOX_THINKING }}
-          # Detection pipeline (Claude Agent SDK). Same DeepSeek Anthropic endpoint by default.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_BASE_URL: ${{ vars.ANTHROPIC_BASE_URL }}
-          DETECTION_FIND_CONCURRENCY: ${{ vars.DETECTION_FIND_CONCURRENCY }}
-          DETECTION_PIPELINE_MODEL: ${{ vars.DETECTION_PIPELINE_MODEL }}
-          DETECTION_THREAT_MODEL_DIR: ${{ vars.DETECTION_THREAT_MODEL_DIR }}
         run: |
           set -euo pipefail
           if [ -z "${DEPLOY_PATH:-}" ]; then
-            echo "Missing vars.DEPLOY_PATH" >&2
+            echo "Missing vars.REALTIME_DEPLOY_PATH" >&2
             exit 1
           fi
           cd "$DEPLOY_PATH"
@@ -123,7 +110,7 @@ jobs:
           npm run build
 
           if command -v pm2 >/dev/null 2>&1; then
-            SUDO_PRESERVE_ENV="--preserve-env=DEPLOY_PATH,APP_PORT,PORT,REALTIME_DATABASE_URL,REALTIME_DIRECT_URL,NEXTAUTH_URL,NEXTAUTH_SECRET,NEXTAUTH_USE_ADAPTER,NEXTAUTH_DEV_ADMIN_EMAILS,EXTENSION_STORAGE_ROOT,AGENT_QUEUE_ROOT,AGENT_TESTING_ENABLED,BROWSER_AGENT_API_URL,BROWSER_AGENT_API_KEY,BROWSER_AGENT_MAX_CONCURRENT,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,OAUTH_GITHUB_ID,OAUTH_GITHUB_SECRET,STRIPE_API_KEY,STRIPE_WEBHOOK_SECRET,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_POSTHOG_HOST,VIRUSTOTAL_API_KEY,UPLOADTHING_SECRET,UPLOADTHING_APP_ID,SMTP_SERVER,SMTP_PORT,SMTP_SECURE,SMTP_USER,EMAIL_PASSWORD,EMAIL_FROM,SLACK_ALERT_WEBHOOK_URL,SLACK_ALERT_MIN_RISK,ANTHROPIC_CHATBOX_API_KEY,ANTHROPIC_CHATBOX_BASE_URL,ANTHROPIC_CHATBOX_MODEL,ANTHROPIC_CHATBOX_THINKING,ANTHROPIC_API_KEY,ANTHROPIC_BASE_URL,DETECTION_FIND_CONCURRENCY,DETECTION_PIPELINE_MODEL,DETECTION_THREAT_MODEL_DIR"
+            SUDO_PRESERVE_ENV="--preserve-env=DEPLOY_PATH,APP_PORT,PORT,REALTIME_DATABASE_URL,REALTIME_DIRECT_URL,NEXTAUTH_URL,NEXTAUTH_SECRET,NEXTAUTH_USE_ADAPTER,NEXTAUTH_DEV_ADMIN_EMAILS,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,OAUTH_GITHUB_ID,OAUTH_GITHUB_SECRET,STRIPE_API_KEY,STRIPE_WEBHOOK_SECRET,NEXT_PUBLIC_POSTHOG_KEY,NEXT_PUBLIC_POSTHOG_HOST,SMTP_SERVER,SMTP_PORT,SMTP_SECURE,SMTP_USER,EMAIL_PASSWORD,EMAIL_FROM"
             sudo "$SUDO_PRESERVE_ENV" pm2 delete realtime >/dev/null 2>&1 || true
             if [ -n "${APP_PORT:-}" ]; then
               PORT="$APP_PORT" sudo "$SUDO_PRESERVE_ENV" pm2 start npm --name realtime -- run start -- -p "$APP_PORT"
